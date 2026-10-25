@@ -340,11 +340,18 @@ def test_alignment_marks_are_shallow_and_on_the_non_marking_face():
     stamp_result = build({"shape": shape.to_dict(), "settings": {**DEFAULT_SETTINGS, "mode": "stamp"}})
     stamp = _mesh(stamp_result["parts"][0])
     ax, ay, _ar = stamp_mark
-    hits, _, _ = stamp.ray.intersects_location(
-        [[ax, ay, 40.0]], [[0.0, 0.0, -1.0]], multiple_hits=True
-    )
-    assert len(hits) >= 1
-    assert float(hits[:, 2].max()) == pytest.approx(DEFAULT_SETTINGS["stampBack"], abs=0.15)
+    tri = stamp.vertices[stamp.faces]
+    a, b, c = tri[:, 0, :2], tri[:, 1, :2], tri[:, 2, :2]
+    den = (b[:, 1] - c[:, 1]) * (a[:, 0] - c[:, 0]) + (c[:, 0] - b[:, 0]) * (a[:, 1] - c[:, 1])
+    valid = den != 0
+    safe_den = den.copy()
+    safe_den[~valid] = 1.0
+    u = ((b[:, 1] - c[:, 1]) * (ax - c[:, 0]) + (c[:, 0] - b[:, 0]) * (ay - c[:, 1])) / safe_den
+    v = ((c[:, 1] - a[:, 1]) * (ax - c[:, 0]) + (a[:, 0] - c[:, 0]) * (ay - c[:, 1])) / safe_den
+    inside = valid & (u >= -1e-6) & (v >= -1e-6) & (u + v <= 1 + 1e-6)
+    z = tri[inside, 0, 2] + u[inside] * (tri[inside, 1, 2] - tri[inside, 0, 2]) + v[inside] * (tri[inside, 2, 2] - tri[inside, 0, 2])
+    assert z.size > 0
+    assert float(z.max()) == pytest.approx(DEFAULT_SETTINGS["stampBack"], abs=0.15)
 
 
 def test_stamp_border_is_flush_with_relief_by_default():
