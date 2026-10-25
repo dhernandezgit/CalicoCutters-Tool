@@ -108,6 +108,7 @@ export default function SettingsPanel({
   selectionCount = 1,
   selectionNames = [],
   assetColor = "#f39ab1",
+  assetName = "",
   onColorChange,
   onRename,
   onRenameAll,
@@ -127,20 +128,24 @@ export default function SettingsPanel({
   selectionCount?: number;
   selectionNames?: string[];
   assetColor?: string;
+  assetName?: string;
   onColorChange?: (color: string) => void;
   onRename?: (name: string) => void;
   onRenameAll?: (base: string) => void;
   plaPricePerKg?: number;
   onPlaPriceChange?: (value: number) => void;
 }) {
-  const [nameDraft, setNameDraft] = useState(selectionNames[0] ?? "");
+  const [nameDraft, setNameDraft] = useState(assetName || selectionNames[0] || "");
   const [bulkName, setBulkName] = useState("galleta");
   useEffect(() => {
-    setNameDraft(selectionNames[0] ?? "");
-  }, [selectionNames[0]]);
+    setNameDraft(assetName || selectionNames[0] || "");
+  }, [assetName, selectionNames[0]]);
   const line = settings.lineWidth || 0.4;
-  const level = levelOf(checks);
+  const level = build ? levelOf(checks) : "warn";
   const printer = PRINTER_PROFILES[settings.printer];
+  const cutterLike = ["cutter", "cutter-stamp", "imprint", "multicutter", "sandwich", "cutter-set"].includes(settings.mode);
+  const supportsExtras = ["cutter", "cutter-stamp", "multicutter"].includes(settings.mode);
+  const stampLike = settings.mode === "stamp" || settings.mode === "cutter-stamp";
   const aspect = shape ? shape.bounds.width / Math.max(shape.bounds.height, 0.001) : 1;
   const final = build?.parts[0];
   const finalW = final ? final.bounds.max[0] - final.bounds.min[0] : 0;
@@ -183,21 +188,23 @@ export default function SettingsPanel({
       <button type="button" className={`print-badge ${level}`} onClick={onOpenChecks}>
         <span className="badge-dot" />
         <span>
-          <strong>{level === "ok" ? "Listo para imprimir" : level === "warn" ? "Revisar antes de imprimir" : "Hay un problema"}</strong>
+          <strong>{!build ? "Falta geometría" : level === "ok" ? "Listo para imprimir" : level === "warn" ? "Revisar antes de imprimir" : "Hay un problema"}</strong>
           <small>
-            {level === "ok"
-              ? `${printer.label} · línea ${line.toFixed(2)} mm`
-              : checks.filter((c) => c.level !== "ok").length + " aviso(s) de impresión"}
+            {!build
+              ? "Añade un diseño o espera al motor"
+              : level === "ok"
+                ? `${printer.label} · línea ${line.toFixed(2)} mm`
+                : checks.filter((c) => c.level !== "ok").length + " aviso(s) de impresión"}
           </small>
         </span>
         <CircleHelp size={16} />
       </button>
 
       {!advanced && (
-        <p className="basic-hint">Básico: elige modo, tamaño, cuchilla y sello. Cambia a Avanzado para impresión, base, color, nombres, coste y refuerzos.</p>
+        <p className="basic-hint">Básico: elige qué crear, el tamaño y los ajustes esenciales. Cambia a Avanzado para impresión, color, nombres, coste y refuerzos.</p>
       )}
 
-      <Section id="mode" title="Qué vas a crear" icon={<Crown size={16} />} defaultOpen summary={settings.mode === "cutter-stamp" ? "2 piezas" : "1 pieza"}>
+      <Section id="mode" title="Qué vas a crear" icon={<Crown size={16} />} defaultOpen summary={settings.mode === "cutter-stamp" || settings.mode === "cakepop" ? "2 piezas" : "1 pieza"}>
         {[
           {
             label: "Galletas",
@@ -207,6 +214,7 @@ export default function SettingsPanel({
               { value: "cutter" as const, label: "Cortador", icon: <Scissors size={20} />, sub: "Contorno exterior" },
               { value: "imprint" as const, label: "Impronta", icon: <Sparkles size={20} />, sub: "Corte + relieve en una pieza" },
               { value: "multicutter" as const, label: "Puzzle", icon: <Layers size={20} />, sub: "Rejilla de copias" },
+              { value: "cutter-set" as const, label: "Set de cortadores", icon: <Scissors size={20} />, sub: "Varios tamaños" },
             ],
           },
           {
@@ -237,10 +245,11 @@ export default function SettingsPanel({
               { value: "topper" as const, label: "Topper de tarta", icon: <Crown size={20} />, sub: "Relieve + pin" },
               { value: "stencil" as const, label: "Stencil", icon: <Layers size={20} />, sub: "Plantilla calada" },
               { value: "practice" as const, label: "Galleta de práctica", icon: <Scissors size={20} />, sub: "Forma con fondo" },
+              { value: "cakepop" as const, label: "Molde cake pop", icon: <Box size={20} />, sub: "Molde + prensador" },
             ],
           },
         ]
-          .filter((group) => advanced || group.basic)
+          .filter((group) => advanced || group.basic || group.modes.some((m) => m.value === settings.mode))
           .map((group) => (
             <div className="mode-group" key={group.label}>
               <span className="mode-group-label">{group.label}</span>
@@ -264,29 +273,68 @@ export default function SettingsPanel({
         {advanced && (
           <div className="mode-group">
             <span className="mode-group-label">Cerámica</span>
-            <button
-              type="button"
-              className="mode-card clay-preset"
-              onClick={() => onChange({
-                mode: "cutter",
-                printer: "fdm04",
-                lineWidth: 0.4,
-                layerHeight: 0.2,
-                bladeThickness: 1.2,
-                bladeDepth: 10,
-                baseHeight: 3,
-                tipWidth: 0.4,
-                stampRelief: 2,
-              })}
-            >
-              <Scissors size={20} />
-              <strong>Cortador de arcilla</strong>
-              <small>Aplica pared 1,2 mm y altura 10 mm</small>
-            </button>
+            <div className="mode-grid">
+              <button
+                type="button"
+                className="mode-card clay-preset"
+                onClick={() => onChange({
+                  mode: "cutter",
+                  printer: "fdm04",
+                  lineWidth: 0.4,
+                  layerHeight: 0.2,
+                  bladeThickness: 1.2,
+                  bladeDepth: 10,
+                  baseHeight: 3,
+                  tipWidth: 0.4,
+                  stampRelief: 2,
+                })}
+              >
+                <Scissors size={20} />
+                <strong>Cortador de arcilla</strong>
+                <small>Pared 1,2 mm y altura 10 mm</small>
+              </button>
+              <button
+                type="button"
+                className="mode-card clay-preset"
+                onClick={() => onChange({
+                  mode: "multicutter",
+                  longest: 25,
+                  bladeThickness: 1,
+                  bladeDepth: 8,
+                  baseHeight: 2.5,
+                  baseWidth: 3,
+                  tipWidth: 0.4,
+                  multiRows: 2,
+                  multiCols: 3,
+                  multiSpacing: 4,
+                })}
+              >
+                <Layers size={20} />
+                <strong>Set de pendientes</strong>
+                <small>6 cortadores pequeños</small>
+              </button>
+              <button
+                type="button"
+                className="mode-card clay-preset"
+                onClick={() => onChange({
+                  mode: "stamp",
+                  bladeThickness: 1,
+                  stampBack: 5,
+                  stampRelief: 2,
+                  stampClearance: 0.8,
+                  stampBorder: false,
+                })}
+              >
+                <Stamp size={20} />
+                <strong>Sello de arcilla</strong>
+                <small>Relieve suave sin borde</small>
+              </button>
+            </div>
           </div>
         )}
       </Section>
 
+      {settings.mode !== "stencil" && (
       <Section
         id="size"
         title="Tamaño"
@@ -320,10 +368,11 @@ export default function SettingsPanel({
           </>
         )}
         <div className="size-note">
-          <span>Tamaño final con base</span>
+          <span>Tamaño final de la pieza</span>
           <strong>{final ? `${finalW.toFixed(1)} × ${finalH.toFixed(1)} mm` : "Calculando…"}</strong>
         </div>
       </Section>
+      )}
 
       {advanced && (
       <Section
@@ -359,6 +408,7 @@ export default function SettingsPanel({
       </Section>
       )}
 
+      {cutterLike && (
       <Section
         id="blade"
         title="Cuchilla"
@@ -398,30 +448,35 @@ export default function SettingsPanel({
                 <NumberField label="Altura del chaflán" value={settings.chamferHeight} min={0.5} max={5} step={0.1} onChange={(v) => onChange({ chamferHeight: v })} />
               </div>
             )}
-            <Toggle
-              label="Cuchilla extra"
-              hint="Refuerza la parte baja de la pared; opcional."
-              checked={settings.extraBlade}
-              onChange={(v) => onChange({ extraBlade: v })}
-            />
-            {settings.extraBlade && (
-              <div className="two-fields">
-                <NumberField label="Profundidad extra" value={settings.extraBladeDepth} min={1} max={settings.bladeDepth} step={0.5} onChange={(v) => onChange({ extraBladeDepth: v })} />
-                <NumberField label="Grosor extra" value={settings.extraBladeThickness} min={0.2} max={3} step={0.1} onChange={(v) => onChange({ extraBladeThickness: v })} />
-              </div>
+            {supportsExtras && (
+              <>
+                <Toggle
+                  label="Cuchilla extra"
+                  hint="Refuerza la parte baja de la pared; opcional."
+                  checked={settings.extraBlade}
+                  onChange={(v) => onChange({ extraBlade: v })}
+                />
+                {settings.extraBlade && (
+                  <div className="two-fields">
+                    <NumberField label="Profundidad extra" value={settings.extraBladeDepth} min={1} max={settings.bladeDepth} step={0.5} onChange={(v) => onChange({ extraBladeDepth: v })} />
+                    <NumberField label="Grosor extra" value={settings.extraBladeThickness} min={0.2} max={3} step={0.1} onChange={(v) => onChange({ extraBladeThickness: v })} />
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
       </Section>
+      )}
 
-      {advanced && (
+      {advanced && cutterLike && (
         <Section id="base" title="Base y mango" icon={<Box size={16} />} summary={`${settings.baseHeight.toFixed(1)} mm`}>
           <div className="two-fields">
             <NumberField label="Altura de la base" value={settings.baseHeight} min={1} max={12} step={0.5} onChange={(v) => onChange({ baseHeight: v })} />
             <NumberField label="Ancho de la base" value={settings.baseWidth} min={1} max={15} step={0.5} onChange={(v) => onChange({ baseWidth: v })} />
           </div>
           <label className="field-row">
-            <span className="field-label">Forma del mango</span>
+            <span className="field-label">Forma de la base</span>
             <span className="field-input">
               <select value={settings.baseShape} onChange={(e) => onChange({ baseShape: e.target.value as DesignSettings["baseShape"] })}>
                 <option value="chamfer">Chaflanada</option>
@@ -430,25 +485,29 @@ export default function SettingsPanel({
               </select>
             </span>
           </label>
-          <Toggle
-            label="Mango de presión"
-            hint="Añade un agarre exterior para presionar con comodidad."
-            checked={settings.addPressHandle}
-            onChange={(v) => onChange({ addPressHandle: v })}
-          />
-          {settings.addPressHandle && (
+          {supportsExtras && (
             <>
-              <div className="two-fields">
-                <NumberField label="Largo" value={settings.pressHandleLength} min={10} max={80} step={1} onChange={(v) => onChange({ pressHandleLength: v })} />
-                <NumberField label="Ancho" value={settings.pressHandleWidth} min={5} max={25} step={0.5} onChange={(v) => onChange({ pressHandleWidth: v })} />
-              </div>
-              <NumberField label="Posición" value={settings.pressHandlePosition} min={-100} max={100} step={5} unit="%" onChange={(v) => onChange({ pressHandlePosition: v })} />
+              <Toggle
+                label="Mango de presión"
+                hint="Añade un agarre exterior para presionar con comodidad."
+                checked={settings.addPressHandle}
+                onChange={(v) => onChange({ addPressHandle: v })}
+              />
+              {settings.addPressHandle && (
+                <>
+                  <div className="two-fields">
+                    <NumberField label="Largo" value={settings.pressHandleLength} min={10} max={80} step={1} onChange={(v) => onChange({ pressHandleLength: v })} />
+                    <NumberField label="Ancho" value={settings.pressHandleWidth} min={5} max={25} step={0.5} onChange={(v) => onChange({ pressHandleWidth: v })} />
+                  </div>
+                  <NumberField label="Posición" value={settings.pressHandlePosition} min={0} max={100} step={5} unit="%" onChange={(v) => onChange({ pressHandlePosition: v })} />
+                </>
+              )}
             </>
           )}
         </Section>
       )}
 
-      {(settings.mode === "cutter-stamp" || settings.mode === "stamp") && (
+      {stampLike && (
         <Section
           id="stamp"
           title="Sello"
@@ -488,6 +547,27 @@ export default function SettingsPanel({
               step={0.2}
               onChange={(v) => onChange({ stampBorderWidth: v })}
             />
+          )}
+          {advanced && (
+            <>
+              <Toggle
+                label="Quitar contorno exterior del sello"
+                hint="Elimina la línea del borde para que el sello no marque el contorno de la galleta."
+                checked={settings.stampRemoveOuterEdge}
+                onChange={(v) => onChange({ stampRemoveOuterEdge: v })}
+              />
+              {settings.stampRemoveOuterEdge && (
+                <label className="field-row">
+                  <span className="field-label">Método de recorte</span>
+                  <span className="field-input">
+                    <select value={settings.stampEdgeMethod} onChange={(e) => onChange({ stampEdgeMethod: e.target.value as DesignSettings["stampEdgeMethod"] })}>
+                      <option value="preserve">Conservar detalles completos</option>
+                      <option value="offset">Recortar detalles en el borde</option>
+                    </select>
+                  </span>
+                </label>
+              )}
+            </>
           )}
         </Section>
       )}
@@ -548,6 +628,17 @@ export default function SettingsPanel({
         </Section>
       )}
 
+      {settings.mode === "cutter-set" && (
+        <Section id="cutter-set" title="Set de cortadores" icon={<Scissors size={16} />} defaultOpen summary={`${settings.setCount} tamaños`}>
+          <div className="two-fields">
+            <NumberField label="Número de cortadores" value={settings.setCount} min={2} max={6} step={1} unit="" onChange={(v) => onChange({ setCount: Math.round(v) })} />
+            <NumberField label="Reducción entre tamaños" value={settings.setStep * 100} min={5} max={45} step={1} unit="%" onChange={(v) => onChange({ setStep: v / 100 })} />
+          </div>
+          <NumberField label="Separación" value={settings.setSpacing} min={2} max={40} step={1} onChange={(v) => onChange({ setSpacing: v })} />
+          <div className="inline-hint"><CircleHelp size={13} /><span>Se generan varios cortadores del mismo dibujo, de mayor a menor, en una sola pieza de impresión.</span></div>
+        </Section>
+      )}
+
       {settings.mode === "stencil" && (
         <Section id="stencil" title="Stencil" icon={<Layers size={16} />} defaultOpen summary={`${settings.stencilWidth.toFixed(0)} × ${settings.stencilHeight.toFixed(0)} mm`}>
           <div className="two-fields">
@@ -559,9 +650,35 @@ export default function SettingsPanel({
             <NumberField label="Columnas" value={settings.stencilCols} min={1} max={10} step={1} unit="" onChange={(v) => onChange({ stencilCols: Math.round(v) })} />
           </div>
           <div className="two-fields">
+            <NumberField label="Tamaño de cada forma" value={settings.stencilShapeSize} min={0} max={80} step={1} hint="0 = ajustar al hueco" onChange={(v) => onChange({ stencilShapeSize: v })} />
             <NumberField label="Separación" value={settings.stencilSpacing} min={1} max={20} step={0.5} onChange={(v) => onChange({ stencilSpacing: v })} />
-            <NumberField label="Grosor" value={settings.stencilThickness} min={0.6} max={4} step={0.1} onChange={(v) => onChange({ stencilThickness: v })} />
           </div>
+          <div className="two-fields">
+            <NumberField label="Margen exterior" value={settings.stencilMargin} min={0} max={20} step={0.5} onChange={(v) => onChange({ stencilMargin: v })} />
+            <NumberField label="Grosor de lámina" value={settings.stencilThickness} min={0.6} max={4} step={0.1} onChange={(v) => onChange({ stencilThickness: v })} />
+          </div>
+          <label className="field-row">
+            <span className="field-label">Disposición</span>
+            <span className="field-input">
+              <select value={settings.stencilPattern} onChange={(e) => onChange({ stencilPattern: e.target.value as DesignSettings["stencilPattern"] })}>
+                <option value="grid">Cuadrícula</option>
+                <option value="diagonal">Diagonal</option>
+              </select>
+            </span>
+          </label>
+          {advanced && (
+            <>
+              <Toggle
+                label="Puentes para islas interiores"
+                hint="Mantiene unidas las islas del dibujo con finos puentes de material."
+                checked={settings.stencilBridges}
+                onChange={(v) => onChange({ stencilBridges: v })}
+              />
+              {settings.stencilBridges && (
+                <NumberField label="Grosor del puente" value={settings.stencilBridgeWidth} min={0.6} max={5} step={0.2} onChange={(v) => onChange({ stencilBridgeWidth: v })} />
+              )}
+            </>
+          )}
         </Section>
       )}
 
@@ -572,9 +689,21 @@ export default function SettingsPanel({
             <NumberField label="Altura de relieve" value={settings.topperRelief} min={0.2} max={6} step={0.2} onChange={(v) => onChange({ topperRelief: v })} />
           </div>
           <div className="two-fields">
-            <NumberField label="Largo del pin" value={settings.topperPinLength} min={5} max={120} step={1} onChange={(v) => onChange({ topperPinLength: v })} />
+            <NumberField label="Respaldo perimetral" value={settings.topperBacking} min={0} max={15} step={0.5} onChange={(v) => onChange({ topperBacking: v })} />
             <NumberField label="Ancho del pin" value={settings.topperPinWidth} min={2} max={20} step={0.5} onChange={(v) => onChange({ topperPinWidth: v })} />
           </div>
+          <div className="two-fields">
+            <NumberField label="Largo del pin" value={settings.topperPinLength} min={5} max={120} step={1} onChange={(v) => onChange({ topperPinLength: v })} />
+            <NumberField label="Posición del pin" value={settings.topperPinPosition} min={-100} max={100} step={5} unit="%" onChange={(v) => onChange({ topperPinPosition: v })} />
+          </div>
+          {advanced && (
+            <Toggle
+              label="Invertir relieve"
+              hint="Eleva el fondo y deja el dibujo rebajado."
+              checked={settings.topperInvert}
+              onChange={(v) => onChange({ topperInvert: v })}
+            />
+          )}
         </Section>
       )}
 
@@ -588,7 +717,29 @@ export default function SettingsPanel({
         </Section>
       )}
 
-      {advanced && (
+      {settings.mode === "cakepop" && (
+        <Section id="cakepop" title="Molde cake pop" icon={<Box size={16} />} defaultOpen summary={`${settings.cakePopMoldHeight.toFixed(0)} mm profundidad`}>
+          <div className="two-fields">
+            <NumberField label="Profundidad del molde" value={settings.cakePopMoldHeight} min={6} max={40} step={0.5} onChange={(v) => onChange({ cakePopMoldHeight: v })} />
+            <NumberField label="Grosor de pared" value={settings.cakePopMoldWall} min={1.2} max={8} step={0.2} onChange={(v) => onChange({ cakePopMoldWall: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Base del molde" value={settings.cakePopBase} min={1} max={8} step={0.5} onChange={(v) => onChange({ cakePopBase: v })} />
+            <NumberField label="Agujero del palito" value={settings.cakePopStickHole} min={2.5} max={12} step={0.1} onChange={(v) => onChange({ cakePopStickHole: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Holgura del palito" value={settings.cakePopHoleClearance} min={0} max={2} step={0.1} onChange={(v) => onChange({ cakePopHoleClearance: v })} />
+            <NumberField label="Holgura del prensador" value={settings.cakePopPlungerClearance} min={0.2} max={2.5} step={0.1} onChange={(v) => onChange({ cakePopPlungerClearance: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Respaldo del prensador" value={settings.cakePopPlungerBack} min={1} max={8} step={0.5} onChange={(v) => onChange({ cakePopPlungerBack: v })} />
+            <NumberField label="Relieve del prensador" value={settings.cakePopRelief} min={0.2} max={6} step={0.2} onChange={(v) => onChange({ cakePopRelief: v })} />
+          </div>
+          <div className="inline-hint"><CircleHelp size={13} /><span>Incluye molde y prensador. El palito se inserta por el agujero central; imprime con la cara plana sobre la cama.</span></div>
+        </Section>
+      )}
+
+      {advanced && supportsExtras && (
         <Section id="bars" title="Barras centrales" icon={<Layers size={16} />} summary={settings.addBar ? "Activas" : "Desactivadas"}>
           <Toggle
             label="Añadir barra central"
@@ -598,7 +749,7 @@ export default function SettingsPanel({
           />
           {settings.addBar && (
             <>
-              <NumberField label="Ángulo" value={settings.barAngle} min={0} max={179} step={1} unit="°" onChange={(v) => onChange({ barAngle: v })} />
+              <NumberField label="Ángulo" value={settings.barAngle} min={0} max={179} step={1} unit="°" onChange={(v) => onChange({ barAngle: v })} />
               <NumberField label="Posición" value={settings.barPosition} min={0} max={100} step={1} unit="%" onChange={(v) => onChange({ barPosition: v })} />
               <NumberField
                 label="Ancho"
@@ -674,14 +825,14 @@ export default function SettingsPanel({
           />
           <div className="inline-hint">
             <CircleHelp size={13} />
-            <span>Los ajustes se guardan en este navegador. Los archivos no se suben a ningún servidor.</span>
+            <span>Los archivos no se suben a ningún servidor. Guarda el proyecto para conservar ajustes y colores.</span>
           </div>
         </Section>
       )}
 
       <button type="button" className="export-button" onClick={onExport}>
         <Scissors size={17} />
-        Exportar cortador y sello
+        Exportar modelos
       </button>
       <div className="panel-footnote">STL · 3MF · proyecto .calicocutters importable</div>
     </div>

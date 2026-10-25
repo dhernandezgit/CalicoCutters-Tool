@@ -59,10 +59,20 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
         </div>
 
         <div className="help-note">
+          <strong>Más que un cortador</strong>
+          <p>
+            El menú “Qué vas a crear” agrupa galletas, sellos, sándwich, rodillo, repostería y cerámica:
+            stamper + cortador, cortador, impronta, puzzle, set de tamaños, sello, sándwich, rodillo de textura,
+            topper, stencil, galleta de práctica, molde cake pop y perfil de arcilla.
+          </p>
+        </div>
+
+        <div className="help-note">
           <strong>Bambu Studio</strong>
           <p>
             Descarga el 3MF y ábrelo con doble clic o arrastrándolo a Bambu Studio. No hay botón de apertura directa:
             Bambu Studio bloquea las URLs de dominios de terceros. El 3MF conserva los objetos separados y sus nombres.
+            También puedes usar “3MF conjunto” para colocar varios diseños en una sola escena.
           </p>
         </div>
 

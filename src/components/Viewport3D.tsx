@@ -288,16 +288,20 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
           console.error("No se pudo leer el STL de vista previa", part.name, error);
         }
       }
+      const cutterNames = new Set(["Cortador", "Impronta", "Puzzle", "Cortador sándwich", "Set de cortadores"]);
       const visible =
         isolate === "all"
           ? null
           : isolate === "cutter"
-            ? "Cortador"
+            ? "cutter"
             : isolate === "stamp"
               ? "Sello"
               : "Impronta";
       group.children.forEach((obj) => {
-        if (visible && obj.userData.partName) obj.visible = obj.userData.partName === visible;
+        if (!visible || !obj.userData.partName) return;
+        obj.visible = visible === "cutter"
+          ? cutterNames.has(String(obj.userData.partName))
+          : obj.userData.partName === visible;
       });
     }
     if (cancelled) return;

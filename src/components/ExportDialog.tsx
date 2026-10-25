@@ -13,7 +13,9 @@ export default function ExportDialog({
   settings,
   projectName,
   onExport3mf,
+  onExport3mfMulti,
   onToast,
+  engineBusy = false,
   plaPricePerKg = 14,
 }: {
   open: boolean;
@@ -22,7 +24,9 @@ export default function ExportDialog({
   settings: DesignSettings;
   projectName: string;
   onExport3mf: (asset: DesignAsset, settings: DesignSettings, parts: string[], name: string) => Promise<Blob>;
+  onExport3mfMulti: (items: DesignAsset[], name: string) => Promise<Blob>;
   onToast: (message: string) => void;
+  engineBusy?: boolean;
   plaPricePerKg?: number;
 }) {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -53,11 +57,17 @@ export default function ExportDialog({
         blob: bytesToBlob(base64ToBytes(part.stl_b64), "model/stl"),
       }));
     }
-    const blob = await onExport3mf(asset, settings, parts.map((p) => p.name), base);
+    const blob = await onExport3mf(
+      asset,
+      { ...asset.settings, color: asset.color },
+      parts.map((p) => p.name),
+      base,
+    );
     return [{ name: `${base}.3mf`, blob }];
   };
 
   const downloadOne = async (asset: AssetRow, format: "stl" | "3mf") => {
+    if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
     setBusy(true);
     try {
       const files = await filesFor(asset, format);
@@ -72,6 +82,7 @@ export default function ExportDialog({
   };
 
   const downloadAll = async (format: "stl" | "3mf") => {
+    if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
     if (!chosen.length) return onToast("Selecciona al menos un diseño.");
     setBusy(true);
     try {
@@ -80,6 +91,25 @@ export default function ExportDialog({
       const result = await saveFilesChoosingLocation([...files, projectDownload]);
       if (result === "cancelled") return;
       onToast(`${files.length} archivo(s) ${format.toUpperCase()} y el proyecto guardados.`);
+    } catch (error) {
+      onToast(String((error as Error)?.message || error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadCombined3mf = async () => {
+    if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
+    if (!chosen.length) return onToast("Selecciona al menos un diseño.");
+    setBusy(true);
+    try {
+      const blob = await onExport3mfMulti(chosen, projectName);
+      const result = await saveFilesChoosingLocation([
+        { name: `${safeFileName(projectName)}_conjunto.3mf`, blob },
+        projectDownload,
+      ]);
+      if (result === "cancelled") return;
+      onToast(`3MF conjunto de ${chosen.length} diseño(s) y proyecto guardados.`);
     } catch (error) {
       onToast(String((error as Error)?.message || error));
     } finally {
@@ -120,8 +150,8 @@ export default function ExportDialog({
                         <small>{asset.build ? `${asset.build.parts.length} pieza(s) · ${asset.build.dimensions.width.toFixed(0)} × ${asset.build.dimensions.height.toFixed(0)} mm · ${asset.build.material_grams.toFixed(1)} g` : "sin geometría"}</small>
                       </div>
                       <div className="export-asset-actions" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" className="soft-button" onClick={() => downloadOne(asset, "stl")} disabled={busy || !asset.build}>STL</button>
-                        <button type="button" className="soft-button" onClick={() => downloadOne(asset, "3mf")} disabled={busy || !asset.build}>3MF</button>
+                        <button type="button" className="soft-button" onClick={() => downloadOne(asset, "stl")} disabled={engineBusy || busy || !asset.build}>STL</button>
+                        <button type="button" className="soft-button" onClick={() => downloadOne(asset, "3mf")} disabled={engineBusy || busy || !asset.build}>3MF</button>
                       </div>
                     </div>
                   );
@@ -132,10 +162,11 @@ export default function ExportDialog({
             <div className="export-block">
               <span className="block-label">Descargar todos los seleccionados, uno a uno</span>
               <div className="export-action-grid">
-                <button type="button" className="soft-button" onClick={() => downloadAll("stl")} disabled={busy}><FileBox size={15} /> Todos en STL</button>
-                <button type="button" className="soft-button" onClick={() => downloadAll("3mf")} disabled={busy}><Download size={15} /> Todos en 3MF</button>
+                <button type="button" className="soft-button" onClick={() => downloadAll("stl")} disabled={engineBusy || busy}><FileBox size={15} /> Todos en STL</button>
+                <button type="button" className="soft-button" onClick={() => downloadAll("3mf")} disabled={engineBusy || busy}><Download size={15} /> Todos en 3MF</button>
+                <button type="button" className="soft-button" onClick={downloadCombined3mf} disabled={engineBusy || busy || !chosen.length}><Download size={15} /> 3MF conjunto</button>
               </div>
-              <div className="inline-hint"><Info size={13} /><span>Elige la carpeta o el archivo de destino. El proyecto .calicocutters se guarda también junto a los modelos.</span></div>
+              <div className="inline-hint"><Info size={13} /><span>Elige la carpeta o el archivo de destino. El proyecto .calicocutters se guarda también junto a los modelos. El 3MF conjunto coloca todos los diseños en una sola escena.</span></div>
             </div>
 
             <div className="project-save-row">
@@ -157,7 +188,15 @@ export default function ExportDialog({
             </div>
             <div className="aside-note">
               <strong>Impresión</strong>
-              <p>Base plana sobre la cama y sin soportes. En Stamper + cortador, el sello va dentro del cortador.</p>
+              <p>
+                {settings.mode === "cutter-stamp"
+                  ? "Base plana sobre la cama y sin soportes. En Stamper + cortador, el sello va dentro del cortador."
+                  : settings.mode === "stencil"
+                    ? "Lámina plana sobre la cama. Revisa que los puentes y las islas queden unidos en la vista previa."
+                    : settings.mode === "cakepop"
+                      ? "Molde y prensador se imprimen por separado, con la cara plana sobre la cama."
+                      : "Base plana sobre la cama y sin soportes. Revisa la vista previa de capas en el slicer."}
+              </p>
             </div>
             <div className="aside-note soft">
               <strong>Importar en otro PC</strong>

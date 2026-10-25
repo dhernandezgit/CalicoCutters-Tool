@@ -53,8 +53,7 @@ async function call(name: "analizar" | "construir" | "exportar_3mf" | "exportar_
   return JSON.parse(result);
 }
 
-self.onmessage = async (event: MessageEvent) => {
-  const data = event.data || {};
+async function handle(data: Record<string, any>) {
   try {
     if (data.type === "init") {
       await boot(String(data.zipUrl));
@@ -75,10 +74,19 @@ self.onmessage = async (event: MessageEvent) => {
       send({ type: "result", id: data.id, data: result });
     }
   } catch (error) {
-    send({
-      type: "error",
-      id: data.id,
-      error: String((error as { message?: string })?.message || error),
-    });
+    const message = String((error as { message?: string })?.message || error);
+    if (data.type === "init") {
+      send({ type: "fatal", error: message });
+    } else {
+      send({ type: "error", id: data.id, error: message });
+    }
   }
+}
+
+// Pyodide is not re-entrant and `_payload` is shared state. Serialize every
+// request so a fast slider change or an export can never race a build.
+let queue: Promise<void> = Promise.resolve();
+self.onmessage = (event: MessageEvent) => {
+  const data = (event.data || {}) as Record<string, any>;
+  queue = queue.then(() => handle(data));
 };

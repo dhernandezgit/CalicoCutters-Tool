@@ -47,15 +47,22 @@ function combineBuilds(assets: DesignAsset[], builds: Record<string, BuildResult
   let cursorY = 0;
   let rowDepth = 0;
   const maxRow = 320;
+  const gap = 12;
   for (const { a, b } of rows) {
-    if (!b) continue;
-    const groupWidth = Math.max(...b.parts.map((p) => p.bounds.max[0] - p.bounds.min[0] + Math.abs(p.preview_offset[0]))) + 8;
-    const groupDepth = Math.max(...b.parts.map((p) => p.bounds.max[1] - p.bounds.min[1] + Math.abs(p.preview_offset[1]))) + 8;
+    if (!b || !b.parts.length) continue;
+    const minX = Math.min(...b.parts.map((p) => p.bounds.min[0] + p.preview_offset[0]));
+    const maxX = Math.max(...b.parts.map((p) => p.bounds.max[0] + p.preview_offset[0]));
+    const minY = Math.min(...b.parts.map((p) => p.bounds.min[1] + p.preview_offset[1]));
+    const maxY = Math.max(...b.parts.map((p) => p.bounds.max[1] + p.preview_offset[1]));
+    const groupWidth = maxX - minX;
+    const groupDepth = maxY - minY;
     if (cursorX > 0 && cursorX + groupWidth > maxRow) {
       cursorX = 0;
-      cursorY += rowDepth + 18;
+      cursorY += rowDepth + gap + 4;
       rowDepth = 0;
     }
+    const shiftX = cursorX - minX;
+    const shiftY = cursorY - minY;
     for (const p of b.parts) {
       parts.push({
         ...p,
@@ -63,8 +70,8 @@ function combineBuilds(assets: DesignAsset[], builds: Record<string, BuildResult
         assetName: a.name,
         color: a.color || p.color,
         preview_offset: [
-          cursorX + p.preview_offset[0],
-          cursorY + p.preview_offset[1],
+          p.preview_offset[0] + shiftX,
+          p.preview_offset[1] + shiftY,
           p.preview_offset[2],
         ],
       });
@@ -73,9 +80,10 @@ function combineBuilds(assets: DesignAsset[], builds: Record<string, BuildResult
     checks.push(...b.checks);
     grams += b.material_grams;
     ms = Math.max(ms, b.build_ms);
-    cursorX += groupWidth;
+    cursorX += groupWidth + gap;
     rowDepth = Math.max(rowDepth, groupDepth);
   }
+  if (!parts.length) return null;
   const minX = Math.min(...parts.map((p) => p.bounds.min[0] + p.preview_offset[0]));
   const maxX = Math.max(...parts.map((p) => p.bounds.max[0] + p.preview_offset[0]));
   const minY = Math.min(...parts.map((p) => p.bounds.min[1] + p.preview_offset[1]));
@@ -224,17 +232,27 @@ export default function App() {
   }, [primary, assets.length]);
 
   const addFiles = useCallback(async (files: File[]) => {
-    if (!files.length) return;
+    if (!files.length || fileBusy) return;
+    if (!engine.ready) {
+      setToast("El motor Python todavía está cargando. Espera un momento.");
+      return;
+    }
     setFileBusy(true);
     setBuildError("");
     setFileProgress({ done: 0, total: files.length });
     let added = 0;
     let processed = 0;
-    for (const file of files) {
+    for (const file of files.slice(0, 40)) {
       const ok = /\.(svg|png|jpe?g|webp)$/i.test(file.name) ||
         ["image/png", "image/jpeg", "image/webp", "image/svg+xml"].includes(file.type);
       if (!ok) {
         setToast("Formato no soportado: " + file.name);
+        processed += 1;
+        setFileProgress({ done: processed, total: files.length });
+        continue;
+      }
+      if (file.size > 25 * 1024 * 1024) {
+        setToast("Archivo demasiado grande (máximo 25 MB): " + file.name);
         processed += 1;
         setFileProgress({ done: processed, total: files.length });
         continue;
@@ -258,11 +276,15 @@ export default function App() {
     setFileBusy(false);
     setFileProgress({ done: 0, total: 0 });
     if (added) setToast(`${added} archivo${added === 1 ? "" : "s"} añadido${added === 1 ? "" : "s"}.`);
-  }, [engine, addAsset]);
+  }, [engine, addAsset, fileBusy]);
 
   const addSample = useCallback(async (sampleId: string) => {
     const sample = BUILTIN_SHAPES.find((s) => s.id === sampleId);
     if (!sample) return;
+    if (fileBusy || !engine.ready) {
+      setToast("El motor Python todavía está cargando. Espera un momento.");
+      return;
+    }
     setFileBusy(true);
     setBuildError("");
     try {
@@ -277,7 +299,7 @@ export default function App() {
     } finally {
       setFileBusy(false);
     }
-  }, [engine, addAsset]);
+  }, [engine, addAsset, fileBusy]);
 
   fileHandler.current = addFiles;
 
@@ -335,7 +357,15 @@ export default function App() {
           setBuilds((prev) => ({ ...prev, [asset.id]: result }));
           setBuildPercent(((i + 1) / assets.length) * 100);
         } catch (error) {
-          if (!cancelled) setBuildError(`${asset.name}: ${String((error as Error)?.message || error)}`);
+          if (!cancelled) {
+            setBuildError(`${asset.name}: ${String((error as Error)?.message || error)}`);
+            setBuilds((prev) => {
+              const next = { ...prev };
+              delete next[asset.id];
+              return next;
+            });
+            signatures.current.delete(asset.id);
+          }
         }
       }
       if (!cancelled) {
@@ -350,17 +380,27 @@ export default function App() {
     };
   }, [assets, engine.ready, engine.build]);
 
+  const targetIds = () => {
+    if (selectedIds.length) return selectedIds;
+    if (activeId) return [activeId];
+    return assets.length ? [assets[0].id] : [];
+  };
+
   const updateSettings = (patch: Partial<DesignSettings>) => {
+    const ids = targetIds();
+    if (!ids.length) return;
     setAssets((prev) => prev.map((asset) =>
-      selectedIds.includes(asset.id)
+      ids.includes(asset.id)
         ? { ...asset, settings: mergeSettings(asset.settings, patch, asset.shape) }
         : asset,
     ));
   };
 
   const applyPrintable = () => {
+    const ids = targetIds();
+    if (!ids.length) return;
     setAssets((prev) => prev.map((asset) =>
-      selectedIds.includes(asset.id)
+      ids.includes(asset.id)
         ? { ...asset, settings: applyPrintableSettings(asset.settings) }
         : asset,
     ));
@@ -368,8 +408,10 @@ export default function App() {
   };
 
   const applyCheck = (code: string) => {
+    const ids = targetIds();
+    if (!ids.length) return;
     setAssets((prev) => prev.map((asset) =>
-      selectedIds.includes(asset.id)
+      ids.includes(asset.id)
         ? { ...asset, settings: applyCheckFix(asset.settings, code) }
         : asset,
     ));
@@ -398,6 +440,7 @@ export default function App() {
   const removeAsset = (id: string) => {
     setAssets((prev) => prev.filter((a) => a.id !== id));
     setSelectedIds((prev) => prev.filter((x) => x !== id));
+    setActiveId((prev) => (prev === id ? null : prev));
     setBuilds((prev) => {
       const next = { ...prev };
       delete next[id];
@@ -409,6 +452,7 @@ export default function App() {
   const removeAll = () => {
     setAssets([]);
     setSelectedIds([]);
+    setActiveId(null);
     setBuilds({});
     signatures.current.clear();
     setProjectName("mi-coleccion");
@@ -428,16 +472,26 @@ export default function App() {
     setToast(`Duplicado: ${copy.name}`);
   };
 
-  const saveProject = () => {
-    if (!assets.length) return setToast("No hay diseños que guardar.");
-    saveProjectFile(projectName, assets);
-    setToast("Proyecto guardado como archivo .calicocutters.");
+  const saveProject = async () => {
+    if (!assets.length) {
+      setToast("No hay diseños que guardar.");
+      return;
+    }
+    try {
+      const result = await saveProjectFile(projectName, assets);
+      if (result === "cancelled") setToast("Guardado cancelado.");
+      else setToast("Proyecto guardado como archivo .calicocutters.");
+    } catch (error) {
+      setToast(`No se pudo guardar el proyecto: ${String((error as Error)?.message || error)}`);
+    }
   };
 
   const openProject = async (file: File) => {
     try {
+      if (file.size > 20 * 1024 * 1024) throw new Error("El proyecto supera 20 MB.");
       const text = await file.text();
       const parsed = projectFromJson(text);
+      if (parsed.assets.length > 100) throw new Error("El proyecto contiene más de 100 diseños.");
       setAssets(parsed.assets);
       setSelectedIds(parsed.assets.slice(0, 1).map((a) => a.id));
       setActiveId(parsed.assets[0]?.id ?? null);
@@ -486,9 +540,14 @@ export default function App() {
     [engine],
   );
 
-  const primaryName = selectedAssets.length > 1
-    ? `${selectedAssets.length} diseños seleccionados`
-    : primary?.name || "Sin diseño";
+  const partNames = new Set(displayBuild?.parts.map((p) => p.name) ?? []);
+  const hasCutterPart = ["Cortador", "Impronta", "Puzzle", "Cortador sándwich", "Set de cortadores"].some((name) => partNames.has(name));
+  const hasStampPart = partNames.has("Sello");
+
+  useEffect(() => {
+    if (isolate === "stamp" && !hasStampPart) setIsolate("all");
+    if (isolate === "cutter" && !hasCutterPart) setIsolate("all");
+  }, [hasCutterPart, hasStampPart, isolate]);
 
   return (
     <div className={`app${busy ? " is-busy" : ""}`}>
@@ -558,11 +617,13 @@ export default function App() {
               <button type="button" className={viewScope === "all" ? "on" : ""} onClick={() => { setViewScope("all"); setFitKey(`all-${Date.now()}`); }}>Todos</button>
               <button type="button" className={viewScope === "selected" ? "on" : ""} onClick={() => { setViewScope("selected"); setFitKey(`sel-${Date.now()}`); }}>Selección</button>
             </div>
-            <div className="part-isolate">
-              <button type="button" className={isolate === "all" ? "on" : ""} onClick={() => setIsolate("all")}><Layers size={14} /> Conjunto</button>
-              <button type="button" className={isolate === "cutter" ? "on" : ""} onClick={() => setIsolate("cutter")}><Scissors size={14} /> Cortador</button>
-              <button type="button" className={isolate === "stamp" ? "on" : ""} onClick={() => setIsolate("stamp")}><Stamp size={14} /> Sello</button>
-            </div>
+            {(hasCutterPart || hasStampPart) && (
+              <div className="part-isolate">
+                <button type="button" className={isolate === "all" ? "on" : ""} onClick={() => setIsolate("all")}><Layers size={14} /> Conjunto</button>
+                {hasCutterPart && <button type="button" className={isolate === "cutter" ? "on" : ""} onClick={() => setIsolate("cutter")}><Scissors size={14} /> Cortador</button>}
+                {hasStampPart && <button type="button" className={isolate === "stamp" ? "on" : ""} onClick={() => setIsolate("stamp")}><Stamp size={14} /> Sello</button>}
+              </div>
+            )}
           </div>
 
           <div className="viewer">
@@ -601,7 +662,15 @@ export default function App() {
             )}
 
             {(buildError || engine.engineError) && (
-              <div className="viewer-error"><strong>{engine.engineError ? "No se pudo cargar el motor Python" : "No se pudo generar el modelo"}</strong><span>{engine.engineError || buildError}</span></div>
+              <div className="viewer-error">
+                <strong>{engine.engineError ? "No se pudo cargar el motor Python" : "No se pudo generar el modelo"}</strong>
+                <span>{engine.engineError || buildError}</span>
+                {engine.engineError && (
+                  <button type="button" className="soft-button" onClick={() => engine.restart()}>
+                    Reintentar motor
+                  </button>
+                )}
+              </div>
             )}
           </div>
 
@@ -620,6 +689,7 @@ export default function App() {
             selectionCount={selectedAssets.length}
             selectionNames={selectedAssets.map((a) => a.name)}
             assetColor={primary?.color ?? "#f39ab1"}
+            assetName={primary?.name ?? ""}
             onColorChange={(color) => primary && setColor(primary.id, color)}
             onRename={(name) => primary && renameAsset(primary.id, name)}
             onRenameAll={renameAll}
@@ -656,7 +726,9 @@ export default function App() {
         assets={rows}
         settings={primary?.settings ?? DEFAULT_SETTINGS}
         projectName={projectName}
+        engineBusy={busy}
         onExport3mf={onExport3mf}
+        onExport3mfMulti={onExport3mfMulti}
         onToast={setToast}
         plaPricePerKg={plaPricePerKg}
       />

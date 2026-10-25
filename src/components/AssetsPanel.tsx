@@ -120,7 +120,7 @@ export default function AssetsPanel({
           <Check size={13} /> Todos
         </button>
         <button type="button" onClick={() => selectedIds.forEach((id) => onSelect(id, "toggle"))}>Quitar selección</button>
-        <button type="button" className="danger" onClick={onRemoveAll}><Trash2 size={13} /> Vaciar</button>
+        <button type="button" className="danger" onClick={() => { if (window.confirm("¿Vaciar todos los diseños del proyecto?")) onRemoveAll(); }}><Trash2 size={13} /> Vaciar</button>
       </div>
 
       <div className="asset-list">
@@ -157,7 +157,7 @@ export default function AssetsPanel({
                     ? `${asset.build.dimensions.width.toFixed(1)} × ${asset.build.dimensions.height.toFixed(1)} mm`
                     : "calculando…"}
                   <span>·</span>
-                  {asset.shape.details.length ? `${asset.shape.details.length} detalles` : "sin detalles"}
+                  {asset.shape.details.length ? `${asset.shape.details.length} detalle${asset.shape.details.length === 1 ? "" : "s"}` : "sin detalles"}
                 </div>
                 {asset.shape.warnings[0] && <div className="asset-warning">{asset.shape.warnings[0]}</div>}
                 <div className="asset-actions" onClick={(e) => e.stopPropagation()}>

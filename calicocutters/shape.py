@@ -122,18 +122,63 @@ class Shape:
 
     @staticmethod
     def from_dict(d: dict) -> "Shape":
+        if not isinstance(d, dict):
+            raise ValueError("El diseño no tiene el formato esperado.")
+        outer = _ring_from_json(d.get("outer"), "contorno")
+        holes = _rings_from_json(d.get("holes"), "agujeros")
+        details = _rings_from_json(d.get("details"), "detalles")
+        extras = _rings_from_json(d.get("extras"), "formas exteriores")
+        warnings = d.get("warnings", [])
+        if not isinstance(warnings, list):
+            warnings = []
+        image_size = d.get("image_size")
+        if image_size and len(image_size) == 2:
+            image_size = (int(image_size[0]), int(image_size[1]))
+        else:
+            image_size = None
+        color = d.get("source_color")
         return Shape(
-            name=str(d.get("name", "Diseño")),
-            outer=[(float(x), float(y)) for x, y in d["outer"]],
-            holes=[[(float(x), float(y)) for x, y in h] for h in d.get("holes", [])],
-            details=[[(float(x), float(y)) for x, y in h] for h in d.get("details", [])],
-            extras=[[(float(x), float(y)) for x, y in h] for h in d.get("extras", [])],
+            name=str(d.get("name", "Diseño"))[:120],
+            outer=outer,
+            holes=holes,
+            details=details,
+            extras=extras,
             source_kind=str(d.get("source_kind", "svg")),
-            warnings=list(d.get("warnings", [])),
-            image_size=tuple(d["image_size"]) if d.get("image_size") else None,
-            source_svg=d.get("source_svg"),
-            source_color=d.get("source_color"),
+            warnings=[str(w) for w in warnings],
+            image_size=image_size,
+            source_svg=None,
+            source_color=str(color) if color else None,
         )
+
+
+def _ring_from_json(value, label: str) -> list[Point2]:
+    if not isinstance(value, (list, tuple)) or len(value) < 3:
+        raise ValueError(f"La silueta no tiene un {label} válido.")
+    if len(value) > 30000:
+        raise ValueError(f"El {label} tiene demasiados puntos.")
+    out: list[Point2] = []
+    for pair in value:
+        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
+            raise ValueError(f"El {label} contiene una coordenada no válida.")
+        try:
+            x = float(pair[0])
+            y = float(pair[1])
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"El {label} contiene una coordenada no numérica.") from exc
+        if not (math.isfinite(x) and math.isfinite(y)):
+            raise ValueError(f"El {label} contiene una coordenada infinita.")
+        out.append((x, y))
+    return out
+
+
+def _rings_from_json(value, label: str) -> list[list[Point2]]:
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ValueError(f"Los {label} no tienen el formato esperado.")
+    if len(value) > 2000:
+        raise ValueError(f"Hay demasiados {label}.")
+    return [_ring_from_json(ring, label) for ring in value]
 
 
 # ------------------------------------------------------------------ SVG ----
@@ -496,7 +541,12 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
 
 # --------------------------------------------------------------- raster ----
 def _mask_from_image(img: Image.Image) -> tuple[np.ndarray, np.ndarray, bool]:
-    """Return (silhouette_mask, detail_mask, was_line_art)."""
+    """Return (silhouette_mask, detail_mask, was_line_art).
+
+    Opaque images are traced against their border colour, not only against
+    darkness.  This keeps light pastel artwork on a white background working
+    instead of producing an empty or clipped silhouette.
+    """
     import cv2
 
     rgba = np.asarray(img.convert("RGBA"))
@@ -509,20 +559,44 @@ def _mask_from_image(img: Image.Image) -> tuple[np.ndarray, np.ndarray, bool]:
         opaque_frac = float(opaque.mean())
         dark = (lum < 170) & opaque
         dark_frac = float(dark.sum()) / max(1.0, float(opaque.sum()))
-        # A transparent PNG whose ink covers only a small part of the canvas
-        # is line art, not a filled silhouette.
         line_art = opaque_frac < 0.55 and dark_frac > 0.5
         silhouette = opaque
         ink = dark
+        line_source = ink
     else:
+        border = np.concatenate([
+            rgb[:3, :, :].reshape(-1, 3),
+            rgb[-3:, :, :].reshape(-1, 3),
+            rgb[:, :3, :].reshape(-1, 3),
+            rgb[:, -3:, :].reshape(-1, 3),
+        ])
+        background = np.median(border, axis=0)
+        spread = float(np.max(np.std(border, axis=0)))
+        background_is_flat = spread < 24
+        color_distance = np.linalg.norm(rgb.astype(float) - background, axis=2)
+        color_foreground = color_distance > max(26.0, spread * 2.5)
         dark = lum < 175
+        foreground = color_foreground | dark
+        dark_frac = float(dark.mean())
+        fill_ratio = 0.0
+        if foreground.any():
+            fg8 = (foreground.astype(np.uint8) * 255)
+            contours, _ = cv2.findContours(fg8, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            outer_area = sum(max(0.0, cv2.contourArea(c)) for c in contours)
+            fill_ratio = float(foreground.sum()) / max(1.0, outer_area)
+        # Thin line art has a low fill ratio; a filled silhouette does not.
+        line_art = background_is_flat and foreground.any() and fill_ratio < 0.38 and dark_frac < 0.45
+        if background_is_flat and foreground.any() and float(foreground.mean()) < 0.9:
+            silhouette = foreground
+        else:
+            silhouette = dark
         ink = dark
-        line_art = float(dark.mean()) < 0.48
-        silhouette = dark
+        line_source = foreground if background_is_flat and foreground.any() else ink
     if not (silhouette.any() or ink.any()):
         raise ValueError("La imagen no tiene una silueta visible.")
     if line_art:
-        silhouette = ink
+        silhouette = line_source
+        ink = line_source
     if not silhouette.any():
         raise ValueError("La imagen no tiene una silueta visible.")
     # Crop to the silhouette to avoid a giant empty canvas.
@@ -531,6 +605,7 @@ def _mask_from_image(img: Image.Image) -> tuple[np.ndarray, np.ndarray, bool]:
     x0, x1 = max(0, xs.min() - 4), min(silhouette.shape[1], xs.max() + 5)
     silhouette = silhouette[y0:y1, x0:x1]
     ink = ink[y0:y1, x0:x1]
+    rgb = rgb[y0:y1, x0:x1]
     if line_art:
         # Close small gaps in the ink line, then fill its outer contour.
         ink8 = (ink.astype(np.uint8) * 255)
@@ -551,7 +626,22 @@ def _mask_from_image(img: Image.Image) -> tuple[np.ndarray, np.ndarray, bool]:
             inner = silhouette
         details = (ink8 > 0) & inner
     else:
-        details = ink & silhouette
+        # Interior pixels that differ from the dominant fill become relief.
+        if silhouette.any():
+            fill = np.median(rgb[silhouette], axis=0)
+            detail_distance = np.linalg.norm(rgb.astype(float) - fill, axis=2)
+            try:
+                from scipy import ndimage
+                inner = ndimage.binary_erosion(silhouette, iterations=3)
+            except Exception:
+                inner = silhouette
+            details = (detail_distance > 32.0) & inner
+            details |= ink & inner
+            details = cv2.morphologyEx(
+                (details.astype(np.uint8) * 255), cv2.MORPH_OPEN, np.ones((2, 2), np.uint8)
+            ) > 0
+        else:
+            details = np.zeros_like(silhouette)
     if not silhouette.any():
         raise ValueError("No se pudo rellenar la silueta de la imagen.")
     return silhouette, details, line_art

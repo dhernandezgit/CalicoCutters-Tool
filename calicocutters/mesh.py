@@ -17,8 +17,8 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 from shapely import affinity
-from shapely.geometry import MultiPolygon, Point, Polygon, box
-from shapely.ops import unary_union
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
+from shapely.ops import nearest_points, unary_union
 from shapely.geometry.polygon import orient
 
 from .vendor.earcut import earcut
@@ -597,6 +597,8 @@ def build_imprint(
     base_height: float,
     base_width: float,
     imprint_depth: float,
+    base_shape: str = "round",
+    sharp_edge: bool = True,
 ) -> Mesh:
     cutter = build_cutter(
         main,
@@ -606,6 +608,8 @@ def build_imprint(
         chamfer_height=chamfer_height,
         base_height=base_height,
         base_width=base_width,
+        base_shape=base_shape,
+        sharp_edge=sharp_edge,
     )
     floor_poly = main.buffer(-max(0.5, blade_thickness * 0.8), join_style=2)
     if floor_poly.is_empty:
@@ -637,6 +641,8 @@ def build_sandwich(
     dent_size: float,
     dent_spacing: float,
     dent_depth: float,
+    base_shape: str = "round",
+    sharp_edge: bool = True,
 ) -> Mesh:
     """Cutter + inner sealing ring with crimping bumps."""
     cutter = build_cutter(
@@ -647,12 +653,22 @@ def build_sandwich(
         chamfer_height=chamfer_height,
         base_height=base_height,
         base_width=base_width,
+        base_shape=base_shape,
+        sharp_edge=sharp_edge,
     )
     seal_outer = main.buffer(-max(0.2, gap), join_style=1, quad_segs=8)
     seal_inner = seal_outer.buffer(-max(0.5, seal_width), join_style=1, quad_segs=8)
     seal_ring = seal_outer.difference(seal_inner)
     seal_height = max(2.0, base_height + blade_depth * 0.62)
     parts = [cutter]
+    # A shallow connector ring ties the sealing ring to the cutter base so the
+    # sandwich tool is one printable piece instead of a loose inner ring.
+    if not seal_outer.is_empty:
+        connector_outer = main.buffer(max(base_width * 0.5, 0.6), join_style=1, quad_segs=8)
+        connector = connector_outer.difference(seal_outer)
+        for p in _ring_parts(connector):
+            if p.area > 0.01:
+                parts.append(extrude_polygon(p, 0.0, max(1.0, base_height)))
     for p in _ring_parts(seal_ring):
         if p.area > 0.01:
             parts.append(extrude_polygon(p, 0.0, seal_height))
@@ -724,6 +740,10 @@ def build_roller(
     out = parts[0]
     for p in parts[1:]:
         out = out.append(p)
+    # The roller is printed standing up: move its lowest face onto Z=0.
+    lowest = out.bounds["min"][2]
+    if lowest != 0:
+        out = out.translated([0.0, 0.0, -lowest])
     return out
 
 
@@ -736,30 +756,76 @@ def build_stencil(
     cols: int,
     spacing: float,
     thickness: float,
+    shape_size: float = 0.0,
+    margin: float = 3.0,
+    pattern: str = "grid",
+    bridges: bool = True,
+    bridge_width: float = 1.2,
 ) -> Mesh:
-    """Flat stencil sheet with the motif repeated as through-cut openings."""
+    """Flat stencil sheet with the motif repeated as through-cut openings.
+
+    The sheet always keeps a solid margin around the pattern.  When a motif
+    has an interior island (for example the centre of an "O"), a thin backing
+    bridge keeps that island attached instead of leaving a loose piece.
+    """
     rows = max(1, int(rows))
     cols = max(1, int(cols))
+    width = max(10.0, float(width))
+    height = max(10.0, float(height))
+    margin = max(0.0, min(float(margin), min(width, height) * 0.35))
     sheet = box(-width / 2, -height / 2, width / 2, height / 2)
     b = main.bounds
     bw = max(1e-6, b[2] - b[0])
     bh = max(1e-6, b[3] - b[1])
-    cell_w = width / cols
-    cell_h = height / rows
-    scale = min((cell_w - max(0.5, spacing)) / bw, (cell_h - max(0.5, spacing)) / bh)
-    pattern = affinity.scale(main, max(0.05, scale), max(0.05, scale), origin="center")
+    available_w = max(4.0, width - margin * 2)
+    available_h = max(4.0, height - margin * 2)
+    cell_w = available_w / cols
+    cell_h = available_h / rows
+    fit = min((cell_w - max(0.5, spacing)) / bw, (cell_h - max(0.5, spacing)) / bh)
+    if shape_size and shape_size > 0:
+        fit = min(fit, float(shape_size) / max(bw, bh))
+    scale = max(0.05, fit)
+    pattern_poly = affinity.scale(main, scale, scale, origin="center")
+    # Guarantee a true border even when the motif is very asymmetric.
+    pb = pattern_poly.bounds
+    pattern_poly = affinity.translate(
+        pattern_poly,
+        -(pb[0] + pb[2]) / 2,
+        -(pb[1] + pb[3]) / 2,
+    )
+    half_pattern_w = (pb[2] - pb[0]) / 2
+    half_pattern_h = (pb[3] - pb[1]) / 2
     cuts: list[Polygon] = []
     for r in range(rows):
         for c in range(cols):
-            cx = -width / 2 + (c + 0.5) * cell_w
-            cy = -height / 2 + (r + 0.5) * cell_h
-            cuts.append(affinity.translate(pattern, cx, cy))
+            cx = -available_w / 2 + (c + 0.5) * cell_w
+            cy = -available_h / 2 + (r + 0.5) * cell_h
+            if pattern == "diagonal" and r % 2 == 1:
+                cx += cell_w / 2
+                if cx + half_pattern_w > width / 2 - margin:
+                    cx -= cell_w
+            cuts.append(affinity.translate(pattern_poly, cx, cy))
     holes = unary_union(cuts)
     result = sheet.difference(holes)
+    pieces = [p for p in _ring_parts(result) if p.area > 0.05]
+    if not pieces:
+        return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
+    pieces.sort(key=lambda p: -p.area)
+    if bridges and len(pieces) > 1:
+        connected = pieces[0]
+        for island in pieces[1:]:
+            try:
+                a, c = nearest_points(connected, island)
+                bridge = LineString([a, c]).buffer(
+                    max(0.5, float(bridge_width)) / 2, cap_style=2, join_style=2
+                )
+                connected = unary_union([connected, island, bridge])
+            except Exception:
+                connected = unary_union([connected, island])
+        pieces = [p for p in _ring_parts(connected) if p.area > 0.05]
     parts: list[Mesh] = []
-    for p in _ring_parts(result):
-        if p.area > 0.05:
-            parts.append(extrude_polygon(p, 0.0, max(0.6, thickness)))
+    for p in pieces:
+        parts.append(extrude_polygon(p, 0.0, max(0.6, thickness)))
     if not parts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
     out = parts[0]
@@ -776,17 +842,109 @@ def build_topper(
     relief: float,
     pin_length: float,
     pin_width: float,
+    backing: float = 0.0,
+    pin_position: float = 0.0,
+    invert: bool = False,
 ) -> Mesh:
     """Flat cake topper with a printable stake in the same plane."""
-    parts = [extrude_polygon(main, 0.0, max(1.0, thickness))]
+    base_poly = main.buffer(max(0.0, float(backing)), join_style=1, quad_segs=8)
+    if base_poly.is_empty:
+        base_poly = main
+    parts = [extrude_polygon(base_poly, 0.0, max(1.0, thickness))]
+    clipped_details: list[Polygon] = []
     for d in details:
         clipped = d.intersection(main)
         for p in _ring_parts(clipped):
             if p.area > 0.15:
+                clipped_details.append(p)
+    if invert and clipped_details:
+        # Raise the background and leave the artwork at base level.  This is the
+        # same physical result as an inverted stamp without needing 3D CSG.
+        # Use the original detail rings for the cut-out: re-intersecting them
+        # can introduce near-duplicate vertices that make earcut create cracks.
+        cover = base_poly.difference(unary_union([d for d in details if not d.is_empty]))
+        for p in _ring_parts(cover):
+            if p.area > 0.15:
                 parts.append(extrude_polygon(p, thickness - 0.2, max(0.3, relief) + 0.2))
-    b = main.bounds
-    pin = box(-max(1.0, pin_width) / 2, b[1] - max(2.0, pin_length), max(1.0, pin_width) / 2, b[1] + 0.5)
+    else:
+        for p in clipped_details:
+            parts.append(extrude_polygon(p, thickness - 0.2, max(0.3, relief) + 0.2))
+    b = base_poly.bounds
+    usable = max(0.0, (b[2] - b[0]) - max(1.0, pin_width))
+    cx = (float(pin_position) / 100.0) * usable / 2
+    pin = box(
+        cx - max(1.0, pin_width) / 2,
+        b[1] - max(2.0, pin_length),
+        cx + max(1.0, pin_width) / 2,
+        b[1] + 0.5,
+    )
+    if pin.is_empty or pin.area <= 0.01:
+        return parts[0] if len(parts) == 1 else _append_all(parts)
     parts.append(extrude_polygon(pin, 0.0, max(1.0, thickness)))
+    return _append_all(parts)
+
+
+def build_cake_pop(
+    main: Polygon,
+    details: list[Polygon],
+    *,
+    mold_height: float,
+    mold_wall: float,
+    base_height: float,
+    stick_hole: float,
+    hole_clearance: float,
+    plunger_clearance: float,
+    plunger_back: float,
+    plunger_relief: float,
+) -> tuple[Mesh, Mesh]:
+    """A two-piece cake-pop mould: open tray plus fitted plunger.
+
+    The tray is a closed-bottom cavity with a central stick channel.  The
+    plunger is a shallow stamp that fits inside the cavity.  Both pieces are
+    built from watertight prisms; overlapping shells are unioned by the
+    slicer at print time.
+    """
+    main = main.buffer(0)
+    outer = main.buffer(max(0.8, mold_wall), join_style=1, quad_segs=8)
+    if outer.is_empty:
+        outer = main
+    hole_r = max(1.0, (stick_hole + hole_clearance * 2) / 2)
+    c = main.centroid
+    stick = Point(c.x, c.y).buffer(hole_r, quad_segs=32)
+    floor_poly = outer.difference(stick)
+    base = extrude_polygon(floor_poly, 0.0, max(1.0, base_height))
+    wall_ring = outer.difference(main)
+    walls = [
+        extrude_polygon(p, max(0.0, base_height - 0.25), max(0.5, mold_height) + 0.25)
+        for p in _ring_parts(wall_ring)
+        if p.area > 0.01
+    ]
+    tray = _append_all([base] + walls)
+    # The plunger is deliberately slightly smaller than the cavity.
+    plunger_poly = main.buffer(-max(0.2, plunger_clearance), join_style=1, quad_segs=8)
+    if plunger_poly.is_empty:
+        plunger_poly = main.buffer(-0.2, join_style=1, quad_segs=8)
+    plunger_parts = [extrude_polygon(plunger_poly, 0.0, max(1.0, plunger_back))]
+    for d in details:
+        clipped = d.intersection(plunger_poly)
+        for p in _ring_parts(clipped):
+            if p.area > 0.15:
+                plunger_parts.append(extrude_polygon(
+                    p, max(0.0, plunger_back - 0.2), max(0.3, plunger_relief) + 0.2
+                ))
+    # Side grip tab, printed in the same plane as the plunger.
+    pb = plunger_poly.bounds
+    grip_len = max(10.0, min(26.0, (pb[3] - pb[1]) * 0.35))
+    grip_wid = max(7.0, min(16.0, (pb[2] - pb[0]) * 0.18))
+    grip = rounded_rect(grip_len, grip_wid, grip_wid / 2)
+    grip = affinity.translate(grip, pb[2] - 1.5 + grip_len / 2, (pb[1] + pb[3]) / 2)
+    plunger_parts.append(extrude_polygon(grip, 0.0, max(1.0, plunger_back)))
+    return tray, _append_all(plunger_parts)
+
+
+def _append_all(parts: list[Mesh]) -> Mesh:
+    if not parts:
+        return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
     out = parts[0]
     for p in parts[1:]:
         out = out.append(p)

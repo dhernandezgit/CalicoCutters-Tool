@@ -15,11 +15,13 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Vectoriza dibujos de líneas y conserva los detalles interiores para el sello.
 - Genera un cortador exterior con cuchilla, base y mango opcional (desactivado por defecto).
 - Genera un sello coordinado con respaldo y relieve; en Stamper + cortador se muestra dentro del cortador.
-- Modos Cortador, Sello, Impronta, Puzzle, Sándwich y Rodillo.
+- Menú agrupado por **Galletas, Sellos, Sándwich, Rodillo, Repostería y Cerámica**:
+  Stamper + cortador, cortador, impronta, puzzle, set de tamaños, sello, sándwich,
+  rodillo de textura, topper, stencil, galleta de práctica, molde cake pop y perfiles de arcilla.
 - Vista previa 3D real, vista 2D, selección múltiple y vista de un solo archivo.
 - Ajustes básicos rápidos y modo avanzado con impresión, base, barras, color, nombres y coste.
-- Comprobaciones de impresión: agua estanco, grosor de pared, filo, holgura y encaje en cama.
-- Exporta STL y 3MF por archivo o por separado, sin ZIP obligatorio.
+- Comprobaciones de impresión: agua estanco, grosor de pared, filo, holgura, separación entre copias y encaje en cama.
+- Exporta STL y 3MF por archivo o por separado, sin ZIP obligatorio, además de un 3MF conjunto opcional.
 - Guarda junto a cada exportación el proyecto `.calicocutters` completo, con formas, ajustes, nombres y colores.
 - El botón **Importar** recupera el proyecto en otro PC sin instalar nada.
 - Peso y coste estimado con precio editable del PLA (14 €/kg por defecto).
@@ -58,12 +60,12 @@ npm run build
 Los tests comprueban:
 
 - Parseo y normalización de SVG, huecos y transforms.
-- Vectorización de dibujos de líneas.
+- Vectorización de dibujos de líneas, PNG transparente y arte coloreado sobre blanco.
 - Extrusiones y loft watertight.
-- Cortador + sello con dos piezas y alturas correctas.
-- Avisos de imprimibilidad.
-- Exportación STL y 3MF con objetos separados.
-- El STL de referencia de Cookiecad como fixture de comparación.
+- Todos los modos, incluyendo stencil, topper, cake pop, práctica y set de cortadores.
+- Avisos de imprimibilidad y correcciones aplicables.
+- Exportación STL y 3MF con objetos separados y colocación sin solapes.
+- Importación de proyectos y normalización de ajustes.
 
 ## Impresión
 
@@ -72,10 +74,18 @@ Los tests comprueban:
 - Altura de cuchilla: 12 mm.
 - Base: 3,5 mm de alto × 4 mm de ancho.
 - Sello: 5,5 mm de respaldo + 3 mm de relieve y 0,8 mm de holgura.
+- Stencil: 1,5 mm de lámina y puentes de unión para islas interiores.
+- Cake pop: molde con agujero de palito y prensador a juego.
 - Cama: 256 × 256 mm.
 - Sin soportes; base plana sobre la cama.
 
-La app avisa si bajas de 2 líneas de pared o de una línea de filo. El slicer sigue siendo la última comprobación.
+La app avisa si bajas de 2 líneas de pared, de una línea de filo, si una copia queda demasiado cerca de otra o si una pieza no cabe en la cama. El slicer sigue siendo la última comprobación.
+
+## Despliegue
+
+GitHub Actions ejecuta los tests, compila la web en `dist/` y publica la rama `gh-pages`.
+La fuente de GitHub Pages debe ser **Deploy from a branch → gh-pages / (root)**.
+La app queda en `https://dhernandezgit.github.io/CalicoCutters-Tool/web/`.
 
 ## Bambu Studio
 

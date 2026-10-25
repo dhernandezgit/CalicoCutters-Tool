@@ -33,7 +33,7 @@ export default function StatusBar({
   onChecks: () => void;
   onDonate?: () => void;
 }) {
-  const level = levelOf(checks);
+  const level = build ? levelOf(checks) : "warn";
   const dims = build?.dimensions;
   const grams = build?.material_grams ?? 0;
   const price = (grams / 1000) * plaPricePerKg;
@@ -60,7 +60,7 @@ export default function StatusBar({
       </div>
       <button type="button" className={`status-ready ${level}`} onClick={onChecks}>
         {level === "ok" ? <ShieldCheck size={15} /> : <TriangleAlert size={15} />}
-        {level === "ok" ? "Print-ready" : level === "warn" ? "Revisar" : "Error"}
+        {!build ? "Sin modelo" : level === "ok" ? "Print-ready" : level === "warn" ? "Revisar" : "Error"}
       </button>
       <button type="button" className="status-action" onClick={onHelp}>
         <CircleHelp size={15} /> Cómo usar

@@ -11,7 +11,9 @@ export type CreateMode =
   | "roller"
   | "stencil"
   | "topper"
-  | "practice";
+  | "practice"
+  | "cakepop"
+  | "cutter-set";
 
 export type PrinterProfile = "fdm04" | "fdm06" | "resin";
 
@@ -85,16 +87,37 @@ export interface DesignSettings {
   stencilRows: number;
   stencilCols: number;
   stencilSpacing: number;
+  stencilMargin: number;
+  stencilShapeSize: number;
+  stencilPattern: "grid" | "diagonal";
+  stencilBridges: boolean;
+  stencilBridgeWidth: number;
   stencilThickness: number;
 
   topperThickness: number;
   topperRelief: number;
+  topperBacking: number;
   topperPinLength: number;
   topperPinWidth: number;
+  topperPinPosition: number;
+  topperInvert: boolean;
 
   practiceThickness: number;
   practiceWallHeight: number;
   practiceWallWidth: number;
+
+  cakePopMoldHeight: number;
+  cakePopMoldWall: number;
+  cakePopBase: number;
+  cakePopStickHole: number;
+  cakePopHoleClearance: number;
+  cakePopPlungerClearance: number;
+  cakePopPlungerBack: number;
+  cakePopRelief: number;
+
+  setCount: number;
+  setStep: number;
+  setSpacing: number;
 
   /** Colour of this design in preview / 3MF. */
   color?: string;
@@ -242,16 +265,37 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stencilRows: 3,
   stencilCols: 3,
   stencilSpacing: 3,
+  stencilMargin: 3,
+  stencilShapeSize: 15,
+  stencilPattern: "grid",
+  stencilBridges: true,
+  stencilBridgeWidth: 1.2,
   stencilThickness: 1.5,
 
   topperThickness: 5,
   topperRelief: 2,
+  topperBacking: 2,
   topperPinLength: 40,
   topperPinWidth: 6,
+  topperPinPosition: 0,
+  topperInvert: false,
 
   practiceThickness: 3,
   practiceWallHeight: 8,
   practiceWallWidth: 1.4,
+
+  cakePopMoldHeight: 18,
+  cakePopMoldWall: 2.4,
+  cakePopBase: 2,
+  cakePopStickHole: 4.8,
+  cakePopHoleClearance: 0.4,
+  cakePopPlungerClearance: 0.6,
+  cakePopPlungerBack: 2.5,
+  cakePopRelief: 2,
+
+  setCount: 3,
+  setStep: 0.18,
+  setSpacing: 10,
 };
 
 export const PRINTER_PROFILES: Record<

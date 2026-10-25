@@ -46,7 +46,7 @@ def test_default_dimensions_and_nested_parts():
         assert mesh.bounds[0][2] == pytest.approx(0.0, abs=0.01)
 
 
-@pytest.mark.parametrize("mode", ["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "roller", "stencil", "topper", "practice"])
+@pytest.mark.parametrize("mode", ["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "roller", "stencil", "topper", "practice", "cakepop", "cutter-set"])
 def test_all_creation_modes_produce_printable_meshes(mode):
     settings = {
         **DEFAULT_SETTINGS,
@@ -69,6 +69,7 @@ def test_all_creation_modes_produce_printable_meshes(mode):
         assert mesh.volume > 0
         assert part["triangles"] > 10
         assert all(abs(float(v)) < 1000 for v in mesh.vertices.reshape(-1))
+        assert float(mesh.bounds[0][2]) == pytest.approx(0.0, abs=0.02)
 
 
 def test_actionable_printability_checks():
@@ -180,3 +181,136 @@ def test_multi_3mf_has_one_object_per_design():
     assert "Corazón 2 · Sello" in model
     assert "#f39ab1" in model
     assert "#b7a4e8" in model
+
+
+def test_cutter_set_contains_several_watertight_cutters():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter-set",
+        "setCount": 3,
+        "setStep": 0.2,
+        "setSpacing": 8,
+    }})
+    mesh = _mesh(result["parts"][0])
+    assert result["parts"][0]["name"] == "Set de cortadores"
+    assert mesh.is_watertight
+    assert len(mesh.split(only_watertight=False)) >= 3
+
+
+def test_cake_pop_has_mould_and_plunger():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cakepop",
+        "cakePopMoldHeight": 18,
+        "cakePopStickHole": 4.8,
+    }})
+    assert [p["name"] for p in result["parts"]] == ["Molde cake pop", "Prensador"]
+    for part in result["parts"]:
+        mesh = _mesh(part)
+        assert mesh.is_watertight
+        assert mesh.volume > 0
+
+
+def test_stencil_stays_inside_requested_sheet():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stencil",
+        "stencilWidth": 100,
+        "stencilHeight": 80,
+        "stencilRows": 3,
+        "stencilCols": 3,
+        "stencilShapeSize": 14,
+        "stencilMargin": 3,
+        "stencilBridges": True,
+    }})
+    mesh = _mesh(result["parts"][0])
+    assert mesh.is_watertight
+    assert mesh.bounds[1][0] - mesh.bounds[0][0] == pytest.approx(100, abs=0.2)
+    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(80, abs=0.2)
+
+
+def test_multi_3mf_places_designs_without_overlap():
+    import xml.etree.ElementTree as ET
+    shape = _shape()
+    result = export_3mf_multi({
+        "name": "coleccion",
+        "items": [
+            {"name": "A", "shape": shape.to_dict(), "settings": {**DEFAULT_SETTINGS, "mode": "stamp"}},
+            {"name": "B", "shape": shape.to_dict(), "settings": {**DEFAULT_SETTINGS, "mode": "stamp"}},
+        ],
+    })
+    raw = base64.b64decode(result["data_b64"])
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        root = ET.fromstring(z.read("3D/3dmodel.model"))
+    objects = {}
+    for obj in root.iter():
+        if obj.tag.endswith("object"):
+            objects[obj.attrib.get("id")] = obj
+    ranges = []
+    for item in root.iter():
+        if not item.tag.endswith("item"):
+            continue
+        obj = objects[item.attrib["objectid"]]
+        values = item.attrib["transform"].split()
+        tx = float(values[9])
+        xs = [
+            float(v.attrib["x"]) + tx
+            for v in obj.iter()
+            if v.tag.endswith("vertex")
+        ]
+        ranges.append((min(xs), max(xs)))
+    ranges.sort()
+    white = [(min(a, b), max(a, b)) for a, b in zip(ranges, ranges[1:])]
+    for left, right in white:
+        assert right[0] - left[1] >= 10.0
+
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <path fill="#111" fill-rule="evenodd" d="M10 10H90V90H10Z M35 35H65V65H35Z"/>
+    </svg>"""
+    shape = parse_svg(svg, "frame.svg", 80)
+    settings = {
+        **DEFAULT_SETTINGS,
+        "mode": "stencil",
+        "stencilRows": 2,
+        "stencilCols": 2,
+        "stencilShapeSize": 20,
+        "stencilBridges": True,
+    }
+    with_bridges = _mesh(build({"shape": shape.to_dict(), "settings": settings})["parts"][0])
+    settings["stencilBridges"] = False
+    without_bridges = _mesh(build({"shape": shape.to_dict(), "settings": settings})["parts"][0])
+    assert with_bridges.is_watertight
+    assert without_bridges.is_watertight
+    assert len(with_bridges.split(only_watertight=False)) < len(without_bridges.split(only_watertight=False))
+
+
+def test_topper_invert_relief_is_watertight():
+    common = {
+        **DEFAULT_SETTINGS,
+        "mode": "topper",
+        "topperBacking": 2,
+        "topperPinLength": 35,
+    }
+    normal = build({"shape": _shape().to_dict(), "settings": common})
+    inverted = build({"shape": _shape().to_dict(), "settings": {**common, "topperInvert": True}})
+    assert _mesh(normal["parts"][0]).is_watertight
+    assert _mesh(inverted["parts"][0]).is_watertight
+    assert inverted["parts"][0]["volume"] != normal["parts"][0]["volume"]
+
+
+
+def test_invalid_settings_are_clamped_instead_of_crashing():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter",
+        "longest": 0,
+        "width": -20,
+        "height": 0,
+        "lineWidth": 0,
+        "bladeThickness": -1,
+        "bladeDepth": 0,
+    }})
+    assert result["parts"]
+    assert result["dimensions"]["width"] > 0
+    assert result["dimensions"]["height"] > 0
+

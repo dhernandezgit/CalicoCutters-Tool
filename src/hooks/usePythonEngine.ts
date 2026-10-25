@@ -6,6 +6,7 @@ type Status = "loading" | "ready" | "error";
 interface Pending {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
+  timer: number;
 }
 
 function bytesToBase64(bytes: Uint8Array): string {
@@ -47,17 +48,33 @@ function normalizeShape(raw: any, previewUrl?: string): DesignShape {
   };
 }
 
+const REQUEST_TIMEOUT_MS = 120_000;
+
 export function usePythonEngine() {
   const workerRef = useRef<Worker | null>(null);
   const pending = useRef(new Map<number, Pending>());
   const nextId = useRef(1);
   const readyRef = useRef(false);
+  const [bootKey, setBootKey] = useState(0);
   const [status, setStatus] = useState<Status>("loading");
   const [progressText, setProgressText] = useState("Preparando el motor Python…");
   const [progressStep, setProgressStep] = useState(0);
   const [engineError, setEngineError] = useState("");
 
+  const rejectAll = useCallback((message: string) => {
+    for (const [, item] of pending.current) {
+      window.clearTimeout(item.timer);
+      item.reject(new Error(message));
+    }
+    pending.current.clear();
+  }, []);
+
   useEffect(() => {
+    setStatus("loading");
+    setEngineError("");
+    setProgressText("Preparando el motor Python…");
+    setProgressStep(0);
+    readyRef.current = false;
     const worker = new Worker(new URL("../workers/pyodide.worker.ts", import.meta.url), {
       type: "module",
     });
@@ -73,19 +90,38 @@ export function usePythonEngine() {
         readyRef.current = true;
         setStatus("ready");
         setProgressText("Motor listo");
+        setProgressStep(5);
+        setEngineError("");
+        return;
+      }
+      if (data.type === "fatal") {
+        readyRef.current = false;
+        setStatus("error");
+        setEngineError(String(data.error || "No se pudo iniciar el motor Python."));
+        rejectAll(String(data.error || "No se pudo iniciar el motor Python."));
         return;
       }
       if (data.type === "result" || data.type === "error") {
         const item = pending.current.get(Number(data.id));
         if (!item) return;
         pending.current.delete(Number(data.id));
+        window.clearTimeout(item.timer);
         if (data.type === "result") item.resolve(data.data);
         else item.reject(new Error(String(data.error || "Error del motor Python")));
       }
     };
     worker.onerror = (event) => {
+      const message = event.message || "No se pudo iniciar el motor Python.";
+      readyRef.current = false;
       setStatus("error");
-      setEngineError(event.message || "No se pudo iniciar el motor Python.");
+      setEngineError(message);
+      rejectAll(message);
+    };
+    worker.onmessageerror = () => {
+      const message = "El motor Python ha devuelto una respuesta ilegible.";
+      setStatus("error");
+      setEngineError(message);
+      rejectAll(message);
     };
     const zipUrl = new URL("calicocutters.zip", document.baseURI).href;
     worker.postMessage({ type: "init", zipUrl });
@@ -93,7 +129,13 @@ export function usePythonEngine() {
       worker.terminate();
       workerRef.current = null;
       readyRef.current = false;
+      rejectAll("El motor Python se reinició.");
     };
+  }, [bootKey, rejectAll]);
+
+  const restart = useCallback(() => {
+    setEngineError("");
+    setBootKey((value) => value + 1);
   }, []);
 
   const request = useCallback((type: string, payload: unknown): Promise<any> => {
@@ -102,7 +144,11 @@ export function usePythonEngine() {
     if (!readyRef.current) return Promise.reject(new Error("El motor Python todavía está cargando. Espera un momento."));
     const id = nextId.current++;
     return new Promise((resolve, reject) => {
-      pending.current.set(id, { resolve, reject });
+      const timer = window.setTimeout(() => {
+        pending.current.delete(id);
+        reject(new Error("El motor ha tardado demasiado en responder. Prueba con un dibujo más sencillo o reinicia el motor."));
+      }, REQUEST_TIMEOUT_MS);
+      pending.current.set(id, { resolve, reject, timer });
       worker.postMessage({ type, id, payload });
     });
   }, []);
@@ -203,6 +249,7 @@ export function usePythonEngine() {
     progressText,
     progressStep,
     engineError,
+    restart,
     analyzeFile,
     analyzeText,
     build,

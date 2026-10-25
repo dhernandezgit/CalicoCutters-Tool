@@ -136,6 +136,40 @@ def test_built_raster_stamp_is_watertight():
     assert stamp.volume > 0
 
 
+def _colored_png() -> bytes:
+    from PIL import Image, ImageDraw
+    img = Image.new("RGB", (420, 420), "white")
+    d = ImageDraw.Draw(img)
+    d.ellipse((50, 50, 370, 370), fill=(47, 111, 187))
+    d.ellipse((150, 150, 220, 220), fill="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_colored_raster_on_white_is_traced():
+    shape = parse_raster(_colored_png(), "blue.png", 75)
+    assert shape.bounds["width"] <= 75.01
+    assert shape.bounds["height"] <= 75.01
+    assert shape.source_color is not None
+    assert shape.main_polygon.area > 1000
+
+
+def test_transparent_line_art_is_traced():
+    from PIL import Image, ImageDraw
+    img = Image.new("RGBA", (420, 420), (255, 255, 255, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((30, 30, 390, 390), outline=(0, 0, 0, 255), width=12)
+    d.ellipse((180, 180, 240, 240), fill=(0, 0, 0, 255))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    shape = parse_raster(buf.getvalue(), "transparent.png", 70)
+    assert shape.bounds["width"] <= 70.01
+    assert shape.warnings
+    assert shape.details
+
+
+
 def test_mesh_orientation_flip():
     # Outward-facing cube, then reverse it and make sure orientation repair fixes it.
     v = np.array([
