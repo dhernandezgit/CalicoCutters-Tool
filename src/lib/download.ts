@@ -1,5 +1,3 @@
-import { zip, type Zippable } from "fflate";
-
 export interface DownloadFile {
   name: string;
   blob: Blob;
@@ -20,42 +18,13 @@ export function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export function uniqueDownloadFiles(files: DownloadFile[]): DownloadFile[] {
-  const used = new Set<string>();
-  return files.map((file) => {
-    let name = file.name;
-    if (!used.has(name)) {
-      used.add(name);
-      return file;
-    }
-    const dot = name.lastIndexOf(".");
-    const stem = dot > 0 ? name.slice(0, dot) : name;
-    const ext = dot > 0 ? name.slice(dot) : "";
-    let n = 2;
-    while (used.has(`${stem}-${n}${ext}`)) n += 1;
-    name = `${stem}-${n}${ext}`;
-    used.add(name);
-    return { ...file, name };
-  });
-}
-
-export async function filesToZip(files: DownloadFile[]): Promise<Blob> {
-  const unique = uniqueDownloadFiles(files);
-  const entries: Zippable = {};
-  for (const file of unique) {
-    entries[file.name] = new Uint8Array(await file.blob.arrayBuffer());
+/** Save several files one by one. The picker proposes the last folder used. */
+export async function saveFilesChoosingSameLocation(files: DownloadFile[]): Promise<SaveResult> {
+  for (const file of files) {
+    const result = await saveBlobChoosingLocation(file.blob, file.name);
+    if (result === "cancelled") return "cancelled";
   }
-  return new Promise((resolve, reject) => {
-    zip(entries, { level: 6 }, (error, data) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      const copy = new Uint8Array(data.byteLength);
-      copy.set(data);
-      resolve(new Blob([copy.buffer], { type: "application/zip" }));
-    });
-  });
+  return "saved";
 }
 
 /** Save one file with the native picker, or fall back to a normal download. */
@@ -70,15 +39,6 @@ export async function saveBlobChoosingLocation(
     return "saved";
   }
   return result;
-}
-
-/** Save a ZIP; this always produces one normal download when pickers fail. */
-export async function saveZipChoosingLocation(
-  files: DownloadFile[],
-  zipName: string,
-): Promise<SaveResult> {
-  const blob = await filesToZip(files);
-  return saveBlobChoosingLocation(blob, zipName, "Archivos CalicoCutters");
 }
 
 type PickerWindow = Window & {

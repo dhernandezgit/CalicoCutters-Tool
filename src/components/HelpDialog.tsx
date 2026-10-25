@@ -45,7 +45,7 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
             <Download size={20} />
             <div>
               <strong>Elige formato y guarda</strong>
-              <p>STL o 3MF, por diseño o de los seleccionados/todos. Si hay varias piezas o activas la copia del proyecto, se guarda un único ZIP en la ubicación que elijas; si no, se guarda el archivo directo. También puedes descargar solo el proyecto.</p>
+              <p>STL o 3MF, por diseño o de los seleccionados/todos. Cortador y sello van juntos en el mismo archivo. Se pide una ubicación por archivo y el navegador propone la misma carpeta; el proyecto se guarda también allí. También puedes descargar solo el proyecto.</p>
             </div>
           </div>
           <div className="help-step">
@@ -90,7 +90,7 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
           <p>
             El menú “Qué vas a crear” agrupa galletas, sellos, sándwich, rodillo, repostería, papelería y cerámica:
             stamper + cortador, cortador, impronta, puzzle, set de tamaños, sello, sándwich, rodillo de textura,
-            topper, stencil, galleta de práctica, molde cake pop, marcapáginas y perfil de arcilla.
+            topper, stencil, galleta de práctica, molde cake pop, pinza de página y perfil de arcilla.
           </p>
         </div>
 

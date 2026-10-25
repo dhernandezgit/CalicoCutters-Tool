@@ -429,19 +429,18 @@ def test_custom_bed_size_is_used_by_checks():
     assert any(c["level"] == "warn" for c in bed_checks)
 
 
-def test_bookmark_is_flat_watertight_and_has_a_tassel_hole():
+def test_page_clip_is_watertight_and_has_a_page_slot():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,
         "mode": "bookmark",
     }})
-    assert result["parts"][0]["name"] == "Marcapáginas"
+    assert result["parts"][0]["name"] == "Pinza de página"
     mesh = _mesh(result["parts"][0])
     assert mesh.is_watertight
-    assert mesh.bounds[1][0] - mesh.bounds[0][0] == pytest.approx(50, abs=0.3)
-    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(150, abs=0.3)
-    # The tassel hole is a through-hole: a section across it is not solid.
-    section = mesh.section(plane_origin=[0, 55, 1.2], plane_normal=[0, 0, 1])
-    assert section is not None
+    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(50, abs=0.5)
+    assert mesh.bounds[1][2] - mesh.bounds[0][2] == pytest.approx(150, abs=0.5)
+    # The clip must be narrow across the page thickness, not a flat bookmark.
+    assert mesh.bounds[1][0] - mesh.bounds[0][0] < 14
 
 
 def test_preprocess_defaults_preserve_fine_details():

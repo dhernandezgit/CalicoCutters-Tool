@@ -124,6 +124,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "bookmarkHoleMargin": 10.0,
     "bookmarkRelief": 0.8,
     "bookmarkDesignStyle": "line",
+    "pageClipGap": 0.9,
+    "pageClipBridge": 6.0,
+    "pageClipFlare": 1.2,
+    "pageClipLip": 12.0,
     "cakePopMoldHeight": 18.0,
     "cakePopMoldWall": 2.4,
     "cakePopBase": 2.0,
@@ -223,6 +227,10 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "bookmarkHoleDiameter": (2.0, 20.0),
     "bookmarkHoleMargin": (5.0, 60.0),
     "bookmarkRelief": (0.0, 3.0),
+    "pageClipGap": (0.3, 3.0),
+    "pageClipBridge": (2.0, 20.0),
+    "pageClipFlare": (0.0, 5.0),
+    "pageClipLip": (3.0, 40.0),
     "cakePopMoldHeight": (6.0, 40.0),
     "cakePopMoldWall": (1.2, 8.0),
     "cakePopBase": (1.0, 8.0),
@@ -1033,8 +1041,12 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 relief=settings["bookmarkRelief"],
                 style=str(settings["bookmarkDesignStyle"]),
                 line_width=settings["lineWidth"],
+                gap=settings["pageClipGap"],
+                bridge=settings["pageClipBridge"],
+                flare=settings["pageClipFlare"],
+                lip=settings["pageClipLip"],
             )
-            parts.append(("Marcapáginas", bookmark, "#f39ab1"))
+            parts.append(("Pinza de página", bookmark, "#f39ab1"))
         if settings["mode"] == "cakepop":
             tray, plunger = build_cake_pop(
                 main,

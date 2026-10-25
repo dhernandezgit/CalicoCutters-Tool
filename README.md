@@ -1,6 +1,6 @@
 # CalicoCutters
 
-**Versión 0.1.0** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.1.1** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
@@ -20,16 +20,16 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Menú agrupado y plegable por **Galletas, Sellos, Sándwich, Rodillo, Repostería, Papelería y Cerámica**:
   Stamper + cortador, cortador, impronta, puzzle, set de tamaños, sello, sándwich,
   rodillo de textura, topper, stencil, galleta de práctica, molde cake pop,
-  marcapáginas y perfiles de arcilla. Todos los tipos están disponibles también en Básico.
-- **Marcapáginas** imprimible con agujero para cinta, borde redondeado y dibujo en relieve o línea.
+  pinza de página y perfiles de arcilla. Todos los tipos están disponibles también en Básico.
+- **Pinza de página** de una pieza: agarra el papel por ambos lados, con ranura superior, puente flexible y dibujo en relieve o línea.
 - Visualización 3D con cama de impresora, cuadrícula de 1 cm, superficies, sombras, rayos X, vista técnica,
   separación de piezas, giro automático, captura PNG y pantalla completa.
 - Perfiles guardables de fabricación y preprocesado para reutilizar ajustes.
 - Vista previa 3D real, vista 2D, selección múltiple y vista de un solo archivo.
 - Ajustes básicos rápidos y modo avanzado con impresión, base, barras, color, nombres y coste.
 - Comprobaciones de impresión: agua estanco, grosor de pared, filo, holgura, separación entre copias y encaje en cama.
-- Exporta STL y 3MF de forma individual, de los seleccionados o de todos, guardando un archivo directo o un único ZIP.
-- El proyecto `.calicocutters` se incluye dentro del ZIP por defecto (se puede desactivar); también hay 3MF conjunto y descarga directa por diseño.
+- Exporta STL y 3MF de forma individual, de los seleccionados o de todos. Cortador y sello van juntos en el mismo archivo.
+- Se pide una ubicación por archivo y el navegador propone la misma carpeta que el primer archivo; el proyecto `.calicocutters` se guarda también allí. También hay 3MF conjunto.
 - Base 3D con cama realista (256 × 256 de Bambu Lab P2S por defecto), cuadrícula de 1 cm, muchos perfiles de impresora y dimensiones personalizadas.
 - Preprocesado avanzado: simplificado, suavizado, protección de esquinas y eliminación de detalles minúsculos.
 - Punto de alineación opcional (activo por defecto) en la base del cortador y el sello, como las marcas de un objetivo.

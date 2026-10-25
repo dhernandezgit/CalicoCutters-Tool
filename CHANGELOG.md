@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.1 — 2026-10-25
+
+Corrección de la pinza de página, exportación sin ZIP y conservación de detalles.
+
+### Correcciones
+
+- La pinza de página sustituye al marcapáginas plano: agarra el papel por ambos lados,
+  tiene ranura de entrada, guía superior, puente flexible y dibujo opcional.
+- Los archivos de exportación ya no se empaquetan en ZIP. Se guardan uno a uno y el
+  navegador propone la misma carpeta que el primer archivo; el proyecto se guarda allí.
+- Cortador y sello se combinan en un único STL o 3MF.
+- El preprocesado agresivo queda desactivado por defecto para conservar detalles finos.
+- El punto de alineación es un hundido superficial, no un agujero pasante.
+- Todos los tipos de creación están disponibles en Básico.
+
 ## 0.1.0 — 2026-10-25
 
 Primera versión estable de CalicoCutters.
@@ -8,7 +23,9 @@ Primera versión estable de CalicoCutters.
 
 - Stamper + cortador, cortador, impronta, puzzle, set de cortadores, sellos,
   sándwich, rodillo de textura, topper, stencil, galleta de práctica, molde cake pop,
-  marcapáginas y perfiles de arcilla.
+  pinza de página y perfiles de arcilla.
+- Pinza de página de una pieza que agarra el papel por ambos lados, con ranura,
+  puente flexible y dibujo opcional.
 - Creación de siluetas desde texto con tipografías del sistema, negrita, cursiva,
   mayúsculas, espaciado y unión de letras.
 - Carga múltiple de SVG, PNG, JPG y WebP, con procesado secuencial.
@@ -35,12 +52,12 @@ Primera versión estable de CalicoCutters.
 - Proyecto `.calicocutters` importable, con formas, ajustes, nombres y colores.
 - Perfiles de fabricación guardables en el navegador.
 - Exportación individual, de seleccionados o de todos; STL, 3MF y 3MF conjunto.
-- Guardado mediante selector de archivo; los lotes se empaquetan en un ZIP que incluye
-  el proyecto por defecto, sin selector de carpeta.
+- Cortador y sello combinados en el mismo STL o 3MF. El navegador propone la misma
+  carpeta para el resto de archivos y para el proyecto, sin ZIP ni selector de carpeta.
 - Peso y coste calculados con precio editable de PLA.
 
 ### Calidad
 
 - 51 tests automáticos de geometría, modos, importación raster, exportación 3MF,
-  alineación, marcapáginas y comprobaciones de impresión.
+  alineación, pinza de página y comprobaciones de impresión.
 - Despliegue automático en GitHub Pages mediante GitHub Actions.

@@ -123,6 +123,10 @@ export interface DesignSettings {
   bookmarkHoleMargin: number;
   bookmarkRelief: number;
   bookmarkDesignStyle: "line" | "relief" | "none";
+  pageClipGap: number;
+  pageClipBridge: number;
+  pageClipFlare: number;
+  pageClipLip: number;
 
   cakePopMoldHeight: number;
   cakePopMoldWall: number;
@@ -329,6 +333,10 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   bookmarkHoleMargin: 10,
   bookmarkRelief: 0.8,
   bookmarkDesignStyle: "line",
+  pageClipGap: 0.9,
+  pageClipBridge: 6,
+  pageClipFlare: 1.2,
+  pageClipLip: 12,
 
   cakePopMoldHeight: 18,
   cakePopMoldWall: 2.4,

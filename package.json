@@ -1,7 +1,7 @@
 {
   "name": "calicocutters",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,7 +14,6 @@
     "test": "python -m pytest -q"
   },
   "dependencies": {
-    "fflate": "^0.8.2",
     "imagetracerjs": "^1.2.6",
     "lucide-react": "^0.468.0",
     "manifold-3d": "^3.5.4",

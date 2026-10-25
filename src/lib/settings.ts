@@ -155,6 +155,6 @@ export function modeLabel(mode: DesignSettings["mode"]): string {
   if (mode === "practice") return "Práctica";
   if (mode === "cakepop") return "Cake pop";
   if (mode === "cutter-set") return "Set de cortadores";
-  if (mode === "bookmark") return "Marcapáginas";
+  if (mode === "bookmark") return "Pinza de página";
   return "Impronta";
 }

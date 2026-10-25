@@ -1,24 +1,20 @@
 import { useMemo, useState } from "react";
-import { FileArchive, Info, Save, X } from "lucide-react";
+import { Info, Save, X } from "lucide-react";
 import type { DesignAsset, DesignSettings } from "../types";
 import type { AssetRow } from "./AssetsPanel";
 import { base64ToBytes, bytesToBlob } from "../hooks/usePythonEngine";
 import {
   saveBlobChoosingLocation,
-  saveZipChoosingLocation,
+  saveFilesChoosingSameLocation,
   safeFileName,
-  uniqueDownloadFiles,
   type DownloadFile,
 } from "../lib/download";
+import { combineBinaryStls } from "../lib/stl";
 import { projectBlob, projectFileName } from "../lib/project";
 import Toggle from "./Toggle";
 
 type Format = "stl" | "3mf" | "3mf-set";
 type Scope = "selected" | "all";
-
-function stamp() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export default function ExportDialog({
   open,
@@ -71,10 +67,9 @@ export default function ExportDialog({
     const base = safeFileName(asset.name);
     const parts = asset.build?.parts ?? [];
     if (kind === "stl") {
-      return parts.map((part) => ({
-        name: `${base}_${safeFileName(part.name)}.stl`,
-        blob: bytesToBlob(base64ToBytes(part.stl_b64), "model/stl"),
-      }));
+      if (!parts.length) return [];
+      const merged = combineBinaryStls(parts.map((part) => base64ToBytes(part.stl_b64)));
+      return [{ name: `${base}.stl`, blob: bytesToBlob(merged, "model/stl") }];
     }
     const blob = await onExport3mf(
       asset,
@@ -112,18 +107,12 @@ export default function ExportDialog({
     setStatus(`Preparando ${kind.toUpperCase()} de ${asset.name}…`);
     try {
       const files = await filesFor(asset, kind);
-      const bundle = includeProject ? uniqueDownloadFiles([...files, projectDownload]) : files;
-      if (bundle.length === 1) {
-        const result = await saveBlobChoosingLocation(bundle[0].blob, bundle[0].name, `Modelo ${kind.toUpperCase()}`);
-        finish(result, `Descargado: ${bundle[0].name}`);
-      } else {
-        const zipName = `${safeFileName(asset.name)}_${kind}.zip`;
-        const result = await saveZipChoosingLocation(bundle, zipName);
-        finish(
-          result,
-          `ZIP descargado: ${zipName} (${files.length} archivo(s)${includeProject ? " + proyecto" : ""}).`,
-        );
-      }
+      const bundle = includeProject ? [...files, projectDownload] : files;
+      const result = await saveFilesChoosingSameLocation(bundle);
+      finish(
+        result,
+        `${files.length} modelo(s)${includeProject ? " y el proyecto" : ""} guardados. La siguiente ventana propone la misma carpeta.`,
+      );
     } catch (error) {
       const message = `No se pudo exportar: ${String((error as Error)?.message || error)}`;
       setStatus(message);
@@ -140,18 +129,12 @@ export default function ExportDialog({
     setStatus(`Generando ${scopeAssets.length} diseño(s) en ${formatLabel}…`);
     try {
       const files = await filesForMany(scopeAssets, format);
-      const bundle = includeProject ? uniqueDownloadFiles([...files, projectDownload]) : files;
-      if (bundle.length === 1) {
-        const result = await saveBlobChoosingLocation(bundle[0].blob, bundle[0].name, "Modelo CalicoCutters");
-        finish(result, `Descargado: ${bundle[0].name}`);
-      } else {
-        const zipName = `${safeFileName(projectName)}_${scope}_${format}_${stamp()}.zip`;
-        const result = await saveZipChoosingLocation(bundle, zipName);
-        finish(
-          result,
-          `ZIP descargado: ${zipName} (${files.length} archivo(s)${includeProject ? " + proyecto" : ""}).`,
-        );
-      }
+      const bundle = includeProject ? [...files, projectDownload] : files;
+      const result = await saveFilesChoosingSameLocation(bundle);
+      finish(
+        result,
+        `${files.length} archivo(s) ${formatLabel}${includeProject ? " y el proyecto" : ""} guardados. La siguiente ventana propone la misma carpeta.`,
+      );
     } catch (error) {
       const message = `No se pudo preparar la exportación: ${String((error as Error)?.message || error)}`;
       setStatus(message);
@@ -204,12 +187,8 @@ export default function ExportDialog({
                         <small>{asset.build ? `${asset.build.parts.length} pieza(s) · ${asset.build.dimensions.width.toFixed(0)} × ${asset.build.dimensions.height.toFixed(0)} mm · ${asset.build.material_grams.toFixed(1)} g` : "sin geometría"}</small>
                       </div>
                       <div className="export-asset-actions" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" className="soft-button" title="Descarga este diseño. Si tiene varias piezas o incluyes el proyecto, se empaqueta en un ZIP." onClick={() => downloadOne(asset, "stl")} disabled={engineBusy || busy || !asset.build}>
-                          STL{includeProject || (asset.build?.parts.length ?? 0) > 1 ? " .zip" : ""}
-                        </button>
-                        <button type="button" className="soft-button" title="3MF de este diseño. Si incluyes el proyecto, se empaqueta en un ZIP." onClick={() => downloadOne(asset, "3mf")} disabled={engineBusy || busy || !asset.build}>
-                          3MF{includeProject ? " .zip" : ""}
-                        </button>
+                        <button type="button" className="soft-button" title="Cortador y sello en un solo archivo STL." onClick={() => downloadOne(asset, "stl")} disabled={engineBusy || busy || !asset.build}>STL</button>
+                        <button type="button" className="soft-button" title="Cortador y sello en un solo archivo 3MF." onClick={() => downloadOne(asset, "3mf")} disabled={engineBusy || busy || !asset.build}>3MF</button>
                       </div>
                     </div>
                   );
@@ -240,19 +219,20 @@ export default function ExportDialog({
               </div>
               <div className="export-action-grid single">
                 <button type="button" className="soft-button" onClick={bulkExport} disabled={engineBusy || busy || !scopeAssets.length}>
-                  <FileArchive size={15} /> Guardar archivo…
+                  <Save size={15} /> Guardar archivos…
                 </button>
               </div>
               <Toggle
-                label="Incluir copia del proyecto"
-                hint="Si está activo, el .calicocutters se guarda dentro del mismo ZIP elegido."
+                label="Guardar también el proyecto"
+                hint="Se pedirá el archivo .calicocutters después de los modelos, en la misma carpeta propuesta."
                 checked={includeProject}
                 onChange={setIncludeProject}
               />
               <div className="inline-hint">
                 <Info size={13} />
                 <span>
-                  {formatLabel} · {scopeAssets.length} diseño(s), {totalParts} pieza(s). Elige dónde guardar el archivo: si hay varias piezas o incluyes el proyecto, se guarda un único ZIP con todo dentro.
+                  {formatLabel} · {scopeAssets.length} diseño(s), {totalParts} pieza(s). Se abrirá un diálogo por archivo;
+                  el navegador propone la misma carpeta que el primer archivo. Cortador y sello van juntos en el mismo archivo.
                 </span>
               </div>
               {status && <div className={`export-result${status.includes("cancel") ? " warn" : ""}`} role="status" aria-live="polite">{status}</div>}

@@ -19,6 +19,7 @@ import {
   Layers,
   Lollipop,
   PaintRoller,
+  Paperclip,
   Puzzle,
   Ruler,
   Sandwich,
@@ -370,9 +371,9 @@ export default function SettingsPanel({
           {
             label: "Papelería",
             basic: true,
-            icon: <Bookmark size={12} />,
+            icon: <Paperclip size={12} />,
             modes: [
-              { value: "bookmark" as const, label: "Marcapáginas", icon: <Bookmark size={20} />, sub: "Para páginas de papel" },
+              { value: "bookmark" as const, label: "Pinza de página", icon: <Paperclip size={20} />, sub: "Agarra el papel por ambos lados" },
             ],
           },
         ]
@@ -586,8 +587,8 @@ export default function SettingsPanel({
       {advanced && (cutterLike || stampLike) && (
         <Section id="alignment" title="Alineación" icon={<Focus size={16} />} summary={settings.alignmentHole ? `${settings.alignmentHoleDiameter.toFixed(1)} mm` : "Desactivada"}>
           <Toggle
-            label="Punto de alineación"
-            hint="Un agujero mínimo en la base del cortador y en el sello, en el mismo ángulo, para orientarlos como las marcas de un objetivo."
+            label="Punto de alineación superficial"
+            hint="Un hundido mínimo en la base, en el lado que no marca, para orientar cortador y sello. No atraviesa la pieza."
             checked={settings.alignmentHole}
             onChange={(v) => onChange({ alignmentHole: v })}
           />
@@ -993,28 +994,23 @@ export default function SettingsPanel({
       )}
 
       {settings.mode === "bookmark" && (
-        <Section id="bookmark" title="Marcapáginas" icon={<Bookmark size={16} />} defaultOpen summary={`${settings.bookmarkWidth.toFixed(0)} × ${settings.bookmarkHeight.toFixed(0)} mm`}>
+        <Section id="bookmark" title="Pinza de página" icon={<Paperclip size={16} />} defaultOpen summary={`${settings.bookmarkWidth.toFixed(0)} × ${settings.bookmarkHeight.toFixed(0)} mm`}>
           <div className="two-fields">
-            <NumberField label="Ancho" value={settings.bookmarkWidth} min={20} max={150} step={1} onChange={(v) => onChange({ bookmarkWidth: v })} />
+            <NumberField label="Ancho de la pinza" value={settings.bookmarkWidth} min={20} max={150} step={1} onChange={(v) => onChange({ bookmarkWidth: v })} />
             <NumberField label="Alto" value={settings.bookmarkHeight} min={50} max={300} step={1} onChange={(v) => onChange({ bookmarkHeight: v })} />
           </div>
           <div className="two-fields">
-            <NumberField label="Grosor" value={settings.bookmarkThickness} min={1.2} max={8} step={0.2} onChange={(v) => onChange({ bookmarkThickness: v })} />
-            <NumberField label="Radio de esquina" value={settings.bookmarkCorner} min={0} max={30} step={0.5} onChange={(v) => onChange({ bookmarkCorner: v })} />
+            <NumberField label="Grosor de pared" value={settings.bookmarkThickness} min={1.2} max={8} step={0.2} onChange={(v) => onChange({ bookmarkThickness: v })} />
+            <NumberField label="Holgura del papel" value={settings.pageClipGap} min={0.3} max={3} step={0.1} onChange={(v) => onChange({ pageClipGap: v })} />
           </div>
-          <NumberField label="Margen del dibujo" value={settings.bookmarkMargin} min={2} max={30} step={0.5} onChange={(v) => onChange({ bookmarkMargin: v })} />
-          <Toggle
-            label="Agujero para cinta"
-            hint="Un agujero pasante en la parte superior para lana, cinta o cordón."
-            checked={settings.bookmarkHole}
-            onChange={(v) => onChange({ bookmarkHole: v })}
-          />
-          {settings.bookmarkHole && (
-            <div className="two-fields">
-              <NumberField label="Diámetro del agujero" value={settings.bookmarkHoleDiameter} min={2} max={20} step={0.5} onChange={(v) => onChange({ bookmarkHoleDiameter: v })} />
-              <NumberField label="Margen al borde" value={settings.bookmarkHoleMargin} min={5} max={60} step={1} onChange={(v) => onChange({ bookmarkHoleMargin: v })} />
-            </div>
-          )}
+          <div className="two-fields">
+            <NumberField label="Altura del puente" value={settings.pageClipBridge} min={2} max={20} step={0.5} onChange={(v) => onChange({ pageClipBridge: v })} />
+            <NumberField label="Apertura superior" value={settings.pageClipFlare} min={0} max={5} step={0.1} onChange={(v) => onChange({ pageClipFlare: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Altura de la guía" value={settings.pageClipLip} min={3} max={40} step={1} onChange={(v) => onChange({ pageClipLip: v })} />
+            <NumberField label="Margen del dibujo" value={settings.bookmarkMargin} min={2} max={30} step={0.5} onChange={(v) => onChange({ bookmarkMargin: v })} />
+          </div>
           <div className="two-fields">
             <NumberField label="Relieve del dibujo" value={settings.bookmarkRelief} min={0} max={3} step={0.1} onChange={(v) => onChange({ bookmarkRelief: v })} />
             <label className="field-row">
@@ -1028,7 +1024,7 @@ export default function SettingsPanel({
               </span>
             </label>
           </div>
-          <div className="inline-hint"><Bookmark size={13} /><span>Lámina plana con diseño en relieve. Si el dibujo tiene muchos detalles finos, usa estilo Línea y revisa la vista previa.</span></div>
+          <div className="inline-hint"><Paperclip size={13} /><span>Pinza de una pieza: el papel entra por la ranura superior y queda sujeto por ambos lados. Imprime de pie, sin soportes; para más flexibilidad usa PETG o TPU.</span></div>
         </Section>
       )}
 

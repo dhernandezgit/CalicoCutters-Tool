@@ -488,13 +488,13 @@ def build_cutter(
         tip = _nearest(tip_parts, centre, used)
         if alignment is not None:
             ax, ay, ar = alignment
-            hole = Point(ax, ay).buffer(max(0.3, ar), quad_segs=24)
-            base_with_hole = base.difference(hole)
-            base_pieces = [p for p in _ring_parts(base_with_hole) if p.area > 0.01]
-            if not base_pieces:
-                base_pieces = [base]
-            for bp in base_pieces:
-                meshes.append(extrude_polygon(bp, 0.0, base_height))
+            dimple = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
+            depth = min(0.5, max(0.15, base_height * 0.2))
+            # A shallow surface dimple on the base top, not a through-hole.
+            meshes.append(extrude_polygon(base, 0.0, max(0.1, base_height - depth)))
+            top_poly = base.difference(dimple)
+            if not top_poly.is_empty:
+                meshes.append(extrude_polygon(top_poly, base_height - depth - 0.01, depth + 0.01))
             if blade is not None:
                 outer_blade = list(blade.exterior.coords[:-1])
                 inner_blade = list(blade.interiors[0].coords[:-1])
@@ -595,11 +595,6 @@ def build_stamp(
         stamp_poly = main.buffer(-min(0.3, clearance), join_style=1, quad_segs=8)
     if stamp_poly.is_empty:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
-    if alignment is not None:
-        ax, ay, ar = alignment
-        stamp_poly = stamp_poly.difference(Point(ax, ay).buffer(max(0.3, ar), quad_segs=24))
-        if stamp_poly.is_empty:
-            stamp_poly = main.buffer(-min(0.3, clearance), join_style=1, quad_segs=8)
     stamp_components = _ring_parts(stamp_poly)
     parts: list[Mesh] = []
     for stamp_component in stamp_components:
@@ -632,7 +627,21 @@ def build_stamp(
                 if p.area > 0.01:
                     parts.append(extrude_polygon(p, back_height - depth - 0.01, depth + 0.01))
             continue
-        parts.append(extrude_polygon(stamp_component, 0.0, back_height))
+        if alignment is not None:
+            ax, ay, ar = alignment
+            dimple = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
+            dep = min(0.4, max(0.12, back_height * 0.1))
+            if stamp_component.buffer(0.05).contains(dimple):
+                parts.append(extrude_polygon(stamp_component, 0.0, max(0.2, back_height - dep)))
+                parts.append(extrude_polygon(
+                    stamp_component.difference(dimple),
+                    back_height - dep - 0.01,
+                    dep + 0.01,
+                ))
+            else:
+                parts.append(extrude_polygon(stamp_component, 0.0, back_height))
+        else:
+            parts.append(extrude_polygon(stamp_component, 0.0, back_height))
         if border and border_width > 0.2:
             # A true annular frame, built by subtracting an inset copy of the
             # plate.  Buffering the exterior line produced non-watertight
@@ -1053,6 +1062,13 @@ def build_practice(
     return out
 
 
+def _map_mesh(mesh: Mesh, mapper) -> Mesh:
+    if len(mesh.faces) == 0:
+        return mesh
+    vertices = np.asarray([mapper(tuple(v)) for v in mesh.vertices], dtype=float)
+    return Mesh(vertices, mesh.faces.copy()).orient_consistent()
+
+
 def build_bookmark(
     main: Polygon,
     details: list[Polygon],
@@ -1068,65 +1084,84 @@ def build_bookmark(
     relief: float,
     style: str = "line",
     line_width: float = 0.4,
+    gap: float = 0.9,
+    bridge: float = 6.0,
+    flare: float = 1.2,
+    lip: float = 12.0,
 ) -> Mesh:
-    """Flat, printable page bookmark with an optional tassel hole and motif."""
-    w = max(20.0, float(width))
-    h = max(50.0, float(height))
-    body = rounded_rect(w, h, max(0.0, float(corner)))
-    hole_r = max(1.0, float(hole_diameter) / 2)
-    hole_y = h / 2 - max(hole_r + 2.0, float(hole_margin))
-    hole_circle: Polygon | None = None
-    if hole:
-        hole_circle = Point(0, hole_y).buffer(hole_r, quad_segs=32)
-        body = body.difference(hole_circle)
-    parts: list[Mesh] = [extrude_polygon(body, 0.0, max(1.2, thickness))]
-    if style not in {"line", "relief"} or relief <= 0:
-        return parts[0]
+    """One-piece page clip: two springy plates joined by a bottom bridge.
 
-    zone_top = (hole_y - hole_r - max(1.0, margin)) if hole else (h / 2 - margin)
-    zone_bottom = -h / 2 + margin
-    zone_h = zone_top - zone_bottom
-    zone_w = w - margin * 2
-    if zone_h < 4 or zone_w < 4:
-        return parts[0]
+    It is printed standing up. The page slides into the open slot from the top;
+    the flared lip guides it and the flexible bridge lets both sides grip it.
+    """
+    W = max(20.0, float(width))
+    H = max(60.0, float(height))
+    T = max(1.2, float(thickness))
+    G = max(0.3, float(gap))
+    B = max(1.5, min(H * 0.35, float(bridge)))
+    F = max(0.0, min(float(flare), T * 0.9))
+    L = max(2.0, min(H - B - 2.0, float(lip)))
+    out = 2.0 * T + G
+    xl, xr = -out / 2, out / 2
+    il, ir = -G / 2, G / 2
+    profile = Polygon([
+        (xl, 0.0),
+        (xr, 0.0),
+        (xr, H),
+        (ir + F, H),
+        (ir, H - L),
+        (ir, B),
+        (il, B),
+        (il, H - L),
+        (il - F, H),
+        (xl, H),
+    ])
+    # Extrude the U profile along the page width, then stand it on Z=0.
+    local = extrude_polygon(profile, 0.0, W)
+    body = _map_mesh(local, lambda v: (float(v[0]), float(v[2] - W / 2), float(v[1])))
+    parts = [body]
+    if style not in {"line", "relief"} or relief <= 0:
+        return body
+
     b = main.bounds
     bw = max(1e-6, b[2] - b[0])
     bh = max(1e-6, b[3] - b[1])
-    scale = min(zone_w / bw, zone_h / bh)
-    design = affinity.scale(main, scale, scale, origin="center")
-    db = design.bounds
-    dx = 0.0 - (db[0] + db[2]) / 2
-    dy = (zone_top + zone_bottom) / 2 - (db[1] + db[3]) / 2
-    design = affinity.translate(design, dx, dy)
-    design = _polygon_only(design.intersection(body))
-    if design is None:
-        return parts[0]
-
+    design_w = max(4.0, W - max(2.0, margin) * 2)
+    design_h = max(4.0, H - max(2.0, margin) * 2)
+    scale = min(design_w / bw, design_h / bh)
+    local_polys: list[Polygon] = []
     if style == "relief":
-        parts.append(extrude_polygon(design, max(0.0, thickness - 0.2), relief + 0.2))
+        local_polys = [main]
     else:
         stroke = max(0.8, line_width * 2)
-        outline = design.buffer(stroke / 2, join_style=1, quad_segs=8).difference(
-            design.buffer(-stroke / 2, join_style=1, quad_segs=8)
+        outline = main.buffer(stroke / 2, join_style=1, quad_segs=8).difference(
+            main.buffer(-stroke / 2, join_style=1, quad_segs=8)
         )
-        for p in _ring_parts(outline):
-            if p.area > 0.02:
-                parts.append(extrude_polygon(p, max(0.0, thickness - 0.2), relief + 0.2))
-        scaled_details: list[Polygon] = []
-        for d in details:
-            q = affinity.scale(d, scale, scale, origin="center")
-            q = affinity.translate(q, dx, dy)
-            q = q.intersection(design)
-            for p in _ring_parts(q):
-                if p.area > 0.08:
-                    scaled_details.append(p)
-        for p in scaled_details:
-            parts.append(extrude_polygon(p, max(0.0, thickness - 0.15), relief + 0.15))
-
-    out = parts[0]
+        local_polys.extend(_ring_parts(outline))
+        for q in details:
+            local_polys.extend(p for p in _ring_parts(q) if p.area > 0.08)
+    for p in local_polys:
+        q = affinity.scale(p, scale, scale, origin="center")
+        qb = q.bounds
+        q = affinity.translate(q, -(qb[0] + qb[2]) / 2, -(qb[1] + qb[3]) / 2)
+        if q.area <= 0.01:
+            continue
+        stamp = extrude_polygon(q, -0.2, relief + 0.2)
+        for side in (1.0, -1.0):
+            face_x = side * (out / 2)
+            relief_mesh = _map_mesh(
+                stamp,
+                lambda v, side=side, face_x=face_x: (
+                    float(face_x + side * v[2]),
+                    float(v[0]),
+                    float(H / 2 + v[1]),
+                ),
+            )
+            parts.append(relief_mesh)
+    out_mesh = parts[0]
     for p in parts[1:]:
-        out = out.append(p)
-    return out
+        out_mesh = out_mesh.append(p)
+    return out_mesh
 
 
 def mesh_to_stl(mesh: Mesh) -> bytes:
