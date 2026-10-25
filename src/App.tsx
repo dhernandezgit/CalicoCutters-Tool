@@ -95,17 +95,20 @@ function combineBuilds(assets: DesignAsset[], builds: Record<string, BuildResult
   const maxY = Math.max(...parts.map((p) => p.bounds.max[1] + p.preview_offset[1]));
   const minZ = Math.min(...parts.map((p) => p.bounds.min[2] + p.preview_offset[2]));
   const maxZ = Math.max(...parts.map((p) => p.bounds.max[2] + p.preview_offset[2]));
+  const dimensions = rows.length === 1 && rows[0].b
+    ? rows[0].b.dimensions
+    : {
+        width: maxX - minX,
+        height: maxY - minY,
+        depth: maxZ - minZ,
+      };
   return {
     parts,
     warnings: Array.from(new Set(warnings)),
     checks,
     build_ms: ms,
     material_grams: grams,
-    dimensions: {
-      width: maxX - minX,
-      height: maxY - minY,
-      depth: maxZ - minZ,
-    },
+    dimensions,
   };
 }
 

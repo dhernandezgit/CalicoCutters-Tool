@@ -790,9 +790,9 @@ def _checks(
 
     if settings.get("alignmentHole") and (cutter_like or stamp_like):
         if settings["alignmentHoleDiameter"] < line * 2:
-            out.append(_check("warn", f"Punto de alineación de {settings['alignmentHoleDiameter']:.1f} mm", "Usa al menos 2 líneas para que el agujero no se cierre al imprimir.", "alignment_hole"))
+            out.append(_check("warn", f"Punto de alineación de {settings['alignmentHoleDiameter']:.1f} mm", "Usa al menos 2 líneas para que el hundido se vea bien en la base.", "alignment_hole"))
         if settings["baseWidth"] < settings["alignmentHoleDiameter"] + 0.8:
-            out.append(_check("warn", "Punto de alineación sin espacio", "Aumenta el ancho de la base o reduce el agujero de alineación.", "alignment_space"))
+            out.append(_check("warn", "Punto de alineación sin espacio", "Aumenta el ancho de la base o reduce el punto de alineación.", "alignment_space"))
 
     for p in parts:
         w = p["bounds"]["max"][0] - p["bounds"]["min"][0]
@@ -1117,6 +1117,16 @@ def build(payload: dict[str, Any]) -> dict[str, Any]:
     _arrange(parts)
     checks = _checks(parts, settings, warnings, main, details)
     total_volume = sum(p["volume"] for p in parts)
+    if settings["mode"] == "bookmark":
+        # A page clip is printed upright: expose its wide face (Y × Z) in the
+        # UI instead of the thin print footprint.
+        width = max(p["bounds"]["max"][1] for p in parts) - min(p["bounds"]["min"][1] for p in parts)
+        height = max(p["bounds"]["max"][2] for p in parts) - min(p["bounds"]["min"][2] for p in parts)
+        depth = max(p["bounds"]["max"][0] for p in parts) - min(p["bounds"]["min"][0] for p in parts)
+    else:
+        width = max(p["bounds"]["max"][0] for p in parts) - min(p["bounds"]["min"][0] for p in parts)
+        height = max(p["bounds"]["max"][1] for p in parts) - min(p["bounds"]["min"][1] for p in parts)
+        depth = max(p["bounds"]["max"][2] for p in parts) - min(p["bounds"]["min"][2] for p in parts)
     return {
         "parts": parts,
         "warnings": list(dict.fromkeys(warnings)),
@@ -1124,9 +1134,9 @@ def build(payload: dict[str, Any]) -> dict[str, Any]:
         "build_ms": (time.perf_counter() - t0) * 1000.0,
         "material_grams": total_volume / 1000.0 * 1.24,
         "dimensions": {
-            "width": max(p["bounds"]["max"][0] for p in parts) - min(p["bounds"]["min"][0] for p in parts),
-            "height": max(p["bounds"]["max"][1] for p in parts) - min(p["bounds"]["min"][1] for p in parts),
-            "depth": max(p["bounds"]["max"][2] for p in parts) - min(p["bounds"]["min"][2] for p in parts),
+            "width": width,
+            "height": height,
+            "depth": depth,
         },
     }
 

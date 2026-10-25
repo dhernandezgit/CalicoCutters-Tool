@@ -5,6 +5,8 @@ export interface DownloadFile {
 
 export type SaveResult = "saved" | "cancelled" | "unsupported";
 
+let lastSavedHandle: unknown = null;
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -18,12 +20,23 @@ export function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-/** Save several files one by one. The picker proposes the last folder used. */
+/**
+ * Save several files one by one. The first file handle is passed as the
+ * starting point for the rest, so the picker proposes the same folder.
+ */
 export async function saveFilesChoosingSameLocation(files: DownloadFile[]): Promise<SaveResult> {
+  lastSavedHandle = null;
+  let anchor: unknown = null;
   for (let index = 0; index < files.length; index += 1) {
     const file = files[index];
-    const result = await saveBlobChoosingLocation(file.blob, file.name);
+    const result = await saveBlobChoosingLocation(
+      file.blob,
+      file.name,
+      "Archivo CalicoCutters",
+      index === 0 ? undefined : anchor,
+    );
     if (result === "cancelled") return "cancelled";
+    if (index === 0) anchor = lastSavedHandle;
     if (index < files.length - 1) {
       await new Promise((resolve) => window.setTimeout(resolve, 220));
     }
@@ -36,8 +49,9 @@ export async function saveBlobChoosingLocation(
   blob: Blob,
   filename: string,
   description = "Archivo CalicoCutters",
+  startIn?: unknown,
 ): Promise<SaveResult> {
-  const result = await saveBlobWithPicker(blob, filename, description);
+  const result = await saveBlobWithPicker(blob, filename, description, startIn);
   if (result === "unsupported") {
     downloadBlob(blob, filename);
     return "saved";
@@ -49,6 +63,7 @@ type PickerWindow = Window & {
   showSaveFilePicker?: (opts?: {
     suggestedName?: string;
     types?: Array<{ description: string; accept: Record<string, string[]> }>;
+    startIn?: unknown;
   }) => Promise<{
     createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
   }>;
@@ -63,23 +78,35 @@ export async function saveBlobWithPicker(
   blob: Blob,
   filename: string,
   description = "Archivo CalicoCutters",
+  startIn?: unknown,
 ): Promise<SaveResult> {
   const picker = (window as PickerWindow).showSaveFilePicker;
   if (!picker) return "unsupported";
+  const ext = extensionOf(filename);
+  const options = {
+    suggestedName: filename,
+    types: ext
+      ? [{ description, accept: { "application/octet-stream": [ext] } }]
+      : undefined,
+    ...(startIn ? { startIn } : {}),
+  };
   try {
-    const ext = extensionOf(filename);
-    const handle = await picker({
-      suggestedName: filename,
-      types: ext
-        ? [{ description, accept: { "application/octet-stream": [ext] } }]
-        : undefined,
-    });
+    const handle = await picker(options);
     const writable = await handle.createWritable();
     await writable.write(blob);
     await writable.close();
+    lastSavedHandle = handle;
     return "saved";
   } catch (error) {
-    return (error as { name?: string })?.name === "AbortError" ? "cancelled" : "unsupported";
+    const name = (error as { name?: string })?.name;
+    if (name === "AbortError") return "cancelled";
+    if (startIn) {
+      // Some browsers expose the picker without supporting file handles as
+      // startIn. Retry in the default folder instead of falling back to a
+      // normal download.
+      return saveBlobWithPicker(blob, filename, description);
+    }
+    return "unsupported";
   }
 }
 
