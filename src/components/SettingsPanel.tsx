@@ -579,7 +579,7 @@ export default function SettingsPanel({
         <Scissors size={17} />
         Exportar cortador y sello
       </button>
-      <div className="panel-footnote">STL · 3MF · listo para Bambu Lab</div>
+      <div className="panel-footnote">STL · 3MF · proyecto .calicocutters importable</div>
     </div>
   );
 }

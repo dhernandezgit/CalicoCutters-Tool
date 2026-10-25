@@ -28,3 +28,6 @@ check_build.py
 find_bad.py
 inspect_text.py
 
+
+prod*.png
+
