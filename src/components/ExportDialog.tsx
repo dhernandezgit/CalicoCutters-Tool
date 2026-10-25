@@ -68,7 +68,10 @@ export default function ExportDialog({
     const parts = asset.build?.parts ?? [];
     if (kind === "stl") {
       if (!parts.length) return [];
-      const merged = combineBinaryStls(parts.map((part) => base64ToBytes(part.stl_b64)));
+      const merged = combineBinaryStls(parts.map((part) => ({
+        data: base64ToBytes(part.stl_b64),
+        offset: part.preview_offset,
+      })));
       return [{ name: `${base}.stl`, blob: bytesToBlob(merged, "model/stl") }];
     }
     const blob = await onExport3mf(

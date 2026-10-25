@@ -20,9 +20,13 @@ export function downloadBlob(blob: Blob, filename: string) {
 
 /** Save several files one by one. The picker proposes the last folder used. */
 export async function saveFilesChoosingSameLocation(files: DownloadFile[]): Promise<SaveResult> {
-  for (const file of files) {
+  for (let index = 0; index < files.length; index += 1) {
+    const file = files[index];
     const result = await saveBlobChoosingLocation(file.blob, file.name);
     if (result === "cancelled") return "cancelled";
+    if (index < files.length - 1) {
+      await new Promise((resolve) => window.setTimeout(resolve, 220));
+    }
   }
   return "saved";
 }
