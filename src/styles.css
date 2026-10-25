@@ -639,3 +639,40 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
 .export-result { margin-top: 7px; border-radius: 8px; padding: 7px 9px; background: #f0fbf7; border: 1px solid #b9e4d7; color: #2f7562; font-size: 10.5px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
 .export-result.warn { background: #fff7ed; border-color: #efd0a8; color: #9a6531; }
 .export-action-grid.single { grid-template-columns: 1fr; }
+.mode-group-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 6px; border: 0; background: transparent; padding: 3px 2px 4px; color: var(--textSoft); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.mode-group-head:hover { color: var(--accent3); }
+.mode-group-head svg { flex: none; opacity: .8; }
+.mode-group-head.open { color: var(--accent3); }
+.text-modal { width: min(620px, 96vw); }
+.text-modal-body { display: flex; flex-direction: column; gap: 10px; }
+.text-preview { min-height: 90px; display: grid; place-items: center; padding: 14px 18px; border: 1.5px dashed var(--border); border-radius: 14px; background: linear-gradient(135deg, #fff9fb, #fdebf2); color: var(--accent3); font-size: clamp(24px, 5vw, 48px); line-height: 1.05; text-align: center; overflow: hidden; overflow-wrap: anywhere; }
+.text-preview.uppercase { text-transform: uppercase; }
+.text-checks { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 11px; color: var(--text); }
+.text-checks label { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.text-checks input { accent-color: var(--accent2); }
+.view-options-wrap { position: relative; }
+.view-options-button { border: 1.5px solid var(--border); background: var(--panel); color: var(--textSoft); border-radius: 9px; padding: 7px 9px; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; }
+.view-options-button:hover, .view-options-button.on { border-color: var(--accent2); color: var(--accent3); background: #fff4f8; }
+.view-options-popover { position: absolute; right: 0; top: calc(100% + 6px); width: min(380px, 88vw); z-index: 30; background: #fffdfd; border: 1.5px solid var(--accent); border-radius: 14px; box-shadow: 0 18px 42px rgba(120, 60, 85, .2); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.view-options-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.view-options-head strong { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent3); }
+.view-options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; }
+.view-options-grid .toggle-row { padding: 3px 0; }
+.view-options-grid .toggle-copy > span { font-size: 10.5px; }
+.view-options-grid .toggle-copy small { font-size: 9px; }
+.view-slider { display: flex; flex-direction: column; gap: 4px; font-size: 10px; color: var(--textSoft); font-weight: 700; }
+.view-slider span { display: flex; justify-content: space-between; }
+.view-slider b { color: var(--accent3); }
+.view-slider input { width: 100%; accent-color: var(--accent2); }
+.view-options-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.view-options-actions button { justify-content: center; font-size: 10px; }
+.viewer:fullscreen { border-radius: 0; background: #fff7fa; padding: 16px; }
+.viewer:fullscreen .viewport3d { border-radius: 14px; }
+.profile-save { display: flex; gap: 5px; align-items: center; }
+.profile-save input { flex: 1; min-width: 0; padding: 6px 8px; font-size: 11px; }
+.profile-save .soft-button { flex: none; padding: 5px 8px; font-size: 10px; }
+.profile-list { display: flex; flex-direction: column; gap: 3px; margin-top: 7px; max-height: 150px; overflow-y: auto; }
+.profile-row { display: flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 7px; background: var(--panel2); }
+.profile-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 700; }
+.profile-row .mini-link.danger { color: var(--danger); }
+.view-slider select { width: 100%; padding: 5px 7px; font-size: 10.5px; }

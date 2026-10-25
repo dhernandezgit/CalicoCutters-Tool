@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Check, Copy, Eye, FolderOpen, ImagePlus, Plus, RefreshCw, Shapes, Sparkles, Trash2, Upload } from "lucide-react";
+import { Check, Copy, Eye, FolderOpen, ImagePlus, Plus, RefreshCw, Shapes, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import type { BuildResult, DesignAsset, DesignShape } from "../types";
 import { modeLabel } from "../lib/settings";
 import { BUILTIN_SHAPES } from "../data/shapes";
@@ -35,6 +35,7 @@ export default function AssetsPanel({
   onDuplicate,
   onViewOnly,
   onRemoveAll,
+  onText,
 }: {
   assets: AssetRow[];
   selectedIds: string[];
@@ -47,6 +48,7 @@ export default function AssetsPanel({
   onDuplicate: (id: string) => void;
   onViewOnly: (id: string) => void;
   onRemoveAll: () => void;
+  onText: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [over, setOver] = useState(false);
@@ -116,6 +118,7 @@ export default function AssetsPanel({
 
       <div className="asset-tools">
         <button type="button" onClick={() => inputRef.current?.click()}><Plus size={13} /> Añadir</button>
+        <button type="button" onClick={onText} disabled={busy}><Type size={13} /> Texto</button>
         <button type="button" onClick={() => assets.forEach((a) => { if (!selectedIds.includes(a.id)) onSelect(a.id, "toggle"); })}>
           <Check size={13} /> Todos
         </button>

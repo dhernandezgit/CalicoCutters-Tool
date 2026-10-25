@@ -60,6 +60,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "pressHandleLength": 26.0,
     "pressHandleWidth": 10.0,
     "pressHandlePosition": 50.0,
+    "pressHandlesBothEnds": False,
     "addBar": False,
     "barAngle": 0.0,
     "barPosition": 50.0,
@@ -68,10 +69,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampRelief": 3.0,
     "stampClearance": 0.8,
     "stampRemoveOuterEdge": True,
+    "stampRecessed": False,
     "stampEdgeMethod": "preserve",
     "stampBorder": True,
     "stampBorderWidth": 1.6,
     "mirror": False,
+    "mirrorPair": False,
     "imprintDepth": 4.5,
     "color": "#f39ab1",
     "multiRows": 2,
@@ -227,8 +230,8 @@ _INTEGER_RANGES: dict[str, tuple[int, int]] = {
 
 _BOOLEAN_KEYS = {
     "lockAspect", "autoPrintable", "sharpEdge", "extraBlade",
-    "addPressHandle", "addBar", "stampRemoveOuterEdge", "stampBorder",
-    "mirror", "stencilBridges", "topperInvert",
+    "addPressHandle", "pressHandlesBothEnds", "addBar", "stampRemoveOuterEdge", "stampBorder",
+    "mirror", "mirrorPair", "stencilBridges", "topperInvert", "stampRecessed",
     "preprocessSmooth", "preprocessPreserveCorners", "preprocessRemoveTiny",
     "alignmentHole",
 }
@@ -272,7 +275,7 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     out["printer"] = str(out.get("printer")) if str(out.get("printer")) in PRINTERS else "fdm04"
     out["baseShape"] = str(out.get("baseShape")) if str(out.get("baseShape")) in {"rect", "chamfer", "round"} else "chamfer"
     out["stampEdgeMethod"] = "offset" if str(out.get("stampEdgeMethod")) == "offset" else "preserve"
-    out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "grid"
+    out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "random" if str(out.get("stencilPattern")) == "random" else "grid"
     out["bedModel"] = str(out.get("bedModel") or "bambu-p2s")[:40]
     for key in _BOOLEAN_KEYS:
         out[key] = _as_bool(out.get(key))
@@ -471,6 +474,10 @@ def _add_cutter_extras(mesh: Mesh, main: Polygon, settings: dict[str, Any]) -> M
         handle = rounded_rect(length, wid, wid * 0.45)
         handle = affinity.translate(handle, cx, cy)
         mesh = mesh.append(extrude_polygon(handle, 0.0, max(3.0, settings["baseHeight"] + 1.2)))
+        if settings.get("pressHandlesBothEnds"):
+            top_handle = rounded_rect(length, wid, wid * 0.45)
+            top_handle = affinity.translate(top_handle, cx, b[3] + wid * 0.35)
+            mesh = mesh.append(extrude_polygon(top_handle, 0.0, max(3.0, settings["baseHeight"] + 1.2)))
     if settings.get("addBar") and settings["barWidth"] >= 0.4:
         bar = _bar_polygon(main, settings)
         mesh = mesh.append(extrude_polygon(bar, 0.0, max(2.0, settings["baseHeight"] + settings["bladeDepth"] * 0.7)))
@@ -656,6 +663,8 @@ def _checks(
         ))
         if settings["stampRelief"] > 5:
             out.append(_check("warn", f"Relieve de {settings['stampRelief']:.1f} mm", "Un relieve muy alto es frágil y puede romperse con el tiempo. Prueba 2–3 mm.", "stamp_relief"))
+        if settings.get("stampRecessed") and settings["stampRelief"] > settings["stampBack"] - 1.0:
+            out.append(_check("warn", "Hundido demasiado profundo", "Deja al menos 1 mm de respaldo bajo el relieve negativo.", "stamp_recess"))
         if details:
             small = [d for d in details if d.area < 2.2 or d.buffer(-line * 0.5).is_empty]
             if small:
@@ -848,6 +857,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 border=bool(settings.get("stampBorder", True)),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
                 alignment=stamp_alignment,
+                recessed=bool(settings.get("stampRecessed")),
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
         if settings["mode"] == "imprint":
@@ -988,6 +998,41 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             parts.append(("Prensador", plunger, "#b7a4e8"))
     except Exception as exc:
         raise ValueError(f"No se pudo generar la geometría: {exc}") from exc
+    if settings.get("mirrorPair") and settings["mode"] in {"cutter", "cutter-stamp", "stamp"}:
+        mirrored_main = affinity.scale(main, -1, 1, origin=(0, 0))
+        mirrored_details = [affinity.scale(d, -1, 1, origin=(0, 0)) for d in details]
+        mirror_cut_align, mirror_stamp_align = _alignment_locations(mirrored_main, settings)
+        if settings["mode"] in {"cutter", "cutter-stamp"}:
+            mirror_cutter = build_cutter(
+                mirrored_main,
+                blade_thickness=settings["bladeThickness"],
+                blade_depth=settings["bladeDepth"],
+                tip_width=settings["tipWidth"],
+                chamfer_height=settings["chamferHeight"],
+                base_height=settings["baseHeight"],
+                base_width=settings["baseWidth"],
+                sharp_edge=bool(settings["sharpEdge"]),
+                extra_blade=bool(settings.get("extraBlade")),
+                extra_blade_depth=settings.get("extraBladeDepth", 0),
+                extra_blade_thickness=settings.get("extraBladeThickness", 0),
+                base_shape=str(settings.get("baseShape", "round")),
+                alignment=mirror_cut_align,
+            )
+            mirror_cutter = _add_cutter_extras(mirror_cutter, mirrored_main, settings)
+            parts.append(("Cortador espejo", mirror_cutter, "#f39ab1"))
+        if settings["mode"] in {"stamp", "cutter-stamp"}:
+            mirror_stamp = build_stamp(
+                mirrored_main,
+                mirrored_details,
+                back_height=settings["stampBack"],
+                relief=settings["stampRelief"],
+                clearance=settings["stampClearance"],
+                border=bool(settings.get("stampBorder", True)),
+                border_width=float(settings.get("stampBorderWidth", 1.6)),
+                alignment=mirror_stamp_align,
+                recessed=bool(settings.get("stampRecessed")),
+            )
+            parts.append(("Sello espejo", mirror_stamp, "#b7a4e8"))
     if not parts:
         raise ValueError("No se ha generado ninguna pieza.")
     return parts, warnings, main, details
@@ -1026,7 +1071,12 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
     data = base64.b64decode(payload["data_b64"])
     if len(data) > 30 * 1024 * 1024:
         raise ValueError("El archivo supera 30 MB. Usa una imagen más ligera.")
-    shape = analyze_bytes(data, payload.get("filename", "diseño.png"), float(payload.get("target_mm", 75.0)))
+    shape = analyze_bytes(
+        data,
+        payload.get("filename", "diseño.png"),
+        float(payload.get("target_mm", 75.0)),
+        force_filled=bool(payload.get("force_filled", False)),
+    )
     return {"shape": shape.to_dict()}
 
 

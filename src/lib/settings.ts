@@ -64,6 +64,8 @@ export function applyCheckFix(settings: DesignSettings, code: string): DesignSet
       return { ...settings, stampBack: Math.max(settings.stampBack, 5.5) };
     case "stamp_relief":
       return { ...settings, stampRelief: Math.min(settings.stampRelief, 3) };
+    case "stamp_recess":
+      return { ...settings, stampRelief: Math.min(settings.stampRelief, Math.max(1, settings.stampBack - 1.2)) };
     case "bar_width":
       return { ...settings, barWidth: Math.max(settings.barWidth, line * 3) };
     case "layer":

@@ -20,8 +20,8 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
             <span className="help-num">1</span>
             <ImagePlus size={20} />
             <div>
-              <strong>Sube o pega tu diseño</strong>
-              <p>SVG, PNG, JPG o WebP. Los dibujos de líneas se rellenan para crear la silueta exterior y los detalles interiores se usan para el sello.</p>
+              <strong>Sube, pega o escribe tu diseño</strong>
+              <p>SVG, PNG, JPG o WebP, o crea una silueta desde texto con el botón “Texto”. Los dibujos de líneas se rellenan para crear la silueta exterior y los detalles interiores se usan para el sello.</p>
             </div>
           </div>
           <div className="help-step">
@@ -59,12 +59,29 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
         </div>
 
         <div className="help-note">
+          <strong>Visualización</strong>
+          <p>
+            El botón “Vista” del visor permite ocultar cama y cuadrícula, cambiar la superficie, activar sombras,
+            rayos X o giro automático, usar una perspectiva técnica, separar las piezas y descargar una captura PNG.
+            También puedes centrar solo la pieza o todo el conjunto y entrar en pantalla completa.
+          </p>
+        </div>
+
+        <div className="help-note">
           <strong>Base, suavizado y alineación</strong>
           <p>
             En Avanzado puedes elegir la cama de tu impresora (Bambu, Prusa, Creality, Elegoo, Anycubic, Sovol, QIDI,
             Voron y más) o introducir medidas personalizadas. El preprocesado suaviza trazos rectos y elimina detalles
             minúsculos; el punto de alineación añade un agujero mínimo en la base del cortador y en el sello para
             orientarlos como las marcas de un objetivo. Puedes desactivarlo.
+          </p>
+        </div>
+
+        <div className="help-note">
+          <strong>Perfiles</strong>
+          <p>
+            En Avanzado puedes guardar tus ajustes de cuchilla, base, sello, cama y preprocesado con un nombre.
+            Aplícalos después a otros diseños sin repetir la configuración.
           </p>
         </div>
 

@@ -260,10 +260,11 @@ def test_multi_3mf_places_designs_without_overlap():
         ]
         ranges.append((min(xs), max(xs)))
     ranges.sort()
-    white = [(min(a, b), max(a, b)) for a, b in zip(ranges, ranges[1:])]
-    for left, right in white:
+    for left, right in zip(ranges, ranges[1:]):
         assert right[0] - left[1] >= 10.0
 
+
+def test_stencil_bridges_keep_interior_islands_attached():
     svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
     <path fill="#111" fill-rule="evenodd" d="M10 10H90V90H10Z M35 35H65V65H35Z"/>
     </svg>"""
@@ -298,7 +299,6 @@ def test_topper_invert_relief_is_watertight():
     assert inverted["parts"][0]["volume"] != normal["parts"][0]["volume"]
 
 
-
 def test_invalid_settings_are_clamped_instead_of_crashing():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,
@@ -313,6 +313,21 @@ def test_invalid_settings_are_clamped_instead_of_crashing():
     assert result["parts"]
     assert result["dimensions"]["width"] > 0
     assert result["dimensions"]["height"] > 0
+
+
+def test_alignment_holes_are_present_and_watertight_by_default():
+    from calicocutters.engine import _alignment_locations, _settings, _sized_geometry
+
+    shape = _shape()
+    settings = _settings(DEFAULT_SETTINGS)
+    main, _details, _warnings = _sized_geometry(shape, settings)
+    cutter_hole, stamp_hole = _alignment_locations(main, settings)
+    assert cutter_hole is not None and stamp_hole is not None
+    result = build({"shape": shape.to_dict(), "settings": settings})
+    for part in result["parts"]:
+        mesh = _mesh(part)
+        assert mesh.is_watertight
+        assert mesh.volume > 0
 
 
 def test_stamp_border_is_flush_with_relief_by_default():
@@ -357,18 +372,48 @@ def test_stamp_interior_outline_near_edge_is_cleaned():
     assert _mesh({"stl_b64": __import__("base64").b64encode(mesh.stl_bytes()).decode(), "name": "Sello"}).is_watertight
     assert mesh.volume() == pytest.approx(clean.volume(), rel=0.02)
 
-    from calicocutters.engine import _alignment_locations, _settings, _sized_geometry
 
-    shape = _shape()
-    settings = _settings(DEFAULT_SETTINGS)
-    main, _details, _warnings = _sized_geometry(shape, settings)
-    cutter_hole, stamp_hole = _alignment_locations(main, settings)
-    assert cutter_hole is not None and stamp_hole is not None
-    result = build({"shape": shape.to_dict(), "settings": settings})
+def test_mirrored_pair_adds_both_orientations():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter-stamp",
+        "mirrorPair": True,
+    }})
+    names = [p["name"] for p in result["parts"]]
+    assert "Cortador" in names and "Cortador espejo" in names
+    assert "Sello" in names and "Sello espejo" in names
     for part in result["parts"]:
-        mesh = _mesh(part)
-        assert mesh.is_watertight
-        assert mesh.volume > 0
+        assert _mesh(part).is_watertight
+
+
+def test_recessed_stamp_is_watertight():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "stampRecessed": True,
+        "stampRelief": 1.5,
+        "stampBorder": True,
+    }})
+    mesh = _mesh(result["parts"][0])
+    assert mesh.is_watertight
+    assert mesh.volume > 0
+    assert mesh.bounds[1][2] == pytest.approx(5.5, abs=0.1)
+
+
+def test_press_handles_on_both_ends_add_material():
+    base = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter",
+        "addPressHandle": False,
+    }})
+    both = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter",
+        "addPressHandle": True,
+        "pressHandlesBothEnds": True,
+    }})
+    assert both["parts"][0]["volume"] > base["parts"][0]["volume"] * 1.15
+    assert _mesh(both["parts"][0]).is_watertight
 
 
 def test_custom_bed_size_is_used_by_checks():
@@ -382,5 +427,3 @@ def test_custom_bed_size_is_used_by_checks():
     bed_checks = [c for c in result["checks"] if c.get("code") == "bed"]
     assert bed_checks
     assert any(c["level"] == "warn" for c in bed_checks)
-
-

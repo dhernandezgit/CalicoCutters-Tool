@@ -1,6 +1,9 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import {
+  Bookmark,
   Box,
+  ChevronDown,
+  ChevronRight,
   CircleHelp,
   Crown,
   Focus,
@@ -14,7 +17,7 @@ import {
   Wand2,
 } from "lucide-react";
 import type { BuildResult, DesignSettings, DesignShape, PrintCheck } from "../types";
-import { PRINTER_BEDS, PRINTER_PROFILES } from "../types";
+import { DEFAULT_SETTINGS, PRINTER_BEDS, PRINTER_PROFILES } from "../types";
 import Section from "./Section";
 import Toggle from "./Toggle";
 
@@ -22,6 +25,27 @@ function levelOf(checks: PrintCheck[]): "ok" | "warn" | "error" {
   if (checks.some((c) => c.level === "error")) return "error";
   if (checks.some((c) => c.level === "warn")) return "warn";
   return "ok";
+}
+
+interface SavedProfile {
+  id: string;
+  name: string;
+  savedAt: string;
+  settings: DesignSettings;
+}
+
+const PROFILE_KEY = "calicocutters-profiles";
+
+function loadProfiles(): SavedProfile[] {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((p) => p && typeof p.name === "string" && p.settings).slice(0, 30);
+  } catch {
+    return [];
+  }
 }
 
 function NumberField({
@@ -181,6 +205,9 @@ export default function SettingsPanel({
 }) {
   const [nameDraft, setNameDraft] = useState(assetName || selectionNames[0] || "");
   const [bulkName, setBulkName] = useState("galleta");
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ Galletas: true });
+  const [profiles, setProfiles] = useState<SavedProfile[]>(() => loadProfiles());
+  const [profileName, setProfileName] = useState("");
   useEffect(() => {
     setNameDraft(assetName || selectionNames[0] || "");
   }, [assetName, selectionNames[0]]);
@@ -202,6 +229,38 @@ export default function SettingsPanel({
   const setHeight = (v: number) => {
     if (settings.lockAspect) onChange({ height: v, width: Number((v * aspect).toFixed(2)) });
     else onChange({ height: v });
+  };
+
+  const persistProfiles = (next: SavedProfile[]) => {
+    setProfiles(next);
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(next)); } catch { /* ignore quota */ }
+  };
+
+  const saveProfile = () => {
+    const name = profileName.trim();
+    if (!name) return;
+    const { color: _color, ...rest } = settings;
+    const profile: SavedProfile = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name,
+      savedAt: new Date().toISOString(),
+      settings: { ...DEFAULT_SETTINGS, ...rest },
+    };
+    const existing = profiles.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    const next = existing
+      ? profiles.map((p) => (p.id === existing.id ? { ...profile, id: existing.id } : p))
+      : [profile, ...profiles].slice(0, 30);
+    persistProfiles(next);
+    setProfileName("");
+  };
+
+  const applyProfile = (profile: SavedProfile) => {
+    const { color: _color, ...rest } = profile.settings;
+    onChange(rest);
+  };
+
+  const removeProfile = (id: string) => {
+    persistProfiles(profiles.filter((p) => p.id !== id));
   };
 
   return (
@@ -248,7 +307,7 @@ export default function SettingsPanel({
         <p className="basic-hint">Básico: elige qué crear, el tamaño y los ajustes esenciales. Cambia a Avanzado para impresión, color, nombres, coste y refuerzos.</p>
       )}
 
-      <Section id="mode" title="Qué vas a crear" icon={<Crown size={16} />} defaultOpen summary={settings.mode === "cutter-stamp" || settings.mode === "cakepop" ? "2 piezas" : "1 pieza"}>
+      <Section id="mode" title="Qué vas a crear" icon={<Crown size={16} />} defaultOpen summary={build ? `${build.parts.length} pieza${build.parts.length === 1 ? "" : "s"}` : (settings.mode === "cutter-stamp" || settings.mode === "cakepop" ? "2 piezas" : "1 pieza")}>
         {[
           {
             label: "Galletas",
@@ -294,29 +353,53 @@ export default function SettingsPanel({
           },
         ]
           .filter((group) => advanced || group.basic || group.modes.some((m) => m.value === settings.mode))
-          .map((group) => (
-            <div className="mode-group" key={group.label}>
-              <span className="mode-group-label">{group.label}</span>
-              <div className="mode-grid">
-                {group.modes.map((m) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    className={`mode-card${settings.mode === m.value ? " on" : ""}`}
-                    onClick={() => onChange({ mode: m.value })}
-                  >
-                    {m.icon}
-                    <strong>{m.label}</strong>
-                    <small>{m.sub}</small>
-                  </button>
-                ))}
+          .map((group) => {
+            const explicitlyOpen = openGroups[group.label];
+            const hasActive = group.modes.some((m) => m.value === settings.mode);
+            const open = explicitlyOpen ?? (group.label === "Galletas" || hasActive);
+            return (
+              <div className="mode-group" key={group.label}>
+                <button
+                  type="button"
+                  className={`mode-group-head${open ? " open" : ""}`}
+                  aria-expanded={open}
+                  onClick={() => setOpenGroups((prev) => ({ ...prev, [group.label]: !open }))}
+                >
+                  <span>{group.label}</span>
+                  {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </button>
+                {open && (
+                  <div className="mode-grid">
+                    {group.modes.map((m) => (
+                      <button
+                        key={m.value}
+                        type="button"
+                        className={`mode-card${settings.mode === m.value ? " on" : ""}`}
+                        onClick={() => onChange({ mode: m.value })}
+                      >
+                        {m.icon}
+                        <strong>{m.label}</strong>
+                        <small>{m.sub}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
 
         {advanced && (
           <div className="mode-group">
-            <span className="mode-group-label">Cerámica</span>
+            <button
+              type="button"
+              className={`mode-group-head${openGroups.Cerámica ? " open" : ""}`}
+              aria-expanded={!!openGroups.Cerámica}
+              onClick={() => setOpenGroups((prev) => ({ ...prev, Cerámica: !prev.Cerámica }))}
+            >
+              <span>Cerámica</span>
+              {openGroups.Cerámica ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+            </button>
+            {openGroups.Cerámica && (
             <div className="mode-grid">
               <button
                 type="button"
@@ -374,6 +457,7 @@ export default function SettingsPanel({
                 <small>Relieve suave sin borde</small>
               </button>
             </div>
+            )}
           </div>
         )}
       </Section>
@@ -649,6 +733,12 @@ export default function SettingsPanel({
                     <NumberField label="Ancho" value={settings.pressHandleWidth} min={5} max={25} step={0.5} onChange={(v) => onChange({ pressHandleWidth: v })} />
                   </div>
                   <NumberField label="Posición" value={settings.pressHandlePosition} min={0} max={100} step={5} unit="%" onChange={(v) => onChange({ pressHandlePosition: v })} />
+                  <Toggle
+                    label="Mango en ambos extremos"
+                    hint="Añade un segundo agarre para presionar con las dos manos."
+                    checked={settings.pressHandlesBothEnds}
+                    onChange={(v) => onChange({ pressHandlesBothEnds: v })}
+                  />
                 </>
               )}
             </>
@@ -695,6 +785,14 @@ export default function SettingsPanel({
               max={5}
               step={0.2}
               onChange={(v) => onChange({ stampBorderWidth: v })}
+            />
+          )}
+          {advanced && (
+            <Toggle
+              label="Relieve negativo (hundido)"
+              hint="Hunde el dibujo en el respaldo para dejar detalles en relieve sobre la masa."
+              checked={settings.stampRecessed}
+              onChange={(v) => onChange({ stampRecessed: v })}
             />
           )}
           {advanced && (
@@ -812,6 +910,7 @@ export default function SettingsPanel({
               <select value={settings.stencilPattern} onChange={(e) => onChange({ stencilPattern: e.target.value as DesignSettings["stencilPattern"] })}>
                 <option value="grid">Cuadrícula</option>
                 <option value="diagonal">Diagonal</option>
+                <option value="random">Aleatoria</option>
               </select>
             </span>
           </label>
@@ -959,6 +1058,36 @@ export default function SettingsPanel({
       )}
 
       {advanced && (
+        <Section id="profiles" title="Perfiles" icon={<Bookmark size={16} />} summary={`${profiles.length} guardado${profiles.length === 1 ? "" : "s"}`}>
+          <div className="profile-save">
+            <input
+              value={profileName}
+              onChange={(event) => setProfileName(event.target.value)}
+              placeholder="Nombre del perfil"
+              maxLength={32}
+              onKeyDown={(event) => { if (event.key === "Enter") saveProfile(); }}
+            />
+            <button type="button" className="soft-button" onClick={saveProfile} disabled={!profileName.trim()}>
+              <Bookmark size={13} /> Guardar
+            </button>
+          </div>
+          {profiles.length > 0 ? (
+            <div className="profile-list">
+              {profiles.map((profile) => (
+                <div className="profile-row" key={profile.id}>
+                  <span title={profile.name}>{profile.name}</span>
+                  <button type="button" className="mini-link" onClick={() => applyProfile(profile)}>Aplicar</button>
+                  <button type="button" className="mini-link danger" onClick={() => removeProfile(profile.id)}>Borrar</button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="inline-hint"><Bookmark size={13} /><span>Guarda tus ajustes de cuchilla, base, sello y preprocesado para reutilizarlos en otro diseño.</span></div>
+          )}
+        </Section>
+      )}
+
+      {advanced && (
         <Section id="experimental" title="Avanzado" icon={<SlidersHorizontal size={16} />}>
           <Toggle
             label="Espejo"
@@ -966,6 +1095,14 @@ export default function SettingsPanel({
             checked={settings.mirror}
             onChange={(v) => onChange({ mirror: v })}
           />
+          {["cutter", "cutter-stamp", "stamp"].includes(settings.mode) && (
+            <Toggle
+              label="Par espejo"
+              hint="Genera también la versión invertida como pieza separada en el mismo modelo."
+              checked={settings.mirrorPair}
+              onChange={(v) => onChange({ mirrorPair: v })}
+            />
+          )}
           <Toggle
             label="Ajustar valores al cambiar de perfil"
             hint="Aplica grosores recomendados al cambiar entre 0,4 / 0,6 / resina."

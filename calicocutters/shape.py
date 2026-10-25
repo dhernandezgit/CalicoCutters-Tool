@@ -540,7 +540,7 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
 
 
 # --------------------------------------------------------------- raster ----
-def _mask_from_image(img: Image.Image) -> tuple[np.ndarray, np.ndarray, bool]:
+def _mask_from_image(img: Image.Image, force_filled: bool = False) -> tuple[np.ndarray, np.ndarray, bool]:
     """Return (silhouette_mask, detail_mask, was_line_art).
 
     Opaque images are traced against their border colour, not only against
@@ -559,7 +559,7 @@ def _mask_from_image(img: Image.Image) -> tuple[np.ndarray, np.ndarray, bool]:
         opaque_frac = float(opaque.mean())
         dark = (lum < 170) & opaque
         dark_frac = float(dark.sum()) / max(1.0, float(opaque.sum()))
-        line_art = opaque_frac < 0.55 and dark_frac > 0.5
+        line_art = (opaque_frac < 0.55 and dark_frac > 0.5) and not force_filled
         silhouette = opaque
         ink = dark
         line_source = ink
@@ -585,7 +585,9 @@ def _mask_from_image(img: Image.Image) -> tuple[np.ndarray, np.ndarray, bool]:
             outer_area = sum(max(0.0, cv2.contourArea(c)) for c in contours)
             fill_ratio = float(foreground.sum()) / max(1.0, outer_area)
         # Thin line art has a low fill ratio; a filled silhouette does not.
-        line_art = background_is_flat and foreground.any() and fill_ratio < 0.38 and dark_frac < 0.45
+        line_art = (
+            background_is_flat and foreground.any() and fill_ratio < 0.38 and dark_frac < 0.45
+        ) and not force_filled
         if background_is_flat and foreground.any() and float(foreground.mean()) < 0.9:
             silhouette = foreground
         else:
@@ -711,14 +713,14 @@ def _detail_polys_from_mask(mask: np.ndarray, sx: float, sy: float) -> list[Poly
     return out
 
 
-def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0) -> Shape:
+def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0, force_filled: bool = False) -> Shape:
     img = Image.open(io.BytesIO(data))
     if getattr(img, "is_animated", False):
         img.seek(0)
     img = img.convert("RGBA")
     # Keep the canvas reasonable; A4 at 300 dpi is already enough for a cutter.
     img.thumbnail((1800, 1800), Image.Resampling.LANCZOS)
-    silhouette, detail_mask, line_art = _mask_from_image(img)
+    silhouette, detail_mask, line_art = _mask_from_image(img, force_filled)
     ys, xs = np.where(silhouette)
     w_px = int(xs.max() - xs.min() + 1)
     h_px = int(ys.max() - ys.min() + 1)
@@ -773,7 +775,7 @@ def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0) -> 
         warnings.append(
             "Dibujo de líneas detectado: se ha rellenado la silueta exterior y se han conservado los detalles interiores."
         )
-    if not details:
+    if not details and not force_filled:
         warnings.append("No se han encontrado detalles interiores; el sello será una base plana.")
     outer, holes = _ring_list(main)
     return Shape(
@@ -788,10 +790,10 @@ def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0) -> 
     )
 
 
-def analyze_bytes(data: bytes, filename: str, target_mm: float = 75.0) -> Shape:
+def analyze_bytes(data: bytes, filename: str, target_mm: float = 75.0, force_filled: bool = False) -> Shape:
     lower = filename.lower()
     if lower.endswith(".svg"):
         return parse_svg(data.decode("utf-8", errors="replace"), filename, target_mm)
     if lower.endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff")):
-        return parse_raster(data, filename, target_mm)
+        return parse_raster(data, filename, target_mm, force_filled=force_filled)
     raise ValueError("Formato no soportado. Usa SVG, PNG, JPG o WebP.")

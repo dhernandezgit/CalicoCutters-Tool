@@ -169,6 +169,20 @@ def test_transparent_line_art_is_traced():
     assert shape.details
 
 
+def test_force_filled_keeps_counters_as_holes():
+    from PIL import Image, ImageDraw
+    img = Image.new("RGBA", (420, 420), (255, 255, 255, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((40, 40, 380, 380), fill=(0, 0, 0, 255))
+    d.ellipse((150, 150, 270, 270), fill=(255, 255, 255, 0))
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    shape = parse_raster(buf.getvalue(), "text.png", 70, force_filled=True)
+    assert shape.holes, "Los contadores de texto deben conservarse como huecos"
+    assert shape.bounds["width"] <= 70.01
+
+
+
 
 def test_mesh_orientation_flip():
     # Outward-facing cube, then reverse it and make sure orientation repair fixes it.

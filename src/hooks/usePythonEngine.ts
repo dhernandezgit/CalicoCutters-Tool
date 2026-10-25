@@ -153,12 +153,13 @@ export function usePythonEngine() {
     });
   }, []);
 
-  const analyzeFile = useCallback(async (file: File, previewUrl?: string) => {
+  const analyzeFile = useCallback(async (file: File, previewUrl?: string, forceFilled = false) => {
     const bytes = new Uint8Array(await file.arrayBuffer());
     const result = await request("analyze", {
       filename: file.name,
       data_b64: bytesToBase64(bytes),
       target_mm: 75,
+      force_filled: forceFilled,
     });
     if (!result.ok) throw new Error(result.error || "No se pudo analizar el archivo.");
     return normalizeShape(result.shape, previewUrl);

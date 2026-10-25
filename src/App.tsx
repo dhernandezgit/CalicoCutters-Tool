@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Camera,
   Eye,
   EyeOff,
+  Expand,
   Focus,
   Grid2X2,
   HelpCircle,
@@ -12,6 +14,7 @@ import {
   Save,
   Scissors,
   FolderOpen,
+  SlidersHorizontal,
   Stamp,
   Upload,
 } from "lucide-react";
@@ -29,6 +32,8 @@ import ExportDialog from "./components/ExportDialog";
 import HelpDialog from "./components/HelpDialog";
 import ChecksDialog from "./components/ChecksDialog";
 import DonateDialog from "./components/DonateDialog";
+import TextDialog from "./components/TextDialog";
+import Toggle from "./components/Toggle";
 import ProcessingBar, { type ProgressState } from "./components/ProcessingBar";
 import StatusBar from "./components/StatusBar";
 import Logo from "./components/Logo";
@@ -119,15 +124,27 @@ export default function App() {
   const [isolate, setIsolate] = useState<"all" | "cutter" | "stamp" | "imprint">("all");
   const [showEdges, setShowEdges] = useState(false);
   const [wireframe, setWireframe] = useState(false);
+  const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+  const [technical, setTechnical] = useState(false);
+  const [autoRotate, setAutoRotate] = useState(false);
+  const [showBed, setShowBed] = useState(true);
+  const [showGrid, setShowGrid] = useState(true);
+  const [shadows, setShadows] = useState(true);
+  const [xray, setXray] = useState(false);
+  const [explode, setExplode] = useState(0);
+  const [bedStyle, setBedStyle] = useState<"mauve" | "midnight" | "cream" | "rose">("mauve");
+  const [finish, setFinish] = useState<"matte" | "satin" | "gloss">("satin");
   const [fitKey, setFitKey] = useState("start");
   const [viewScope, setViewScope] = useState<"all" | "selected">("all");
   const [exportOpen, setExportOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
   const [donateOpen, setDonateOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
   const [plaPricePerKg, setPlaPricePerKg] = useState(14);
   const [toast, setToast] = useState("");
   const viewportRef = useRef<Viewport3DHandle>(null);
+  const viewerBoxRef = useRef<HTMLDivElement | null>(null);
   const projectInputRef = useRef<HTMLInputElement | null>(null);
   const initialLoaded = useRef(false);
   const fileHandler = useRef<(files: File[]) => void>(() => undefined);
@@ -231,7 +248,7 @@ export default function App() {
     return asset;
   }, [primary, assets.length]);
 
-  const addFiles = useCallback(async (files: File[]) => {
+  const addFiles = useCallback(async (files: File[], settingsOverride?: DesignSettings, forceFilled = false) => {
     if (!files.length || fileBusy) return;
     if (!engine.ready) {
       setToast("El motor Python todavía está cargando. Espera un momento.");
@@ -261,8 +278,8 @@ export default function App() {
         ? URL.createObjectURL(file)
         : undefined;
       try {
-        const shape = await engine.analyzeFile(file, previewUrl);
-        addAsset(shape, file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || "diseño");
+        const shape = await engine.analyzeFile(file, previewUrl, forceFilled);
+        addAsset(shape, file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim() || "diseño", settingsOverride);
         added += 1;
         // Let React paint each card before starting the next file.  This keeps
         // multi-file imports genuinely sequential on screen.
@@ -540,9 +557,35 @@ export default function App() {
     [engine],
   );
 
+  const downloadViewScreenshot = () => {
+    const data = viewportRef.current?.screenshot();
+    if (!data) {
+      setToast("La captura no está disponible en este navegador.");
+      return;
+    }
+    const a = document.createElement("a");
+    a.href = data;
+    a.download = `calicocutters-vista-${new Date().toISOString().slice(0, 10)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setToast("Captura de la vista guardada.");
+  };
+
+  const toggleFullscreen = async () => {
+    const element = viewerBoxRef.current;
+    if (!element) return;
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await element.requestFullscreen();
+    } catch {
+      setToast("El navegador no ha permitido la pantalla completa.");
+    }
+  };
+
   const partNames = new Set(displayBuild?.parts.map((p) => p.name) ?? []);
-  const hasCutterPart = ["Cortador", "Impronta", "Puzzle", "Cortador sándwich", "Set de cortadores"].some((name) => partNames.has(name));
-  const hasStampPart = partNames.has("Sello");
+  const hasCutterPart = ["Cortador", "Cortador espejo", "Impronta", "Puzzle", "Cortador sándwich", "Set de cortadores"].some((name) => partNames.has(name));
+  const hasStampPart = partNames.has("Sello") || partNames.has("Sello espejo");
 
   useEffect(() => {
     if (isolate === "stamp" && !hasStampPart) setIsolate("all");
@@ -594,6 +637,7 @@ export default function App() {
             onDuplicate={duplicateAsset}
             onViewOnly={viewOnly}
             onRemoveAll={removeAll}
+            onText={() => setTextOpen(true)}
           />
         </aside>
 
@@ -613,6 +657,54 @@ export default function App() {
               <button type="button" className={showEdges ? "on" : ""} onClick={() => setShowEdges((v) => !v)}>{showEdges ? <Eye size={15} /> : <EyeOff size={15} />}</button>
               <button type="button" className={wireframe ? "on" : ""} onClick={() => setWireframe((v) => !v)}><Grid2X2 size={15} /></button>
             </div>
+            <div className="view-options-wrap">
+              <button type="button" className={`view-options-button${viewOptionsOpen ? " on" : ""}`} onClick={() => setViewOptionsOpen((v) => !v)}>
+                <SlidersHorizontal size={14} /> Vista
+              </button>
+              {viewOptionsOpen && (
+                <div className="view-options-popover">
+                  <div className="view-options-head">
+                    <strong>Visualización</strong>
+                    <button type="button" className="mini-link" onClick={() => setViewOptionsOpen(false)}>Cerrar</button>
+                  </div>
+                  <div className="view-options-grid">
+                    <Toggle label="Cama" checked={showBed} onChange={setShowBed} />
+                    <Toggle label="Cuadrícula" checked={showGrid} onChange={setShowGrid} />
+                    <Toggle label="Sombras" checked={shadows} onChange={setShadows} />
+                    <Toggle label="Rayos X" checked={xray} onChange={setXray} />
+                    <Toggle label="Giro automático" checked={autoRotate} onChange={setAutoRotate} />
+                    <Toggle label="Vista técnica" hint="Perspectiva baja, casi ortográfica" checked={technical} onChange={setTechnical} />
+                  </div>
+                  <label className="view-slider">
+                    <span>Superficie de la cama</span>
+                    <select value={bedStyle} onChange={(e) => setBedStyle(e.target.value as typeof bedStyle)}>
+                      <option value="mauve">Malva oscuro</option>
+                      <option value="midnight">Azul medianoche</option>
+                      <option value="cream">Crema cálida</option>
+                      <option value="rose">Rosa oscuro</option>
+                    </select>
+                  </label>
+                  <label className="view-slider">
+                    <span>Acabado de impresión</span>
+                    <select value={finish} onChange={(e) => setFinish(e.target.value as typeof finish)}>
+                      <option value="matte">Mate</option>
+                      <option value="satin">Satinado</option>
+                      <option value="gloss">Brillante</option>
+                    </select>
+                  </label>
+                  <label className="view-slider">
+                    <span>Separar piezas <b>{explode.toFixed(0)} mm</b></span>
+                    <input type="range" min={0} max={30} step={1} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
+                  </label>
+                  <div className="view-options-actions">
+                    <button type="button" className="soft-button" onClick={() => viewportRef.current?.fitModel()}><Focus size={13} /> Centrar pieza</button>
+                    <button type="button" className="soft-button" onClick={() => viewportRef.current?.fit()}><Maximize2 size={13} /> Centrar todo</button>
+                    <button type="button" className="soft-button" onClick={downloadViewScreenshot}><Camera size={13} /> Captura PNG</button>
+                    <button type="button" className="soft-button" onClick={toggleFullscreen}><Expand size={13} /> Pantalla completa</button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="segmented view-scope">
               <button type="button" className={viewScope === "all" ? "on" : ""} onClick={() => { setViewScope("all"); setFitKey(`all-${Date.now()}`); }}>Todos</button>
               <button type="button" className={viewScope === "selected" ? "on" : ""} onClick={() => { setViewScope("selected"); setFitKey(`sel-${Date.now()}`); }}>Selección</button>
@@ -626,7 +718,7 @@ export default function App() {
             )}
           </div>
 
-          <div className="viewer">
+          <div className="viewer" ref={viewerBoxRef}>
             {tab === "3d" ? (
               <Viewport3D
                 ref={viewportRef}
@@ -639,6 +731,15 @@ export default function App() {
                 onSelectAsset={(id, additive) => selectAsset(id, additive ? "toggle" : "single")}
                 bedWidth={primary?.settings.bedWidth ?? 256}
                 bedDepth={primary?.settings.bedDepth ?? 256}
+                technical={technical}
+                autoRotate={autoRotate}
+                showBed={showBed}
+                showGrid={showGrid}
+                shadows={shadows}
+                xray={xray}
+                explode={explode}
+                bedStyle={bedStyle}
+                finish={finish}
               />
             ) : primary ? (
               <Preview2D shape={primary.shape} lineWidth={primary.settings.lineWidth} />
@@ -738,6 +839,11 @@ export default function App() {
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <ChecksDialog open={checksOpen} onClose={() => setChecksOpen(false)} checks={checks} onApplyFix={applyCheck} />
       <DonateDialog open={donateOpen} onClose={() => setDonateOpen(false)} />
+      <TextDialog
+        open={textOpen}
+        onClose={() => setTextOpen(false)}
+        onCreate={(file) => addFiles([file], { ...(primary?.settings ?? DEFAULT_SETTINGS), mode: "cutter" }, true)}
+      />
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

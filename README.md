@@ -12,12 +12,17 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 ## Qué hace
 
 - Carga uno o varios SVG, PNG, JPG y WebP; se procesan de uno en uno.
+- Crea siluetas desde texto con tipografía, espaciado, mayúsculas y unión por la base.
 - Vectoriza dibujos de líneas y conserva los detalles interiores para el sello.
 - Genera un cortador exterior con cuchilla, base y mango opcional (desactivado por defecto).
 - Genera un sello coordinado con respaldo y relieve; en Stamper + cortador se muestra dentro del cortador.
-- Menú agrupado por **Galletas, Sellos, Sándwich, Rodillo, Repostería y Cerámica**:
+- Relieve positivo, relieve negativo hundido, borde a ras del dibujo, par espejo y mangos en uno o ambos extremos.
+- Menú agrupado y plegable por **Galletas, Sellos, Sándwich, Rodillo, Repostería y Cerámica**:
   Stamper + cortador, cortador, impronta, puzzle, set de tamaños, sello, sándwich,
   rodillo de textura, topper, stencil, galleta de práctica, molde cake pop y perfiles de arcilla.
+- Visualización 3D con cama de impresora, cuadrícula de 1 cm, superficies, sombras, rayos X, vista técnica,
+  separación de piezas, giro automático, captura PNG y pantalla completa.
+- Perfiles guardables de fabricación y preprocesado para reutilizar ajustes.
 - Vista previa 3D real, vista 2D, selección múltiple y vista de un solo archivo.
 - Ajustes básicos rápidos y modo avanzado con impresión, base, barras, color, nombres y coste.
 - Comprobaciones de impresión: agua estanco, grosor de pared, filo, holgura, separación entre copias y encaje en cama.

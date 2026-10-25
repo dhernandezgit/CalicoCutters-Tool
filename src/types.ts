@@ -50,6 +50,7 @@ export interface DesignSettings {
   pressHandleLength: number;
   pressHandleWidth: number;
   pressHandlePosition: number;
+  pressHandlesBothEnds: boolean;
 
   addBar: boolean;
   barAngle: number;
@@ -60,10 +61,12 @@ export interface DesignSettings {
   stampRelief: number;
   stampClearance: number;
   stampRemoveOuterEdge: boolean;
+  stampRecessed: boolean;
   stampEdgeMethod: "preserve" | "offset";
   stampBorder: boolean;
   stampBorderWidth: number;
   mirror: boolean;
+  mirrorPair: boolean;
 
   imprintDepth: number;
 
@@ -92,7 +95,7 @@ export interface DesignSettings {
   stencilSpacing: number;
   stencilMargin: number;
   stencilShapeSize: number;
-  stencilPattern: "grid" | "diagonal";
+  stencilPattern: "grid" | "diagonal" | "random";
   stencilBridges: boolean;
   stencilBridgeWidth: number;
   stencilThickness: number;
@@ -241,6 +244,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   pressHandleLength: 26,
   pressHandleWidth: 10,
   pressHandlePosition: 50,
+  pressHandlesBothEnds: false,
 
   addBar: false,
   barAngle: 0,
@@ -251,10 +255,12 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampRelief: 3,
   stampClearance: 0.8,
   stampRemoveOuterEdge: true,
+  stampRecessed: false,
   stampEdgeMethod: "preserve",
   stampBorder: true,
   stampBorderWidth: 1.6,
   mirror: false,
+  mirrorPair: false,
 
   imprintDepth: 4.5,
 

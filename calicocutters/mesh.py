@@ -572,6 +572,7 @@ def build_stamp(
     border: bool = True,
     border_width: float = 1.6,
     alignment: tuple[float, float, float] | None = None,
+    recessed: bool = False,
 ) -> Mesh:
     stamp_poly = main.buffer(-clearance, join_style=1, quad_segs=8)
     if stamp_poly.is_empty:
@@ -586,24 +587,7 @@ def build_stamp(
     stamp_components = _ring_parts(stamp_poly)
     parts: list[Mesh] = []
     for stamp_component in stamp_components:
-        parts.append(extrude_polygon(stamp_component, 0.0, back_height))
-        if border and border_width > 0.2:
-            # A true annular frame, built by subtracting an inset copy of the
-            # plate.  Buffering the exterior line produced non-watertight
-            # fragments on sharp SVG contours.
-            inner_plate = stamp_component.buffer(
-                -max(0.2, border_width), join_style=1, quad_segs=8
-            )
-            if inner_plate.is_empty:
-                inner_plate = stamp_component.buffer(
-                    -max(0.1, min(0.4, border_width / 2)), join_style=1, quad_segs=8
-                )
-            strip = stamp_component.difference(inner_plate) if not inner_plate.is_empty else stamp_component
-            for p in _ring_parts(strip):
-                if p.area > 0.01:
-                    parts.append(extrude_polygon(
-                        p, back_height - 0.25, max(0.3, relief) + 0.25
-                    ))
+        kept_details: list[Polygon] = []
         for d in details:
             clipped = d.intersection(stamp_component)
             if clipped.is_empty:
@@ -628,7 +612,39 @@ def build_stamp(
                         continue
                 except Exception:
                     pass
-                parts.append(extrude_polygon(p, back_height - 0.25, relief + 0.25))
+                kept_details.append(p)
+        depth = min(max(0.2, relief), max(0.2, back_height - 1.0))
+        if recessed and kept_details:
+            # Negative relief: the background is high and the artwork is a
+            # shallow recess.  This leaves raised details in dough/fondant.
+            base_plate = extrude_polygon(stamp_component, 0.0, max(0.3, back_height - depth))
+            parts.append(base_plate)
+            cutouts = unary_union([d for d in details if not d.is_empty])
+            cover = stamp_component.difference(cutouts)
+            for p in _ring_parts(cover):
+                if p.area > 0.01:
+                    parts.append(extrude_polygon(p, back_height - depth - 0.01, depth + 0.01))
+            continue
+        parts.append(extrude_polygon(stamp_component, 0.0, back_height))
+        if border and border_width > 0.2:
+            # A true annular frame, built by subtracting an inset copy of the
+            # plate.  Buffering the exterior line produced non-watertight
+            # fragments on sharp SVG contours.
+            inner_plate = stamp_component.buffer(
+                -max(0.2, border_width), join_style=1, quad_segs=8
+            )
+            if inner_plate.is_empty:
+                inner_plate = stamp_component.buffer(
+                    -max(0.1, min(0.4, border_width / 2)), join_style=1, quad_segs=8
+                )
+            strip = stamp_component.difference(inner_plate) if not inner_plate.is_empty else stamp_component
+            for p in _ring_parts(strip):
+                if p.area > 0.01:
+                    parts.append(extrude_polygon(
+                        p, back_height - 0.25, max(0.3, relief) + 0.25
+                    ))
+        for p in kept_details:
+            parts.append(extrude_polygon(p, back_height - 0.25, relief + 0.25))
     if not parts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
     out = parts[0]
@@ -859,6 +875,10 @@ def build_stencil(
                 cx += cell_w / 2
                 if cx + half_pattern_w > width / 2 - margin:
                     cx -= cell_w
+            elif pattern == "random":
+                phase = (r * cols + c + 1) * 1.618
+                cx += math.sin(phase) * cell_w * 0.14
+                cy += math.cos(phase * 1.37) * cell_h * 0.14
             cuts.append(affinity.translate(pattern_poly, cx, cy))
     holes = unary_union(cuts)
     result = sheet.difference(holes)
