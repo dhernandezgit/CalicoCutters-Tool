@@ -61,6 +61,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampClearance": 0.8,
     "stampRemoveOuterEdge": False,
     "stampEdgeMethod": "preserve",
+    "mirror": False,
     "imprintDepth": 4.5,
     "color": "#f39ab1",
     "multiRows": 2,
@@ -130,6 +131,9 @@ def _sized_geometry(shape: Shape, settings: dict[str, Any]) -> tuple[Polygon, li
         sy = float(settings["height"]) / bh
     main = _transform_poly(main, sx, sy)
     details = [_transform_poly(p, sx, sy) for p in shape.detail_polygons]
+    if settings.get("mirror"):
+        main = affinity.scale(main, -1, 1, origin=(0, 0))
+        details = [affinity.scale(p, -1, 1, origin=(0, 0)) for p in details]
     clipped: list[Polygon] = []
     for d in details:
         c = d.intersection(main)
@@ -323,6 +327,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade=bool(settings.get("extraBlade")),
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
+                base_shape=str(settings.get("baseShape", "round")),
             )
             cutter = _add_cutter_extras(cutter, main, settings)
             parts.append(("Cortador", cutter, "#f39ab1"))
@@ -361,6 +366,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade=bool(settings.get("extraBlade")),
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
+                base_shape=str(settings.get("baseShape", "round")),
             )
             base = _add_cutter_extras(base, main, settings)
             rows = max(1, int(settings["multiRows"]))

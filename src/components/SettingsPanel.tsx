@@ -561,7 +561,13 @@ export default function SettingsPanel({
       )}
 
       {advanced && (
-        <Section id="experimental" title="Más opciones" icon={<SlidersHorizontal size={16} />}>
+        <Section id="experimental" title="Avanzado" icon={<SlidersHorizontal size={16} />}>
+          <Toggle
+            label="Espejo"
+            hint="Invierte el diseño horizontalmente; útil para parejas izquierda/derecha."
+            checked={settings.mirror}
+            onChange={(v) => onChange({ mirror: v })}
+          />
           <Toggle
             label="Ajustar valores al cambiar de perfil"
             hint="Aplica grosores recomendados al cambiar entre 0,4 / 0,6 / resina."

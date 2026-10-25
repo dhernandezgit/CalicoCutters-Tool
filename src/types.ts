@@ -53,6 +53,7 @@ export interface DesignSettings {
   stampClearance: number;
   stampRemoveOuterEdge: boolean;
   stampEdgeMethod: "preserve" | "offset";
+  mirror: boolean;
 
   imprintDepth: number;
 
@@ -188,6 +189,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampClearance: 0.8,
   stampRemoveOuterEdge: false,
   stampEdgeMethod: "preserve",
+  mirror: false,
 
   imprintDepth: 4.5,
 

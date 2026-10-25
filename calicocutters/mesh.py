@@ -402,9 +402,22 @@ def _ring_loft(layers: list[tuple[float, np.ndarray, np.ndarray]], segments: int
     return Mesh(np.asarray(verts), np.asarray(faces, dtype=np.int64)).merged().orient_consistent()
 
 
-def cutter_rings(outer: Polygon, thickness: float, base_width: float, tip_width: float, inset: float = 0.25):
+def cutter_rings(
+    outer: Polygon,
+    thickness: float,
+    base_width: float,
+    tip_width: float,
+    inset: float = 0.25,
+    base_shape: str = "round",
+):
     """Return base, blade and tip ring polygons for an outline."""
-    expanded_base = outer.buffer(base_width, join_style=1, quad_segs=8)
+    if base_shape == "rect":
+        join_style, miter, segs = 2, 2.0, 1
+    elif base_shape == "chamfer":
+        join_style, miter, segs = 3, 2.0, 1
+    else:
+        join_style, miter, segs = 1, 2.0, 8
+    expanded_base = outer.buffer(base_width, join_style=join_style, mitre_limit=miter, quad_segs=segs)
     base_ring = expanded_base.difference(outer.buffer(-inset, join_style=1, quad_segs=8))
     expanded_blade = outer.buffer(thickness, join_style=1, quad_segs=8)
     blade_ring = expanded_blade.difference(outer)
@@ -441,9 +454,10 @@ def build_cutter(
     extra_blade: bool = False,
     extra_blade_depth: float = 0.0,
     extra_blade_thickness: float = 0.0,
+    base_shape: str = "round",
 ) -> Mesh:
     base_parts, blade_parts, tip_parts = cutter_rings(
-        main, blade_thickness, base_width, tip_width
+        main, blade_thickness, base_width, tip_width, base_shape=base_shape
     )
     meshes: list[Mesh] = []
     used: set[int] = set()
