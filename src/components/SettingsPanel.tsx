@@ -413,6 +413,22 @@ export default function SettingsPanel({
           {advanced && (
             <>
               <Toggle
+                label="Borde perimetral"
+                hint="Deja un marco elevado alrededor del sello. Desactívalo para un sello sin borde."
+                checked={settings.stampBorder}
+                onChange={(v) => onChange({ stampBorder: v })}
+              />
+              {settings.stampBorder && (
+                <NumberField
+                  label="Ancho del borde"
+                  value={settings.stampBorderWidth}
+                  min={0.8}
+                  max={5}
+                  step={0.2}
+                  onChange={(v) => onChange({ stampBorderWidth: v })}
+                />
+              )}
+              <Toggle
                 label="Borrar contorno exterior"
                 hint="Elimina el contorno exterior del dibujo para que solo queden los detalles interiores."
                 checked={settings.stampRemoveOuterEdge}

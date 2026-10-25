@@ -260,7 +260,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
           const geometry = loader.parse(bytes.buffer);
           geometry.computeVertexNormals();
           const material = new THREE.MeshStandardMaterial({
-            color: COLORS[part.name] ?? 0xf39ab1,
+            color: part.color || new THREE.Color(COLORS[part.name] ?? 0xf39ab1).getHexString(),
             roughness: 0.46,
             metalness: 0.015,
             wireframe,
@@ -280,6 +280,8 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
               new THREE.LineBasicMaterial({ color: 0x7d4d63, transparent: true, opacity: 0.28 }),
             );
             edges.position.copy(mesh.position);
+            edges.userData.partName = part.name;
+            edges.userData.assetId = part.assetId;
             group.add(edges);
           }
         } catch (error) {

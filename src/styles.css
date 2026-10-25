@@ -614,3 +614,5 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
   .folder-save-row { flex-wrap: wrap; }
   .folder-save-row select { margin-left: 0; }
 }
+.check-fix { margin-left: auto; flex: none; border: 1.5px solid var(--accent); background: #fff8fb; color: var(--accent3); border-radius: 7px; padding: 4px 7px; font-size: 9.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px; }
+.check-fix:hover { background: #fff0f6; border-color: var(--accent2); }

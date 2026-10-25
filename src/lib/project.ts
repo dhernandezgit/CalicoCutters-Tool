@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, type DesignAsset, type DesignShape, type DesignSettings } from "../types";
+import { saveBlobWithPicker } from "./download";
 
 const VERSION = 1;
 
@@ -38,6 +39,7 @@ export function projectToJson(projectName: string, assets: DesignAsset[]): strin
         bounds: a.shape.bounds,
         warnings: a.shape.warnings,
         imageSize: a.shape.imageSize,
+        sourceColor: a.shape.sourceColor,
       },
     })),
   };
@@ -78,14 +80,17 @@ export function projectFileName(projectName: string): string {
   return `${projectName.replace(/[^a-zA-Z0-9_-]+/g, "-").toLowerCase() || "calicocutters"}.calicocutters`;
 }
 
-export function saveProjectFile(projectName: string, assets: DesignAsset[]) {
+export async function saveProjectFile(projectName: string, assets: DesignAsset[]) {
   const blob = projectBlob(projectName, assets);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = projectFileName(projectName);
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2500);
+  const result = await saveBlobWithPicker(blob, projectFileName(projectName), "Proyecto CalicoCutters");
+  if (result === "unsupported") {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = projectFileName(projectName);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+  }
 }

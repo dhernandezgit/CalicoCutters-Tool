@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
-import { Download, FileBox, FolderDown, Info, Save, X } from "lucide-react";
+import { Download, FileBox, Info, Save, X } from "lucide-react";
 import type { DesignAsset, DesignSettings } from "../types";
 import type { AssetRow } from "./AssetsPanel";
 import { base64ToBytes, bytesToBlob } from "../hooks/usePythonEngine";
-import { downloadBlob, downloadFilesSequentially, saveFilesToDirectory, safeFileName, type DownloadFile } from "../lib/download";
+import { saveBlobWithPicker, saveFilesChoosingLocation, safeFileName, type DownloadFile } from "../lib/download";
 import { projectBlob, projectFileName } from "../lib/project";
 
 export default function ExportDialog({
@@ -27,7 +27,6 @@ export default function ExportDialog({
 }) {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
-  const [folderFormat, setFolderFormat] = useState<"stl" | "3mf" | "both">("both");
 
   const chosen = useMemo(
     () => assets.filter((a) => a.build && selected[a.id] !== false),
@@ -62,8 +61,9 @@ export default function ExportDialog({
     setBusy(true);
     try {
       const files = await filesFor(asset, format);
-      await downloadFilesSequentially([...files, projectDownload]);
-      onToast(`${format.toUpperCase()} de “${asset.name}” y proyecto descargados.`);
+      const result = await saveFilesChoosingLocation([...files, projectDownload]);
+      if (result === "cancelled") return;
+      onToast(`${format.toUpperCase()} de “${asset.name}” y proyecto guardados.`);
     } catch (error) {
       onToast(String((error as Error)?.message || error));
     } finally {
@@ -77,8 +77,9 @@ export default function ExportDialog({
     try {
       const files: DownloadFile[] = [];
       for (const asset of chosen) files.push(...await filesFor(asset, format));
-      await downloadFilesSequentially([...files, projectDownload]);
-      onToast(`${files.length} archivo(s) ${format.toUpperCase()} y el proyecto descargados por separado.`);
+      const result = await saveFilesChoosingLocation([...files, projectDownload]);
+      if (result === "cancelled") return;
+      onToast(`${files.length} archivo(s) ${format.toUpperCase()} y el proyecto guardados.`);
     } catch (error) {
       onToast(String((error as Error)?.message || error));
     } finally {
@@ -86,29 +87,6 @@ export default function ExportDialog({
     }
   };
 
-  const saveFolder = async () => {
-    if (!chosen.length) return onToast("Selecciona al menos un diseño.");
-    setBusy(true);
-    try {
-      const formats: Array<"stl" | "3mf"> =
-        folderFormat === "both" ? ["stl", "3mf"] : [folderFormat];
-      const files: DownloadFile[] = [];
-      for (const asset of chosen) {
-        for (const format of formats) files.push(...await filesFor(asset, format));
-      }
-      files.push(projectDownload);
-      const ok = await saveFilesToDirectory(files);
-      if (!ok) {
-        onToast("Tu navegador no permite elegir carpeta. Usa los botones STL/3MF de cada archivo.");
-        return;
-      }
-      onToast(`${files.length} archivo(s) guardados en la carpeta elegida, incluido el proyecto.`);
-    } catch (error) {
-      onToast(String((error as Error)?.message || error));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <div className="modal-back" role="dialog" aria-modal="true" aria-label="Exportar modelos">
@@ -157,27 +135,13 @@ export default function ExportDialog({
                 <button type="button" className="soft-button" onClick={() => downloadAll("stl")} disabled={busy}><FileBox size={15} /> Todos en STL</button>
                 <button type="button" className="soft-button" onClick={() => downloadAll("3mf")} disabled={busy}><Download size={15} /> Todos en 3MF</button>
               </div>
-              <div className="inline-hint"><Info size={13} /><span>Se descargan archivos separados, sin ZIP. El proyecto .calicocutters se guarda también en cada descarga.</span></div>
-            </div>
-
-            <div className="export-block folder-save">
-              <span className="block-label">Guardado fiable</span>
-              <div className="folder-save-row">
-                <FolderDown size={17} />
-                <div><strong>Guardar en una carpeta</strong><small>Elige una carpeta y escribe todos los archivos de golpe, incluido el proyecto.</small></div>
-                <select value={folderFormat} onChange={(e) => setFolderFormat(e.target.value as typeof folderFormat)}>
-                  <option value="both">STL + 3MF</option>
-                  <option value="stl">Solo STL</option>
-                  <option value="3mf">Solo 3MF</option>
-                </select>
-                <button type="button" className="primary" onClick={saveFolder} disabled={busy}>Elegir carpeta</button>
-              </div>
+              <div className="inline-hint"><Info size={13} /><span>Elige la carpeta o el archivo de destino. El proyecto .calicocutters se guarda también junto a los modelos.</span></div>
             </div>
 
             <div className="project-save-row">
               <Save size={15} />
               <span>El archivo de proyecto incluye todos los diseños, ajustes, nombres y colores.</span>
-              <button type="button" className="mini-link" onClick={() => downloadBlob(projectFile, projectFileName(projectName))}>Descargar solo el proyecto</button>
+              <button type="button" className="mini-link" onClick={async () => { await saveBlobWithPicker(projectFile, projectFileName(projectName), "Proyecto CalicoCutters"); }}>Descargar solo el proyecto</button>
             </div>
           </div>
 

@@ -42,6 +42,7 @@ function normalizeShape(raw: any, previewUrl?: string): DesignShape {
     bounds: raw.bounds,
     warnings: raw.warnings ?? [],
     imageSize: raw.image_size ? { width: raw.image_size[0], height: raw.image_size[1] } : undefined,
+    sourceColor: raw.source_color,
     previewUrl,
   };
 }

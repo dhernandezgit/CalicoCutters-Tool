@@ -53,6 +53,8 @@ export interface DesignSettings {
   stampClearance: number;
   stampRemoveOuterEdge: boolean;
   stampEdgeMethod: "preserve" | "offset";
+  stampBorder: boolean;
+  stampBorderWidth: number;
   mirror: boolean;
 
   imprintDepth: number;
@@ -102,6 +104,8 @@ export interface DesignShape {
   warnings: string[];
   /** Original image dimensions, when the source is a raster. */
   imageSize?: { width: number; height: number };
+  /** Colour sampled from the artwork; neutral black becomes Calico pink. */
+  sourceColor?: string;
 }
 
 export interface BuildPart {
@@ -137,6 +141,7 @@ export interface PrintCheck {
   level: "ok" | "warn" | "error";
   title: string;
   detail: string;
+  code?: string;
 }
 
 export interface BambuSettings {
@@ -189,6 +194,8 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampClearance: 0.8,
   stampRemoveOuterEdge: false,
   stampEdgeMethod: "preserve",
+  stampBorder: true,
+  stampBorderWidth: 1.6,
   mirror: false,
 
   imprintDepth: 4.5,

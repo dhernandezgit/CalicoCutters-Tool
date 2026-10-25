@@ -19,7 +19,7 @@ import { usePythonEngine } from "./hooks/usePythonEngine";
 import { BUILTIN_SHAPES } from "./data/shapes";
 import type { BuildPart, BuildResult, DesignAsset, DesignSettings, PrintCheck } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
-import { applyPrintableSettings, mergeSettings, modeLabel } from "./lib/settings";
+import { applyCheckFix, applyPrintableSettings, mergeSettings, modeLabel } from "./lib/settings";
 import { projectFromJson, saveProjectFile } from "./lib/project";
 import AssetsPanel, { type AssetRow } from "./components/AssetsPanel";
 import SettingsPanel from "./components/SettingsPanel";
@@ -109,7 +109,7 @@ export default function App() {
   const [advanced, setAdvanced] = useState(false);
   const [tab, setTab] = useState<"3d" | "2d">("3d");
   const [isolate, setIsolate] = useState<"all" | "cutter" | "stamp" | "imprint">("all");
-  const [showEdges, setShowEdges] = useState(true);
+  const [showEdges, setShowEdges] = useState(false);
   const [wireframe, setWireframe] = useState(false);
   const [fitKey, setFitKey] = useState("start");
   const [viewScope, setViewScope] = useState<"all" | "selected">("all");
@@ -207,12 +207,13 @@ export default function App() {
   const addAsset = useCallback((shape: DesignAsset["shape"], name: string, settings?: DesignSettings, color?: string) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const baseSettings = settings ?? primary?.settings ?? DEFAULT_SETTINGS;
+    const chosenColor = color ?? shape.sourceColor ?? ASSET_COLORS[assets.length % ASSET_COLORS.length];
     const asset: DesignAsset = {
       id,
       name,
       shape,
-      settings: { ...baseSettings, color: color ?? ASSET_COLORS[assets.length % ASSET_COLORS.length] },
-      color: color ?? ASSET_COLORS[assets.length % ASSET_COLORS.length],
+      settings: { ...baseSettings, color: chosenColor },
+      color: chosenColor,
     };
     setAssets((prev) => [...prev, asset]);
     setSelectedIds([id]);
@@ -364,6 +365,15 @@ export default function App() {
         : asset,
     ));
     setToast("Medidas ajustadas a líneas de impresión.");
+  };
+
+  const applyCheck = (code: string) => {
+    setAssets((prev) => prev.map((asset) =>
+      selectedIds.includes(asset.id)
+        ? { ...asset, settings: applyCheckFix(asset.settings, code) }
+        : asset,
+    ));
+    setToast("Ajuste recomendado aplicado. Revisa el nuevo resultado.");
   };
 
   const setColor = (id: string, color: string) => {
@@ -651,7 +661,7 @@ export default function App() {
         plaPricePerKg={plaPricePerKg}
       />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <ChecksDialog open={checksOpen} onClose={() => setChecksOpen(false)} checks={checks} />
+      <ChecksDialog open={checksOpen} onClose={() => setChecksOpen(false)} checks={checks} onApplyFix={applyCheck} />
       <DonateDialog open={donateOpen} onClose={() => setDonateOpen(false)} />
       {toast && <div className="toast">{toast}</div>}
     </div>

@@ -86,6 +86,7 @@ class Shape:
     warnings: list[str] = field(default_factory=list)
     image_size: tuple[int, int] | None = None
     source_svg: str | None = None
+    source_color: str | None = None
 
     @property
     def main_polygon(self) -> Polygon:
@@ -116,6 +117,7 @@ class Shape:
             "warnings": self.warnings,
             "image_size": self.image_size,
             "bounds": self.bounds,
+            "source_color": self.source_color,
         }
 
     @staticmethod
@@ -130,6 +132,7 @@ class Shape:
             warnings=list(d.get("warnings", [])),
             image_size=tuple(d["image_size"]) if d.get("image_size") else None,
             source_svg=d.get("source_svg"),
+            source_color=d.get("source_color"),
         )
 
 
@@ -181,6 +184,56 @@ def _apply_matrix(m: np.ndarray, points: Iterable[Point2]) -> list[Point2]:
         ty = m[1, 0] * x + m[1, 1] * y + m[1, 2]
         out.append((float(tx), float(ty)))
     return out
+
+
+def _color_from_value(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = value.strip().lower()
+    m = re.fullmatch(r"#([0-9a-f]{3}|[0-9a-f]{6})", text)
+    if m:
+        h = m.group(1)
+        if len(h) == 3:
+            h = "".join(ch * 2 for ch in h)
+        return f"#{h}"
+    m = re.fullmatch(r"rgb\(\s*(\d+)\s*[, ]\s*(\d+)\s*[, ]\s*(\d+)\s*\)", text)
+    if m:
+        return "#" + "".join(f"{max(0, min(255, int(v))):02x}" for v in m.groups())
+    return None
+
+
+def _useful_color(colors: list[str]) -> str | None:
+    """Pick a colour for the preview; neutral/black artwork becomes Calico pink."""
+    counts: dict[str, int] = {}
+    for c in colors:
+        try:
+            r = int(c[1:3], 16)
+            g = int(c[3:5], 16)
+            b = int(c[5:7], 16)
+        except Exception:
+            continue
+        mx, mn = max(r, g, b), min(r, g, b)
+        lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        if mx - mn < 24 or lum < 38 or lum > 235:
+            continue
+        counts[c] = counts.get(c, 0) + 1
+    if not counts:
+        return None
+    return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def _dominant_raster_color(img: Image.Image) -> str:
+    arr = np.asarray(img.convert("RGBA"))
+    alpha = arr[:, :, 3]
+    rgb = arr[:, :, :3].astype(float)
+    lum = 0.2126 * rgb[:, :, 0] + 0.7152 * rgb[:, :, 1] + 0.0722 * rgb[:, :, 2]
+    mx = rgb.max(axis=2)
+    mn = rgb.min(axis=2)
+    mask = (alpha > 20) & (lum > 30) & (lum < 242) & ((mx - mn) > 26)
+    if mask.sum() < 20:
+        return "#f39ab1"
+    med = np.median(rgb[mask], axis=0)
+    return "#" + "".join(f"{max(0, min(255, int(v))):02x}" for v in med)
 
 
 def _style(el: ET.Element) -> dict[str, str]:
@@ -339,6 +392,7 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
     warnings: list[str] = []
     components: list[Polygon] = []
     skipped_strokes = 0
+    fill_colors: list[str] = []
 
     def walk(el: ET.Element, parent_matrix: np.ndarray) -> None:
         nonlocal skipped_strokes
@@ -350,6 +404,9 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
             style = _style(el)
             fill = (style.get("fill") or "black").strip()
             stroke = (style.get("stroke") or "none").strip()
+            c = _color_from_value(fill)
+            if c:
+                fill_colors.append(c)
             if fill in {"none", "transparent"} or fill.startswith("url("):
                 if stroke not in {"none", "transparent"}:
                     skipped_strokes += 1
@@ -433,6 +490,7 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
         source_kind="svg",
         warnings=warnings,
         source_svg=svg_text,
+        source_color=_useful_color(fill_colors) or "#f39ab1",
     )
 
 
@@ -631,6 +689,7 @@ def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0) -> 
         source_kind="raster",
         warnings=warnings,
         image_size=(img.width, img.height),
+        source_color=_dominant_raster_color(img),
     )
 
 

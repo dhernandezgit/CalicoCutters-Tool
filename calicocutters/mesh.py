@@ -540,6 +540,8 @@ def build_stamp(
     back_height: float,
     relief: float,
     clearance: float,
+    border: bool = True,
+    border_width: float = 1.6,
 ) -> Mesh:
     stamp_poly = main.buffer(-clearance, join_style=1, quad_segs=8)
     if stamp_poly.is_empty:
@@ -550,12 +552,30 @@ def build_stamp(
     parts: list[Mesh] = []
     for stamp_component in stamp_components:
         parts.append(extrude_polygon(stamp_component, 0.0, back_height))
+        if border and border_width > 0.2:
+            # A true annular frame, built by subtracting an inset copy of the
+            # plate.  Buffering the exterior line produced non-watertight
+            # fragments on sharp SVG contours.
+            inner_plate = stamp_component.buffer(
+                -max(0.2, border_width), join_style=1, quad_segs=8
+            )
+            if inner_plate.is_empty:
+                inner_plate = stamp_component.buffer(
+                    -max(0.1, min(0.4, border_width / 2)), join_style=1, quad_segs=8
+                )
+            strip = stamp_component.difference(inner_plate) if not inner_plate.is_empty else stamp_component
+            for p in _ring_parts(strip):
+                if p.area > 0.01:
+                    parts.append(extrude_polygon(
+                        p, back_height - 0.25, min(relief, 1.4) + 0.25
+                    ))
         for d in details:
             clipped = d.intersection(stamp_component)
             if clipped.is_empty:
                 continue
             for p in _ring_parts(clipped):
-                if p.area > 0.002:
+                # Drop hairline islands; they become fragile spikes on a stamp.
+                if p.area > 0.15:
                     parts.append(extrude_polygon(p, back_height - 0.25, relief + 0.25))
     if not parts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))

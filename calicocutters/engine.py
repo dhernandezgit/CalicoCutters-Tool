@@ -61,6 +61,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampClearance": 0.8,
     "stampRemoveOuterEdge": False,
     "stampEdgeMethod": "preserve",
+    "stampBorder": True,
+    "stampBorderWidth": 1.6,
     "mirror": False,
     "imprintDepth": 4.5,
     "color": "#f39ab1",
@@ -104,7 +106,7 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
         "extraBladeDepth", "extraBladeThickness",
         "baseHeight", "baseWidth", "pressHandleLength", "pressHandleWidth",
         "pressHandlePosition", "barAngle", "barPosition", "barWidth",
-        "stampBack", "stampRelief", "stampClearance", "imprintDepth",
+        "stampBack", "stampRelief", "stampClearance", "stampBorderWidth", "imprintDepth",
         "multiSpacing", "sandwichSealWidth", "sandwichGap", "sandwichDentSize",
         "sandwichDentSpacing", "sandwichDentDepth", "rollerDiameter",
         "rollerLength", "rollerRelief", "rollerBore", "rollerRim",
@@ -219,11 +221,20 @@ def _arrange(parts: list[dict[str, Any]], gap: float = 8.0) -> None:
         cursor += w + gap
 
 
-def _check(level: str, title: str, detail: str) -> dict[str, str]:
-    return {"level": level, "title": title, "detail": detail}
+def _check(level: str, title: str, detail: str, code: str | None = None) -> dict[str, str]:
+    out = {"level": level, "title": title, "detail": detail}
+    if code:
+        out["code"] = code
+    return out
 
 
-def _checks(parts: list[dict[str, Any]], settings: dict[str, Any], warnings: list[str]) -> list[dict[str, str]]:
+def _checks(
+    parts: list[dict[str, Any]],
+    settings: dict[str, Any],
+    warnings: list[str],
+    main: Polygon | None = None,
+    details: list[Polygon] | None = None,
+) -> list[dict[str, str]]:
     line = settings["lineWidth"]
     out: list[dict[str, str]] = []
     bt = settings["bladeThickness"]
@@ -231,30 +242,35 @@ def _checks(parts: list[dict[str, Any]], settings: dict[str, Any], warnings: lis
         "ok" if bt >= line * 2 else "error",
         f"Cuchilla de {bt:.2f} mm",
         f"{bt / line:.1f} líneas de {line:.2f} mm. Mínimo recomendado: 2 líneas.",
+        "thin_blade",
     ))
     tip = settings["tipWidth"]
     out.append(_check(
         "ok" if tip >= line * 0.75 else "warn",
         f"Filo de {tip:.2f} mm",
         "Ancho de filo imprimible." if tip >= line * 0.75 else "Puede desaparecer en el slicer.",
+        "thin_tip",
     ))
     clearance = settings["stampClearance"]
     out.append(_check(
         "ok" if clearance >= line * 1.5 else "warn",
         f"Holgura del sello de {clearance:.2f} mm",
         f"{clearance / line:.1f} líneas. Recomendado: 2 líneas ({line * 2:.1f} mm).",
+        "clearance",
     ))
     if settings["mode"] in {"cutter-stamp", "stamp"}:
         out.append(_check(
             "ok" if settings["stampBack"] >= 4 else "warn",
             f"Respaldo del sello de {settings['stampBack']:.1f} mm",
             "Suficiente para presionar sin doblarse." if settings["stampBack"] >= 4 else "Menos de 4 mm puede doblarse.",
+            "stamp_back",
         ))
     if settings.get("addBar"):
         out.append(_check(
             "ok" if settings["barWidth"] >= line * 3 else "warn",
             f"Barra de {settings['barWidth']:.2f} mm",
             "Tres líneas: estructura suficiente." if settings["barWidth"] >= line * 3 else "Menos de 3 líneas puede ser frágil.",
+            "bar_width",
         ))
     for p in parts:
         w = p["bounds"]["max"][0] - p["bounds"]["min"][0]
@@ -264,17 +280,44 @@ def _checks(parts: list[dict[str, Any]], settings: dict[str, Any], warnings: lis
             f"{p['name']}: {w:.1f} × {d:.1f} mm",
             "Cabe en una cama Bambu de 256 × 256 mm." if w <= 250 and d <= 250
             else "No cabe en una cama de 256 × 256 mm.",
+            "bed",
         ))
     if settings["printer"] == "fdm04" and settings["layerHeight"] > 0.3:
-        out.append(_check("warn", f"Capa de {settings['layerHeight']:.2f} mm", "Para detalles finos, usa 0,2 mm o menos."))
+        out.append(_check("warn", f"Capa de {settings['layerHeight']:.2f} mm", "Para detalles finos, usa 0,2 mm o menos.", "layer"))
     if settings["printer"] == "fdm04" and settings["bladeDepth"] < 8:
-        out.append(_check("warn", f"Cuchilla de {settings['bladeDepth']:.1f} mm", "Para galleta suelen necesitarse 10–15 mm."))
+        out.append(_check("warn", f"Cuchilla de {settings['bladeDepth']:.1f} mm", "Para galleta suelen necesitarse 10–15 mm.", "blade_depth"))
     if settings["baseHeight"] < 2:
-        out.append(_check("warn", f"Base de {settings['baseHeight']:.1f} mm", "Una base tan fina puede romperse. Recomendado: 3–4 mm."))
+        out.append(_check("warn", f"Base de {settings['baseHeight']:.1f} mm", "Una base tan fina puede romperse. Recomendado: 3–4 mm.", "base_height"))
+    if main is not None and not main.buffer(-line * 0.5, join_style=1, quad_segs=8).is_empty:
+        pass
+    elif main is not None:
+        out.append(_check(
+            "warn",
+            "Zonas finas en la silueta",
+            "Algunas zonas son más estrechas que una línea de impresión. Se pueden romper o desprender con el tiempo. Aumenta el tamaño o simplifica el dibujo.",
+            "thin_shape",
+        ))
+    if details and settings["mode"] in {"stamp", "cutter-stamp"}:
+        small = [d for d in details if d.area < 2.2 or d.buffer(-line * 0.5).is_empty]
+        if small:
+            out.append(_check(
+                "warn",
+                f"{len(small)} detalle(s) fino(s) en el sello",
+                "Los detalles pequeños y altos pueden desgastarse, doblarse o caerse con el tiempo. Reduce el relieve a 2 mm o engrosa el dibujo.",
+                "small_details",
+            ))
+    if settings["bladeDepth"] >= 16 and settings["bladeThickness"] < line * 3:
+        out.append(_check(
+            "warn",
+            "Cuchilla alta y fina",
+            "Una pared alta y delgada puede oscilar, despegarse o romperse con el tiempo. Sube el grosor a 3 líneas o baja la profundidad a 12 mm.",
+            "tall_blade",
+        ))
     out.append(_check(
         "warn" if warnings else "ok",
         f"{len(warnings)} aviso(s) de geometría" if warnings else "Geometría validada",
         " ".join(warnings) if warnings else "Malla generada. Revisa el slicer antes de imprimir.",
+        "geometry",
     ))
     return out
 
@@ -338,6 +381,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 back_height=settings["stampBack"],
                 relief=settings["stampRelief"],
                 clearance=settings["stampClearance"],
+                border=bool(settings.get("stampBorder", True)),
+                border_width=float(settings.get("stampBorderWidth", 1.6)),
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
         if settings["mode"] == "imprint":
@@ -432,10 +477,10 @@ def build(payload: dict[str, Any]) -> dict[str, Any]:
     t0 = time.perf_counter()
     shape = Shape.from_dict(payload["shape"])
     settings = _settings(payload.get("settings"))
-    raw, warnings, _main, _details = _generate_meshes(shape, settings)
+    raw, warnings, main, details = _generate_meshes(shape, settings)
     parts = _wire_parts(raw)
     _arrange(parts)
-    checks = _checks(parts, settings, warnings)
+    checks = _checks(parts, settings, warnings, main, details)
     total_volume = sum(p["volume"] for p in parts)
     return {
         "parts": parts,

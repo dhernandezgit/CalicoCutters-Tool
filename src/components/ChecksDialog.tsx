@@ -1,14 +1,16 @@
-import { AlertTriangle, CheckCircle2, ShieldCheck, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, ShieldCheck, Wand2, X } from "lucide-react";
 import type { PrintCheck } from "../types";
 
 export default function ChecksDialog({
   open,
   onClose,
   checks,
+  onApplyFix,
 }: {
   open: boolean;
   onClose: () => void;
   checks: PrintCheck[];
+  onApplyFix?: (code: string) => void;
 }) {
   if (!open) return null;
   return (
@@ -31,13 +33,19 @@ export default function ChecksDialog({
                 <strong>{c.title}</strong>
                 <p>{c.detail}</p>
               </div>
+              {c.code && c.level !== "ok" && onApplyFix && (
+                <button type="button" className="check-fix" onClick={() => onApplyFix(c.code!)}>
+                  <Wand2 size={12} /> Aplicar
+                </button>
+              )}
             </div>
           ))}
         </div>
         <div className="help-note soft">
           <p>
-            Estas comprobaciones usan el ancho de línea y la geometría generada. El slicer sigue siendo la última
-            comprobación: revisa la vista previa de capas antes de imprimir.
+            Estas comprobaciones usan el ancho de línea y la geometría generada. Las partes finas o pequeñas pueden
+            desgastarse, doblarse o caer con el tiempo, sobre todo si son muy altas. Pulsa “Aplicar” en un aviso para
+            corregir ese ajuste. El slicer sigue siendo la última comprobación: revisa la vista previa de capas.
           </p>
         </div>
         <div className="modal-actions">

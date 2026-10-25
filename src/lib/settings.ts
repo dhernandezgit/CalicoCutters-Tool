@@ -49,6 +49,46 @@ export function mergeSettings(
   return next;
 }
 
+export function applyCheckFix(settings: DesignSettings, code: string): DesignSettings {
+  const line = settings.lineWidth;
+  switch (code) {
+    case "thin_blade":
+      return applyPrintableSettings(settings);
+    case "thin_tip":
+      return { ...settings, tipWidth: Math.max(settings.tipWidth, line) };
+    case "clearance":
+      return { ...settings, stampClearance: Math.max(settings.stampClearance, line * 2) };
+    case "stamp_back":
+      return { ...settings, stampBack: Math.max(settings.stampBack, 5.5) };
+    case "bar_width":
+      return { ...settings, barWidth: Math.max(settings.barWidth, line * 3) };
+    case "layer":
+      return { ...settings, layerHeight: Math.min(settings.layerHeight, 0.2) };
+    case "blade_depth":
+      return { ...settings, bladeDepth: 12 };
+    case "base_height":
+      return { ...settings, baseHeight: Math.max(settings.baseHeight, 3.5) };
+    case "small_details":
+      return { ...settings, stampRelief: Math.min(settings.stampRelief, 2), stampBorder: true };
+    case "tall_blade":
+      return {
+        ...settings,
+        bladeThickness: Math.max(settings.bladeThickness, line * 3),
+        bladeDepth: Math.min(settings.bladeDepth, 12),
+      };
+    case "thin_shape":
+      return settings.sizeMode === "longest"
+        ? { ...settings, longest: Math.min(240, settings.longest * 1.15) }
+        : { ...settings, width: Math.min(240, settings.width * 1.15), height: Math.min(240, settings.height * 1.15) };
+    case "bed":
+      return settings.sizeMode === "longest"
+        ? { ...settings, longest: Math.max(20, settings.longest * 0.85) }
+        : { ...settings, width: Math.max(20, settings.width * 0.85), height: Math.max(20, settings.height * 0.85) };
+    default:
+      return applyPrintableSettings(settings);
+  }
+}
+
 export function modeLabel(mode: DesignSettings["mode"]): string {
   if (mode === "cutter-stamp") return "Stamper + cortador";
   if (mode === "cutter") return "Solo cortador";

@@ -71,6 +71,40 @@ def test_all_creation_modes_produce_printable_meshes(mode):
         assert all(abs(float(v)) < 1000 for v in mesh.vertices.reshape(-1))
 
 
+def test_actionable_printability_checks():
+    shape = _shape()
+    result = build({"shape": shape.to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "bladeDepth": 20,
+        "bladeThickness": 0.8,
+        "stampRelief": 5,
+    }})
+    codes = {c.get("code") for c in result["checks"]}
+    assert "thin_blade" in codes
+    assert "tall_blade" in codes
+    assert "geometry" in codes
+
+
+def test_stamp_border_can_be_removed_cleanly():
+    with_border = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "stampBorder": True,
+    }})
+    without_border = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "stampBorder": False,
+    }})
+    assert with_border["parts"][0]["volume"] > without_border["parts"][0]["volume"]
+    for result in (with_border, without_border):
+        mesh = _mesh(result["parts"][0])
+        assert mesh.is_watertight
+        assert mesh.is_winding_consistent
+        assert mesh.bounds[0][2] == pytest.approx(0.0, abs=0.01)
+        assert mesh.bounds[1][2] == pytest.approx(8.5, abs=0.1)
+
+
 def test_extra_blade_adds_material_without_breaking_mesh():
     base = build({"shape": _shape().to_dict(), "settings": DEFAULT_SETTINGS})
     extra = build({"shape": _shape().to_dict(), "settings": {
