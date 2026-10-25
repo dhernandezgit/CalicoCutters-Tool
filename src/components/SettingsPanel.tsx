@@ -908,7 +908,7 @@ export default function SettingsPanel({
             <NumberField label="Columnas" value={settings.multiCols} min={1} max={6} step={1} unit="" onChange={(v) => onChange({ multiCols: Math.round(v) })} />
           </div>
           <NumberField label="Separación" value={settings.multiSpacing} min={0} max={30} step={0.5} onChange={(v) => onChange({ multiSpacing: v })} />
-          <div className="inline-hint"><Grid3X3 size={13} /><span>Una sola placa conecta todas las copias y sirve de superficie de presión. El mango se atornilla arriba; al girar la herramienta, las cuchillas cortan todas las galletas a la vez.</span></div>
+          <div className="inline-hint"><Grid3X3 size={13} /><span>Una sola placa conecta todas las copias y sirve de superficie de presión. El mango opcional se imprime encima; al girar la herramienta, las cuchillas cortan todas las galletas a la vez.</span></div>
         </Section>
       )}
 
