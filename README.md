@@ -83,8 +83,7 @@ La app avisa si bajas de 2 líneas de pared, de una línea de filo, si una copia
 
 ## Despliegue
 
-GitHub Actions ejecuta los tests, compila la web en `dist/` y publica la rama `gh-pages`.
-La fuente de GitHub Pages debe ser **Deploy from a branch → gh-pages / (root)**.
+GitHub Actions ejecuta los tests, compila la web en `dist/` y la publica con **GitHub Pages → Source: GitHub Actions**.
 La app queda en `https://dhernandezgit.github.io/CalicoCutters-Tool/web/`.
 
 ## Bambu Studio
