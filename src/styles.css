@@ -630,3 +630,5 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
 .fatal-card code { display: block; max-height: 120px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: #f8edf2; color: #7d4d63; font-size: 11px; }
 .fatal-card .primary { justify-self: start; }
 .viewer-error button { margin-top: 6px; justify-self: start; }
+.field-input input.invalid { border-color: #d95363; background: #fff4f6; box-shadow: 0 0 0 2px rgba(217, 83, 99, .14); }
+.field-input input.invalid:focus { border-color: #d95363; }

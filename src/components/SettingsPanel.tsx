@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import {
   Box,
   CircleHelp,
@@ -44,6 +44,32 @@ function NumberField({
   onChange: (v: number) => void;
   disabled?: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [draft, setDraft] = useState(() => String(Number.isFinite(value) ? value : ""));
+  const [invalid, setInvalid] = useState(false);
+
+  useEffect(() => {
+    if (document.activeElement !== inputRef.current) {
+      setDraft(String(Number.isFinite(value) ? value : ""));
+    }
+  }, [value]);
+
+  const commit = () => {
+    const raw = inputRef.current?.value ?? draft;
+    const parsed = Number(raw.replace(",", ".").trim());
+    if (!raw.trim() || !Number.isFinite(parsed)) {
+      // Empty or non-numeric: restore the last valid value and flag it.
+      setDraft(String(Number.isFinite(value) ? value : ""));
+      setInvalid(true);
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, parsed));
+    const changed = clamped !== value;
+    setDraft(String(clamped));
+    setInvalid(clamped !== parsed);
+    if (changed) onChange(clamped);
+  };
+
   return (
     <label className="field-row">
       <span className="field-label">
@@ -52,15 +78,32 @@ function NumberField({
       </span>
       <span className="field-input">
         <input
+          ref={inputRef}
           type="number"
-          value={Number.isFinite(value) ? value : 0}
+          inputMode="decimal"
+          value={draft}
           min={min}
           max={max}
           step={step}
           disabled={disabled}
+          aria-invalid={invalid}
+          title={invalid ? `Valor no válido. Rango permitido: ${min}–${max}.` : undefined}
+          className={invalid ? "invalid" : undefined}
+          onFocus={() => setInvalid(false)}
           onChange={(e) => {
-            const v = Number(e.target.value);
-            if (Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v)));
+            setDraft(e.target.value);
+            if (invalid) setInvalid(false);
+          }}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            } else if (e.key === "Escape") {
+              setDraft(String(Number.isFinite(value) ? value : ""));
+              setInvalid(false);
+              e.currentTarget.blur();
+            }
           }}
         />
         <span>{unit}</span>
