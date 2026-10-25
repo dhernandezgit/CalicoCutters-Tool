@@ -25,6 +25,17 @@ def _mesh_from_b64(data: str) -> trimesh.Trimesh:
     return trimesh.load(io.BytesIO(raw), file_type="stl", force="mesh")
 
 
+def test_black_artwork_becomes_calico_pink():
+    shape = parse_svg(HEART, "heart.svg", 80)
+    assert shape.source_color == "#f39ab1"
+
+
+def test_colored_svg_keeps_original_colour():
+    colored = HEART.replace('fill="#111"', 'fill="#2f6fbb"')
+    shape = parse_svg(colored, "blue.svg", 80)
+    assert shape.source_color == "#2f6fbb"
+
+
 def test_svg_parse_normalizes_and_keeps_details():
     shape = parse_svg(HEART, "heart.svg", 80)
     assert shape.name == "heart"

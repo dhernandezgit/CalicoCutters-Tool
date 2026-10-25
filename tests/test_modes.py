@@ -154,6 +154,14 @@ def test_3mf_is_millimetres_and_has_separate_objects():
     assert 'name="Cortador"' in model
     assert 'name="Sello"' in model
     assert model.count("<item ") == 2
+    colored = export_3mf({
+        "shape": shape.to_dict(),
+        "settings": {**DEFAULT_SETTINGS, "color": "#f39ab1"},
+        "name": "galleta",
+    })
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(colored["data_b64"]))) as z:
+        colored_model = z.read("3D/3dmodel.model").decode("utf-8")
+    assert "#f39ab1" in colored_model
 
 
 def test_multi_3mf_has_one_object_per_design():

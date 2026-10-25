@@ -410,14 +410,14 @@ export default function SettingsPanel({
             <CircleHelp size={13} />
             <span>El sello se genera un poco más pequeño para entrar dentro del cortador.</span>
           </div>
+          <Toggle
+            label="Borde perimetral del sello"
+            hint="Deja un marco elevado alrededor del sello. Desactívalo para un sello sin borde."
+            checked={settings.stampBorder}
+            onChange={(v) => onChange({ stampBorder: v })}
+          />
           {advanced && (
             <>
-              <Toggle
-                label="Borde perimetral"
-                hint="Deja un marco elevado alrededor del sello. Desactívalo para un sello sin borde."
-                checked={settings.stampBorder}
-                onChange={(v) => onChange({ stampBorder: v })}
-              />
               {settings.stampBorder && (
                 <NumberField
                   label="Ancho del borde"
