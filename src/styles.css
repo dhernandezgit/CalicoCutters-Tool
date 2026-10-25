@@ -679,3 +679,41 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
 .mode-group-title { display: inline-flex; align-items: center; gap: 5px; }
 .mode-icon-pair { display: inline-flex; align-items: center; justify-content: center; gap: 2px; }
 .mode-icon-pair svg:last-child { transform: translateY(2px); opacity: .8; }
+
+/* V8-inspired 3D preview controls */
+.view-options-popover { width: min(430px, 92vw); max-height: min(720px, calc(100vh - 150px)); overflow-y: auto; }
+.view-options-head-actions { display: inline-flex; align-items: center; gap: 9px; }
+.view-options-head-actions .mini-link { display: inline-flex; align-items: center; gap: 3px; }
+.view-section-tabs { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; }
+.view-section-tabs button { justify-content: center; font-size: 10px; padding: 5px 4px; }
+.view-section { display: flex; flex-direction: column; gap: 7px; padding: 2px 0 3px; border-bottom: 1px dashed var(--border); }
+.view-section-title { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; color: var(--textSoft); }
+.surface-row { display: grid; grid-template-columns: 54px 1fr; align-items: center; gap: 6px; }
+.surface-row > span { font-size: 9.5px; font-weight: 700; color: var(--textSoft); }
+.surface-swatches { display: flex; flex-wrap: wrap; gap: 4px; }
+.surface-swatch { width: 24px; height: 24px; border-radius: 8px; border: 2px solid rgba(255,255,255,.8); box-shadow: 0 0 0 1px var(--border); cursor: pointer; padding: 0; }
+.surface-swatch:hover { transform: translateY(-1px); }
+.surface-swatch.on { box-shadow: 0 0 0 2px var(--accent3), 0 2px 6px rgba(120,60,85,.2); }
+.view-options-grid .scene-unavailable { grid-column: 1 / -1; margin-top: 2px; }
+.surface-custom { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--border); border-radius: 8px; padding: 4px 7px; font-size: 10px; font-weight: 700; color: var(--textSoft); cursor: pointer; width: fit-content; }
+.surface-custom.on { border-color: var(--accent3); color: var(--accent3); background: #fff4f8; }
+.surface-custom input { width: 21px; height: 21px; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.material-picker { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; }
+.material-card { border: 1.5px solid var(--border); border-radius: 9px; background: var(--panel2); padding: 4px; display: flex; flex-direction: column; align-items: stretch; gap: 3px; cursor: pointer; color: var(--textSoft); font-size: 8.5px; font-weight: 800; }
+.material-card i { display: block; height: 21px; border-radius: 5px; border: 1px solid rgba(80,50,60,.08); }
+.material-card span { text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.material-card:hover { border-color: var(--accent2); }
+.material-card.on { border-color: var(--accent3); background: #fff4f8; color: var(--accent3); box-shadow: 0 0 0 2px rgba(255,138,155,.12); }
+.view-two-colors { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.view-two-colors label { display: flex; flex-direction: column; gap: 4px; font-size: 9.5px; font-weight: 700; color: var(--textSoft); }
+.view-two-colors input[type="color"] { height: 27px; width: 100%; border: 1px solid var(--border); border-radius: 7px; background: transparent; padding: 1px; cursor: pointer; }
+.view-two-colors select { width: 100%; padding: 5px 6px; font-size: 10px; }
+.center-pick-button { width: 100%; justify-content: center; }
+.center-pick-button.on { border-color: var(--accent3); color: var(--accent3); background: #fff0f6; }
+.center-pick-hint { position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 12; display: inline-flex; align-items: center; gap: 7px; background: rgba(255,250,252,.95); border: 1.5px solid var(--accent); border-radius: 999px; padding: 7px 10px; box-shadow: 0 8px 22px rgba(120,60,85,.16); color: var(--accent3); font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+.center-pick-hint button { border: 0; background: transparent; color: var(--textSoft); font-size: 9.5px; font-weight: 800; cursor: pointer; text-decoration: underline; }
+@media (max-width: 620px) {
+  .view-options-popover { width: min(360px, 94vw); }
+  .material-picker { grid-template-columns: repeat(3, 1fr); }
+  .center-pick-hint { white-space: normal; width: 88%; justify-content: center; text-align: center; }
+}

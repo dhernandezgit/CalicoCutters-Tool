@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 from shapely import affinity
-from shapely.geometry import LineString, MultiPolygon, Point, Polygon
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon, box
 from shapely.ops import unary_union
 
 from .mesh import (
@@ -20,6 +20,7 @@ from .mesh import (
     build_cake_pop,
     build_cutter,
     build_imprint,
+    build_multicutter,
     build_practice,
     build_roller,
     build_sandwich,
@@ -61,6 +62,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "pressHandleLength": 26.0,
     "pressHandleWidth": 10.0,
     "pressHandlePosition": 50.0,
+    "pressHandleShape": "rounded",
     "pressHandlesBothEnds": False,
     "addBar": False,
     "barAngle": 0.0,
@@ -74,6 +76,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampEdgeMethod": "preserve",
     "stampBorder": True,
     "stampBorderWidth": 1.6,
+    "stampDetailCurve": "round",
+    "stampDetailGrow": 0.0,
     "mirror": False,
     "mirrorPair": False,
     "imprintDepth": 4.5,
@@ -124,10 +128,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "bookmarkHoleMargin": 10.0,
     "bookmarkRelief": 0.8,
     "bookmarkDesignStyle": "line",
-    "pageClipGap": 0.9,
-    "pageClipBridge": 6.0,
-    "pageClipFlare": 1.2,
-    "pageClipLip": 12.0,
+    "pageClipGap": 1.0,
+    "pageClipBridge": 14.0,
+    "pageClipFlare": 6.0,
+    "pageClipLip": 8.0,
+    "pageClipHingeThickness": 0.6,
     "cakePopMoldHeight": 18.0,
     "cakePopMoldWall": 2.4,
     "cakePopBase": 2.0,
@@ -191,6 +196,7 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "stampRelief": (0.5, 10.0),
     "stampClearance": (0.2, 4.0),
     "stampBorderWidth": (0.5, 6.0),
+    "stampDetailGrow": (0.0, 2.0),
     "imprintDepth": (1.0, 12.0),
     "multiSpacing": (0.0, 30.0),
     "sandwichSealWidth": (0.8, 12.0),
@@ -228,9 +234,10 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "bookmarkHoleMargin": (5.0, 60.0),
     "bookmarkRelief": (0.0, 3.0),
     "pageClipGap": (0.3, 3.0),
-    "pageClipBridge": (2.0, 20.0),
-    "pageClipFlare": (0.0, 5.0),
-    "pageClipLip": (3.0, 40.0),
+    "pageClipBridge": (4.0, 80.0),
+    "pageClipFlare": (0.0, 12.0),
+    "pageClipLip": (3.0, 20.0),
+    "pageClipHingeThickness": (0.3, 1.2),
     "cakePopMoldHeight": (6.0, 40.0),
     "cakePopMoldWall": (1.2, 8.0),
     "cakePopBase": (1.0, 8.0),
@@ -304,7 +311,17 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     out["sizeMode"] = "wh" if str(out.get("sizeMode")) == "wh" else "longest"
     out["printer"] = str(out.get("printer")) if str(out.get("printer")) in PRINTERS else "fdm04"
     out["baseShape"] = str(out.get("baseShape")) if str(out.get("baseShape")) in {"rect", "chamfer", "round"} else "chamfer"
+    out["pressHandleShape"] = (
+        str(out.get("pressHandleShape"))
+        if str(out.get("pressHandleShape")) in {"round", "rect", "rounded"}
+        else "rounded"
+    )
     out["stampEdgeMethod"] = "offset" if str(out.get("stampEdgeMethod")) == "offset" else "preserve"
+    out["stampDetailCurve"] = (
+        str(out.get("stampDetailCurve"))
+        if str(out.get("stampDetailCurve")) in {"chamfer", "round"}
+        else "none"
+    )
     out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "random" if str(out.get("stencilPattern")) == "random" else "grid"
     out["bookmarkDesignStyle"] = str(out.get("bookmarkDesignStyle")) if str(out.get("bookmarkDesignStyle")) in {"line", "relief", "none"} else "line"
     out["bedModel"] = str(out.get("bedModel") or "bambu-p2s")[:40]
@@ -493,6 +510,14 @@ def _bar_polygon(main: Polygon, settings: dict[str, Any]) -> Polygon:
     return affinity.translate(bar, rx, ry)
 
 
+def _handle_polygon(length: float, width: float, shape: str) -> Polygon:
+    if shape == "rect":
+        return box(-length / 2.0, -width / 2.0, length / 2.0, width / 2.0)
+    if shape == "round":
+        return rounded_rect(length, width, width / 2.0)
+    return rounded_rect(length, width, width * 0.45)
+
+
 def _add_cutter_extras(mesh: Mesh, main: Polygon, settings: dict[str, Any]) -> Mesh:
     b = main.bounds
     width = b[2] - b[0]
@@ -503,11 +528,12 @@ def _add_cutter_extras(mesh: Mesh, main: Polygon, settings: dict[str, Any]) -> M
         pos = (settings["pressHandlePosition"] - 50.0) / 50.0
         cx = pos * max(0.0, (width - length) * 0.5)
         cy = b[1] - wid * 0.35
-        handle = rounded_rect(length, wid, wid * 0.45)
+        shape = str(settings.get("pressHandleShape", "rounded"))
+        handle = _handle_polygon(length, wid, shape)
         handle = affinity.translate(handle, cx, cy)
         mesh = mesh.append(extrude_polygon(handle, 0.0, max(3.0, settings["baseHeight"] + 1.2)))
         if settings.get("pressHandlesBothEnds"):
-            top_handle = rounded_rect(length, wid, wid * 0.45)
+            top_handle = _handle_polygon(length, wid, shape)
             top_handle = affinity.translate(top_handle, cx, b[3] + wid * 0.35)
             mesh = mesh.append(extrude_polygon(top_handle, 0.0, max(3.0, settings["baseHeight"] + 1.2)))
     if settings.get("addBar") and settings["barWidth"] >= 0.4:
@@ -677,7 +703,7 @@ def _checks(
                 out.append(_check("warn", f"Separación del set de {settings['setSpacing']:.1f} mm", "Deja al menos 4–8 mm entre cortadores para poder separarlos sin romperlos.", "set_spacing"))
 
     if mode == "multicutter" and settings["multiSpacing"] < 2:
-        out.append(_check("warn", f"Separación del puzzle de {settings['multiSpacing']:.1f} mm", "Deja al menos 2–4 mm entre copias; si no, se fusionan al imprimir.", "multi_spacing"))
+        out.append(_check("warn", f"Separación del multicortador de {settings['multiSpacing']:.1f} mm", "Deja al menos 2–4 mm entre copias; si no, se fusionan al imprimir.", "multi_spacing"))
 
     if stamp_like:
         clearance = settings["stampClearance"]
@@ -903,6 +929,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
                 alignment=stamp_alignment,
                 recessed=bool(settings.get("stampRecessed")),
+                detail_curve=str(settings.get("stampDetailCurve", "round")),
+                detail_grow=float(settings.get("stampDetailGrow", 0.0)),
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
         if settings["mode"] == "imprint":
@@ -919,10 +947,12 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 base_shape=str(settings.get("baseShape", "round")),
                 sharp_edge=bool(settings["sharpEdge"]),
                 alignment=cutter_alignment,
+                detail_curve=str(settings.get("stampDetailCurve", "round")),
+                detail_grow=float(settings.get("stampDetailGrow", 0.0)),
             )
             parts.append(("Impronta", imprint, "#f39ab1"))
         if settings["mode"] == "multicutter":
-            base = build_cutter(
+            multi = build_multicutter(
                 main,
                 blade_thickness=settings["bladeThickness"],
                 blade_depth=settings["bladeDepth"],
@@ -930,34 +960,22 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 chamfer_height=settings["chamferHeight"],
                 base_height=settings["baseHeight"],
                 base_width=settings["baseWidth"],
+                rows=max(1, int(settings["multiRows"])),
+                cols=max(1, int(settings["multiCols"])),
+                spacing=settings["multiSpacing"],
                 sharp_edge=bool(settings["sharpEdge"]),
                 extra_blade=bool(settings.get("extraBlade")),
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
                 base_shape=str(settings.get("baseShape", "round")),
-                alignment=cutter_alignment,
+                add_press_handle=bool(settings.get("addPressHandle")),
+                press_handle_length=settings.get("pressHandleLength", 30),
+                press_handle_width=settings.get("pressHandleWidth", 12),
+                press_handle_position=settings.get("pressHandlePosition", 50),
+                press_handle_shape=str(settings.get("pressHandleShape", "rounded")),
+                press_handles_both_ends=bool(settings.get("pressHandlesBothEnds")),
             )
-            base = _add_cutter_extras(base, main, settings)
-            rows = max(1, int(settings["multiRows"]))
-            cols = max(1, int(settings["multiCols"]))
-            b = base.bounds
-            cell_w = b["max"][0] - b["min"][0]
-            cell_d = b["max"][1] - b["min"][1]
-            spacing = float(settings["multiSpacing"])
-            multi = None
-            for r in range(rows):
-                for c in range(cols):
-                    copy = base.translated([c * (cell_w + spacing), r * (cell_d + spacing), 0.0])
-                    multi = copy if multi is None else multi.append(copy)
-            if multi is not None:
-                # Center the grid around the origin.
-                mb = multi.bounds
-                multi = multi.translated([
-                    -(mb["min"][0] + mb["max"][0]) / 2,
-                    -(mb["min"][1] + mb["max"][1]) / 2,
-                    0.0,
-                ])
-                parts.append(("Puzzle", multi, "#f39ab1"))
+            parts.append(("Multicortador", multi, "#f39ab1"))
         if settings["mode"] == "sandwich":
             sandwich = build_sandwich(
                 main,
@@ -1045,6 +1063,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 bridge=settings["pageClipBridge"],
                 flare=settings["pageClipFlare"],
                 lip=settings["pageClipLip"],
+                hinge_thickness=settings["pageClipHingeThickness"],
             )
             parts.append(("Pinza de página", bookmark, "#f39ab1"))
         if settings["mode"] == "cakepop":
@@ -1097,6 +1116,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
                 alignment=mirror_stamp_align,
                 recessed=bool(settings.get("stampRecessed")),
+                detail_curve=str(settings.get("stampDetailCurve", "round")),
+                detail_grow=float(settings.get("stampDetailGrow", 0.0)),
             )
             parts.append(("Sello espejo", mirror_stamp, "#b7a4e8"))
     if not parts:
@@ -1118,11 +1139,11 @@ def build(payload: dict[str, Any]) -> dict[str, Any]:
     checks = _checks(parts, settings, warnings, main, details)
     total_volume = sum(p["volume"] for p in parts)
     if settings["mode"] == "bookmark":
-        # A page clip is printed upright: expose its wide face (Y × Z) in the
-        # UI instead of the thin print footprint.
-        width = max(p["bounds"]["max"][1] for p in parts) - min(p["bounds"]["min"][1] for p in parts)
-        height = max(p["bounds"]["max"][2] for p in parts) - min(p["bounds"]["min"][2] for p in parts)
-        depth = max(p["bounds"]["max"][0] for p in parts) - min(p["bounds"]["min"][0] for p in parts)
+        # The two plates are printed flat side by side; report the folded page
+        # marker size rather than the large print footprint.
+        width = settings["bookmarkWidth"]
+        height = settings["bookmarkHeight"]
+        depth = 2.0 * settings["bookmarkThickness"] + 0.55
     else:
         width = max(p["bounds"]["max"][0] for p in parts) - min(p["bounds"]["min"][0] for p in parts)
         height = max(p["bounds"]["max"][1] for p in parts) - min(p["bounds"]["min"][1] for p in parts)

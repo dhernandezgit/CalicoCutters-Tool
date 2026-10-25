@@ -147,7 +147,7 @@ export function modeLabel(mode: DesignSettings["mode"]): string {
   if (mode === "cutter-stamp") return "Stamper + cortador";
   if (mode === "cutter") return "Solo cortador";
   if (mode === "stamp") return "Solo sello";
-  if (mode === "multicutter") return "Puzzle";
+  if (mode === "multicutter") return "Multicortador";
   if (mode === "sandwich") return "Sándwich";
   if (mode === "roller") return "Rodillo";
   if (mode === "stencil") return "Stencil";

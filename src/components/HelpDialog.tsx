@@ -61,9 +61,10 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
         <div className="help-note">
           <strong>Visualización</strong>
           <p>
-            El botón “Vista” del visor permite ocultar cama y cuadrícula, cambiar la superficie, activar sombras,
-            rayos X o giro automático, usar una perspectiva técnica, separar las piezas y descargar una captura PNG.
-            También puedes centrar solo la pieza o todo el conjunto y entrar en pantalla completa.
+            El botón “Vista” abre una escena tipo CookieCAD V8: 14 superficies de color, mármol o madera;
+            materiales sólidos, bicolor, degradado, glitter o seda; masa con galleta suelta, regla y moneda;
+            medidas 3D y centro de giro movible. Haz clic en la pieza o en la masa para orbitar alrededor de ese punto;
+            con el botón derecho desplazas la vista. También hay captura PNG, pantalla completa y ajuste de cámara.
           </p>
         </div>
 
@@ -72,8 +73,8 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
           <p>
             En Avanzado puedes elegir la cama de tu impresora (Bambu, Prusa, Creality, Elegoo, Anycubic, Sovol, QIDI,
             Voron y más) o introducir medidas personalizadas. El preprocesado suaviza trazos rectos y elimina detalles
-            minúsculos; el punto de alineación añade un agujero mínimo en la base del cortador y en el sello para
-            orientarlos como las marcas de un objetivo. Puedes desactivarlo.
+            minúsculos; el punto de alineación es un hundido superficial en la cara inferior del cortador y del sello,
+            no un agujero pasante, para orientarlos sin marcar la masa. Puedes desactivarlo.
           </p>
         </div>
 
@@ -89,8 +90,9 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
           <strong>Más que un cortador</strong>
           <p>
             El menú “Qué vas a crear” agrupa galletas, sellos, sándwich, rodillo, repostería, papelería y cerámica:
-            stamper + cortador, cortador, impronta, puzzle, set de tamaños, sello, sándwich, rodillo de textura,
-            topper, stencil, galleta de práctica, molde cake pop, pinza de página y perfil de arcilla.
+            stamper + cortador, cortador, impronta, multicortador de placa compartida, set de tamaños, sello,
+            sándwich, rodillo de textura, topper, stencil, galleta de práctica, molde cake pop, pinza de página
+            plana con bisagras vivas y perfil de arcilla.
           </p>
         </div>
 

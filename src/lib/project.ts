@@ -38,7 +38,9 @@ function normalizeSettings(raw: Partial<DesignSettings> | null | undefined): Des
   out.sizeMode = out.sizeMode === "wh" ? "wh" : "longest";
   out.printer = ["fdm04", "fdm06", "resin"].includes(String(out.printer)) ? out.printer : "fdm04";
   out.baseShape = ["rect", "chamfer", "round"].includes(String(out.baseShape)) ? out.baseShape : "chamfer";
+  out.pressHandleShape = ["rect", "round", "rounded"].includes(String(out.pressHandleShape)) ? out.pressHandleShape : "rounded";
   out.stampEdgeMethod = out.stampEdgeMethod === "offset" ? "offset" : "preserve";
+  out.stampDetailCurve = ["chamfer", "round"].includes(String(out.stampDetailCurve)) ? out.stampDetailCurve : "none";
   out.stencilPattern = ["diagonal", "random"].includes(String(out.stencilPattern)) ? out.stencilPattern : "grid";
   if (typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color)) out.color = input.color;
   return out as unknown as DesignSettings;

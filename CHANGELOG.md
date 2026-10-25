@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.2.0 — 2026-10-26
+
+Nueva visualización 3D de escena, superficies y materiales, multicortador de placa
+compartida, pinza de página plana y perfiles de relieve decorativos.
+
+### Visualización
+
+- 14 superficies de color, mármol claro/oscuro, madera y color personalizado.
+- Materiales de previsualización sólido, bicolor, degradado, glitter y seda.
+- Escena de masa con galleta recortada, pieza suelta, regla y moneda de escala.
+- Medidas 3D con líneas y etiquetas de ancho, fondo y alto.
+- Centro de giro movible: clic en la pieza o en la masa; desplazamiento con botón derecho.
+
+### Creación y decoración
+
+- **Pinza de página plana**: dos placas rectangulares con tres bisagras vivas, pestaña
+  de apertura, agarre y dibujo calado. Impresión tumbada, sin soportes ni montaje.
+- **Multicortador** de placa compartida: varias copias comparten una base de presión
+  con agujeros de desmolde, en lugar de cortadores sueltos.
+- **Perfil del relieve del sello** recto, chaflán o redondeado, con engrosado de líneas.
+- Forma del mango de presión redonda, redondeada o rectangular.
+- Punto de alineación superficial en la cara inferior, sin atravesar la pieza.
+
+### Calidad
+
+- 52 tests automáticos, comprobación de tipos y build de producción.
+
 ## 0.1.1 — 2026-10-25
 
 Corrección de la pinza de página, exportación sin ZIP y conservación de detalles.
@@ -21,7 +48,7 @@ Primera versión estable de CalicoCutters.
 
 ### Creación
 
-- Stamper + cortador, cortador, impronta, puzzle, set de cortadores, sellos,
+- Stamper + cortador, cortador, impronta, multicortador, set de cortadores, sellos,
   sándwich, rodillo de textura, topper, stencil, galleta de práctica, molde cake pop,
   pinza de página y perfiles de arcilla.
 - Pinza de página de una pieza que agarra el papel por ambos lados, con ranura,

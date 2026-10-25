@@ -20,7 +20,6 @@ import {
   Lollipop,
   PaintRoller,
   Paperclip,
-  Puzzle,
   Ruler,
   Sandwich,
   Scissors,
@@ -329,7 +328,7 @@ export default function SettingsPanel({
               { value: "cutter-stamp" as const, label: "Stamper + cortador", icon: <span className="mode-icon-pair"><Scissors size={16} /><Stamp size={14} /></span>, sub: "El modo por defecto" },
               { value: "cutter" as const, label: "Cortador", icon: <Scissors size={20} />, sub: "Contorno exterior" },
               { value: "imprint" as const, label: "Impronta", icon: <Fingerprint size={20} />, sub: "Corte + relieve en una pieza" },
-              { value: "multicutter" as const, label: "Puzzle", icon: <Puzzle size={20} />, sub: "Rejilla de copias" },
+              { value: "multicutter" as const, label: "Multicortador", icon: <Grid3X3 size={20} />, sub: "Base común para varias copias" },
               { value: "cutter-set" as const, label: "Set de cortadores", icon: <Layers size={20} />, sub: "Varios tamaños" },
             ],
           },
@@ -373,7 +372,7 @@ export default function SettingsPanel({
             basic: true,
             icon: <Paperclip size={12} />,
             modes: [
-              { value: "bookmark" as const, label: "Pinza de página", icon: <Paperclip size={20} />, sub: "Agarra el papel por ambos lados" },
+              { value: "bookmark" as const, label: "Pinza de página", icon: <Paperclip size={20} />, sub: "Dos placas planas con bisagra" },
             ],
           },
         ]
@@ -760,6 +759,16 @@ export default function SettingsPanel({
                     <NumberField label="Largo" value={settings.pressHandleLength} min={10} max={80} step={1} onChange={(v) => onChange({ pressHandleLength: v })} />
                     <NumberField label="Ancho" value={settings.pressHandleWidth} min={5} max={25} step={0.5} onChange={(v) => onChange({ pressHandleWidth: v })} />
                   </div>
+                  <label className="field-row">
+                    <span className="field-label">Forma del mango</span>
+                    <span className="field-input">
+                      <select value={settings.pressHandleShape} onChange={(e) => onChange({ pressHandleShape: e.target.value as DesignSettings["pressHandleShape"] })}>
+                        <option value="rounded">Redondeada</option>
+                        <option value="round">Redonda</option>
+                        <option value="rect">Rectangular</option>
+                      </select>
+                    </span>
+                  </label>
                   <NumberField label="Posición" value={settings.pressHandlePosition} min={0} max={100} step={5} unit="%" onChange={(v) => onChange({ pressHandlePosition: v })} />
                   <Toggle
                     label="Mango en ambos extremos"
@@ -785,6 +794,23 @@ export default function SettingsPanel({
           <div className="two-fields">
             <NumberField label="Grosor del respaldo" value={settings.stampBack} min={2} max={12} step={0.5} onChange={(v) => onChange({ stampBack: v })} />
             <NumberField label="Profundidad del relieve" value={settings.stampRelief} min={0.5} max={8} step={0.5} onChange={(v) => onChange({ stampRelief: v })} />
+          </div>
+          <div className="two-fields">
+            <label className="field-row">
+              <span className="field-label">Perfil del relieve</span>
+              <span className="field-input">
+                <select value={settings.stampDetailCurve} onChange={(e) => onChange({ stampDetailCurve: e.target.value as DesignSettings["stampDetailCurve"] })}>
+                  <option value="round">Redondeado</option>
+                  <option value="chamfer">Chaflán</option>
+                  <option value="none">Recto</option>
+                </select>
+              </span>
+            </label>
+            <NumberField label="Engrosar líneas" value={settings.stampDetailGrow} min={0} max={1.5} step={0.1} hint="0 = sin cambios" onChange={(v) => onChange({ stampDetailGrow: v })} />
+          </div>
+          <div className="inline-hint">
+            <Stamp size={13} />
+            <span>El perfil suaviza las cimas del relieve para desmoldar mejor. Engrosar líneas ayuda con dibujos de trazo fino, sin cambiar el contorno del sello.</span>
           </div>
           <NumberField
             label="Holgura del sello"
@@ -858,16 +884,31 @@ export default function SettingsPanel({
             hint="0 sería enrasado con el filo; 4,5 mm es un buen comienzo."
             onChange={(v) => onChange({ imprintDepth: v })}
           />
+          <div className="two-fields">
+            <label className="field-row">
+              <span className="field-label">Perfil del relieve</span>
+              <span className="field-input">
+                <select value={settings.stampDetailCurve} onChange={(e) => onChange({ stampDetailCurve: e.target.value as DesignSettings["stampDetailCurve"] })}>
+                  <option value="round">Redondeado</option>
+                  <option value="chamfer">Chaflán</option>
+                  <option value="none">Recto</option>
+                </select>
+              </span>
+            </label>
+            <NumberField label="Engrosar líneas" value={settings.stampDetailGrow} min={0} max={1.5} step={0.1} onChange={(v) => onChange({ stampDetailGrow: v })} />
+          </div>
+          <div className="inline-hint"><Fingerprint size={13} /><span>Perfil suave y engrosado de los relieves para que las líneas finas se impriman y se desmolden mejor.</span></div>
         </Section>
       )}
 
       {settings.mode === "multicutter" && (
-        <Section id="multi" title="Puzzle" icon={<Layers size={16} />} defaultOpen summary={`${settings.multiRows} × ${settings.multiCols}`}>
+        <Section id="multi" title="Multicortador" icon={<Grid3X3 size={16} />} defaultOpen summary={`${settings.multiRows} × ${settings.multiCols}`}>
           <div className="two-fields">
             <NumberField label="Filas" value={settings.multiRows} min={1} max={6} step={1} unit="" onChange={(v) => onChange({ multiRows: Math.round(v) })} />
             <NumberField label="Columnas" value={settings.multiCols} min={1} max={6} step={1} unit="" onChange={(v) => onChange({ multiCols: Math.round(v) })} />
           </div>
           <NumberField label="Separación" value={settings.multiSpacing} min={0} max={30} step={0.5} onChange={(v) => onChange({ multiSpacing: v })} />
+          <div className="inline-hint"><Grid3X3 size={13} /><span>Una sola placa conecta todas las copias y sirve de superficie de presión. El mango se atornilla arriba; al girar la herramienta, las cuchillas cortan todas las galletas a la vez.</span></div>
         </Section>
       )}
 
@@ -996,35 +1037,35 @@ export default function SettingsPanel({
       {settings.mode === "bookmark" && (
         <Section id="bookmark" title="Pinza de página" icon={<Paperclip size={16} />} defaultOpen summary={`${settings.bookmarkWidth.toFixed(0)} × ${settings.bookmarkHeight.toFixed(0)} mm`}>
           <div className="two-fields">
-            <NumberField label="Ancho de la pinza" value={settings.bookmarkWidth} min={20} max={150} step={1} onChange={(v) => onChange({ bookmarkWidth: v })} />
-            <NumberField label="Alto" value={settings.bookmarkHeight} min={50} max={300} step={1} onChange={(v) => onChange({ bookmarkHeight: v })} />
+            <NumberField label="Ancho de la placa" value={settings.bookmarkWidth} min={20} max={120} step={1} onChange={(v) => onChange({ bookmarkWidth: v })} />
+            <NumberField label="Alto de la placa" value={settings.bookmarkHeight} min={50} max={180} step={1} onChange={(v) => onChange({ bookmarkHeight: v })} />
           </div>
           <div className="two-fields">
-            <NumberField label="Grosor de pared" value={settings.bookmarkThickness} min={1.2} max={8} step={0.2} onChange={(v) => onChange({ bookmarkThickness: v })} />
-            <NumberField label="Holgura del papel" value={settings.pageClipGap} min={0.3} max={3} step={0.1} onChange={(v) => onChange({ pageClipGap: v })} />
+            <NumberField label="Grosor de placa" value={settings.bookmarkThickness} min={1.2} max={5} step={0.2} onChange={(v) => onChange({ bookmarkThickness: v })} />
+            <NumberField label="Grosor de bisagra" value={settings.pageClipHingeThickness} min={0.3} max={1.2} step={0.1} onChange={(v) => onChange({ pageClipHingeThickness: v })} />
           </div>
           <div className="two-fields">
-            <NumberField label="Altura del puente" value={settings.pageClipBridge} min={2} max={20} step={0.5} onChange={(v) => onChange({ pageClipBridge: v })} />
-            <NumberField label="Apertura superior" value={settings.pageClipFlare} min={0} max={5} step={0.1} onChange={(v) => onChange({ pageClipFlare: v })} />
+            <NumberField label="Separación de bisagra" value={settings.pageClipGap} min={0.3} max={2} step={0.1} onChange={(v) => onChange({ pageClipGap: v })} />
+            <NumberField label="Ancho de cada bisagra" value={settings.pageClipBridge} min={4} max={60} step={1} onChange={(v) => onChange({ pageClipBridge: v })} />
           </div>
           <div className="two-fields">
-            <NumberField label="Altura de la guía" value={settings.pageClipLip} min={3} max={40} step={1} onChange={(v) => onChange({ pageClipLip: v })} />
+            <NumberField label="Pestaña de apertura" value={settings.pageClipFlare} min={0} max={12} step={0.5} onChange={(v) => onChange({ pageClipFlare: v })} />
+            <NumberField label="Zona de agarre" value={settings.pageClipLip} min={3} max={20} step={1} onChange={(v) => onChange({ pageClipLip: v })} />
+          </div>
+          <div className="two-fields">
             <NumberField label="Margen del dibujo" value={settings.bookmarkMargin} min={2} max={30} step={0.5} onChange={(v) => onChange({ bookmarkMargin: v })} />
-          </div>
-          <div className="two-fields">
-            <NumberField label="Relieve del dibujo" value={settings.bookmarkRelief} min={0} max={3} step={0.1} onChange={(v) => onChange({ bookmarkRelief: v })} />
             <label className="field-row">
-              <span className="field-label">Estilo del dibujo</span>
+              <span className="field-label">Dibujo</span>
               <span className="field-input">
                 <select value={settings.bookmarkDesignStyle} onChange={(e) => onChange({ bookmarkDesignStyle: e.target.value as DesignSettings["bookmarkDesignStyle"] })}>
-                  <option value="line">Línea</option>
-                  <option value="relief">Silueta</option>
+                  <option value="line">Calado</option>
+                  <option value="relief">Calado (silueta)</option>
                   <option value="none">Sin dibujo</option>
                 </select>
               </span>
             </label>
           </div>
-          <div className="inline-hint"><Paperclip size={13} /><span>Pinza de una pieza: el papel entra por la ranura superior y queda sujeto por ambos lados. Imprime de pie, sin soportes; para más flexibilidad usa PETG o TPU.</span></div>
+          <div className="inline-hint"><Paperclip size={13} /><span>Dos placas planas unidas por tres bisagras vivas. Se imprime tumbada, sin soportes y sin montaje: dobla una placa sobre la otra. El dibujo es un calado que se ve por ambas caras. Para muchas aperturas usa PETG o TPU.</span></div>
         </Section>
       )}
 

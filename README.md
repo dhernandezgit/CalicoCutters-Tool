@@ -1,6 +1,6 @@
 # CalicoCutters
 
-**Versión 0.1.1** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.2.0** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
@@ -18,21 +18,25 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Genera un sello coordinado con respaldo y relieve; en Stamper + cortador se muestra dentro del cortador.
 - Relieve positivo, relieve negativo hundido, borde a ras del dibujo, par espejo y mangos en uno o ambos extremos.
 - Menú agrupado y plegable por **Galletas, Sellos, Sándwich, Rodillo, Repostería, Papelería y Cerámica**:
-  Stamper + cortador, cortador, impronta, puzzle, set de tamaños, sello, sándwich,
+  Stamper + cortador, cortador, impronta, multicortador, set de tamaños, sello, sándwich,
   rodillo de textura, topper, stencil, galleta de práctica, molde cake pop,
   pinza de página y perfiles de arcilla. Todos los tipos están disponibles también en Básico.
-- **Pinza de página** de una pieza: agarra el papel por ambos lados, con ranura superior, puente flexible y dibujo en relieve o línea.
-- Visualización 3D con cama de impresora, cuadrícula de 1 cm, superficies, sombras, rayos X, vista técnica,
-  separación de piezas, giro automático, captura PNG y pantalla completa.
+- **Pinza de página plana**: dos placas rectangulares con tres bisagras vivas, pestaña de apertura y dibujo calado. Se imprime tumbada, sin soportes y sin montaje.
+- **Visualización 3D tipo CookieCAD V8**: 14 superficies de color, mármol, madera o color propio; materiales sólido, bicolor, degradado, glitter y seda; masa, galleta suelta, regla y moneda.
+- **Centro de giro movible**: haz clic en cualquier punto del modelo o de la masa para orbitar alrededor de ese punto; también puedes desplazar con el botón derecho.
+- **Medidas 3D** con líneas y cotas de ancho, fondo y alto.
+- **Multicortador** de una sola pieza: varias copias comparten una placa de presión y se cortan de una vez.
 - Perfiles guardables de fabricación y preprocesado para reutilizar ajustes.
 - Vista previa 3D real, vista 2D, selección múltiple y vista de un solo archivo.
 - Ajustes básicos rápidos y modo avanzado con impresión, base, barras, color, nombres y coste.
+- **Perfil del relieve del sello** (recto, chaflán o redondeado) y engrosado de líneas finas para decorar sin perder detalle.
+- **Forma del mango de presión**: redonda, redondeada o rectangular.
 - Comprobaciones de impresión: agua estanco, grosor de pared, filo, holgura, separación entre copias y encaje en cama.
 - Exporta STL y 3MF de forma individual, de los seleccionados o de todos. Cortador y sello van juntos en el mismo archivo.
 - Se pide una ubicación por archivo y el navegador propone la misma carpeta que el primer archivo; el proyecto `.calicocutters` se guarda también allí. También hay 3MF conjunto.
 - Base 3D con cama realista (256 × 256 de Bambu Lab P2S por defecto), cuadrícula de 1 cm, muchos perfiles de impresora y dimensiones personalizadas.
 - Preprocesado avanzado: simplificado, suavizado, protección de esquinas y eliminación de detalles minúsculos.
-- Punto de alineación opcional (activo por defecto) en la base del cortador y el sello, como las marcas de un objetivo.
+- Punto de alineación superficial opcional (activo por defecto) en la cara inferior del cortador y del sello, sin agujero pasante.
 - El botón **Importar** recupera el proyecto en otro PC sin instalar nada.
 - Peso y coste estimado con precio editable del PLA (14 €/kg por defecto).
 
@@ -84,7 +88,8 @@ Los tests comprueban:
 - Altura de cuchilla: 12 mm.
 - Base: 3,5 mm de alto × 4 mm de ancho.
 - Sello: 5,5 mm de respaldo + 3 mm de relieve y 0,8 mm de holgura. El borde, si está activo, queda a la misma altura que el relieve; sin borde, la zona exterior queda a la altura de la base.
-- Punto de alineación de 1,8 mm en la base del cortador y el sello (activo por defecto).
+- Punto de alineación superficial de 1,8 mm en la cara inferior del cortador y del sello (activo por defecto); no atraviesa la pieza.
+- Pinza de página: dos placas planas de 50 × 150 × 2,4 mm con tres bisagras vivas de 0,6 mm y pestaña de apertura. Se imprime tumbada, sin soportes; usa PETG o TPU para muchas aperturas.
 - Stencil: 1,5 mm de lámina y puentes de unión para islas interiores.
 - Cake pop: molde con agujero de palito y prensador a juego.
 - Cama: 256 × 256 mm.

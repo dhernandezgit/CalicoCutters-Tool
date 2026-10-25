@@ -118,7 +118,7 @@ def test_extra_blade_adds_material_without_breaking_mesh():
     assert _mesh(extra["parts"][0]).is_watertight
 
 
-def test_puzzle_grid_repeats_cutter():
+def test_multicutter_uses_one_shared_press_plate():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,
         "mode": "multicutter",
@@ -126,11 +126,17 @@ def test_puzzle_grid_repeats_cutter():
         "multiCols": 3,
         "multiSpacing": 3,
     }})
-    assert result["parts"][0]["name"] == "Puzzle"
+    assert result["parts"][0]["name"] == "Multicortador"
     mesh = _mesh(result["parts"][0])
     assert mesh.is_watertight
-    # Six independent cutter cells are expected.
-    assert len(mesh.split(only_watertight=False)) >= 6
+    # The six cutters share a single connected base instead of six loose
+    # cutter bodies.  The holes in that plate keep the dough releasable.
+    assert result["parts"][0]["volume"] > 0
+    single = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter",
+    }})
+    assert result["parts"][0]["volume"] > single["parts"][0]["volume"] * 3
 
 
 def test_sandwich_has_cutter_and_seal():
@@ -315,19 +321,30 @@ def test_invalid_settings_are_clamped_instead_of_crashing():
     assert result["dimensions"]["height"] > 0
 
 
-def test_alignment_holes_are_present_and_watertight_by_default():
+def test_alignment_marks_are_shallow_and_on_the_non_marking_face():
     from calicocutters.engine import _alignment_locations, _settings, _sized_geometry
 
     shape = _shape()
     settings = _settings(DEFAULT_SETTINGS)
     main, _details, _warnings = _sized_geometry(shape, settings)
-    cutter_hole, stamp_hole = _alignment_locations(main, settings)
-    assert cutter_hole is not None and stamp_hole is not None
+    cutter_mark, stamp_mark = _alignment_locations(main, settings)
+    assert cutter_mark is not None and stamp_mark is not None
     result = build({"shape": shape.to_dict(), "settings": settings})
     for part in result["parts"]:
         mesh = _mesh(part)
         assert mesh.is_watertight
         assert mesh.volume > 0
+
+    # A shallow mark on the underside must leave the top face intact.  If it
+    # were drilled from the visible side, the ray would stop depth-mm lower.
+    stamp_result = build({"shape": shape.to_dict(), "settings": {**DEFAULT_SETTINGS, "mode": "stamp"}})
+    stamp = _mesh(stamp_result["parts"][0])
+    ax, ay, _ar = stamp_mark
+    hits, _, _ = stamp.ray.intersects_location(
+        [[ax, ay, 40.0]], [[0.0, 0.0, -1.0]], multiple_hits=True
+    )
+    assert len(hits) >= 1
+    assert float(hits[:, 2].max()) == pytest.approx(DEFAULT_SETTINGS["stampBack"], abs=0.15)
 
 
 def test_stamp_border_is_flush_with_relief_by_default():
@@ -429,7 +446,21 @@ def test_custom_bed_size_is_used_by_checks():
     assert any(c["level"] == "warn" for c in bed_checks)
 
 
-def test_page_clip_is_watertight_and_has_a_page_slot():
+def test_stamp_decoration_curves_stay_watertight():
+    for curve in ("none", "chamfer", "round"):
+        result = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "stamp",
+            "stampRecessed": False,
+            "stampDetailCurve": curve,
+            "stampDetailGrow": 0.35,
+        }})
+        mesh = _mesh(result["parts"][0])
+        assert mesh.is_watertight
+        assert result["parts"][0]["volume"] > 0
+
+
+def test_page_clip_prints_flat_as_two_hinged_plates():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,
         "mode": "bookmark",
@@ -437,10 +468,13 @@ def test_page_clip_is_watertight_and_has_a_page_slot():
     assert result["parts"][0]["name"] == "Pinza de página"
     mesh = _mesh(result["parts"][0])
     assert mesh.is_watertight
-    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(50, abs=0.5)
-    assert mesh.bounds[1][2] - mesh.bounds[0][2] == pytest.approx(150, abs=0.5)
-    # The clip must be narrow across the page thickness, not a flat bookmark.
-    assert mesh.bounds[1][0] - mesh.bounds[0][0] < 14
+    # Printed flat: two 50 mm plates side by side, 150 mm tall and only a few
+    # layers thick.  The finished folded marker is reported separately.
+    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(150, abs=0.5)
+    assert mesh.bounds[1][0] - mesh.bounds[0][0] > 100
+    assert mesh.bounds[1][2] - mesh.bounds[0][2] < 4
+    assert result["dimensions"]["width"] == pytest.approx(50, abs=0.2)
+    assert result["dimensions"]["height"] == pytest.approx(150, abs=0.2)
 
 
 def test_preprocess_defaults_preserve_fine_details():

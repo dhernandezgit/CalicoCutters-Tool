@@ -51,6 +51,7 @@ export interface DesignSettings {
   pressHandleLength: number;
   pressHandleWidth: number;
   pressHandlePosition: number;
+  pressHandleShape: "round" | "rect" | "rounded";
   pressHandlesBothEnds: boolean;
 
   addBar: boolean;
@@ -66,6 +67,8 @@ export interface DesignSettings {
   stampEdgeMethod: "preserve" | "offset";
   stampBorder: boolean;
   stampBorderWidth: number;
+  stampDetailCurve: "none" | "chamfer" | "round";
+  stampDetailGrow: number;
   mirror: boolean;
   mirrorPair: boolean;
 
@@ -127,6 +130,7 @@ export interface DesignSettings {
   pageClipBridge: number;
   pageClipFlare: number;
   pageClipLip: number;
+  pageClipHingeThickness: number;
 
   cakePopMoldHeight: number;
   cakePopMoldWall: number;
@@ -261,6 +265,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   pressHandleLength: 26,
   pressHandleWidth: 10,
   pressHandlePosition: 50,
+  pressHandleShape: "rounded",
   pressHandlesBothEnds: false,
 
   addBar: false,
@@ -276,6 +281,8 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampEdgeMethod: "preserve",
   stampBorder: true,
   stampBorderWidth: 1.6,
+  stampDetailCurve: "round",
+  stampDetailGrow: 0,
   mirror: false,
   mirrorPair: false,
 
@@ -333,10 +340,11 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   bookmarkHoleMargin: 10,
   bookmarkRelief: 0.8,
   bookmarkDesignStyle: "line",
-  pageClipGap: 0.9,
-  pageClipBridge: 6,
-  pageClipFlare: 1.2,
-  pageClipLip: 12,
+  pageClipGap: 1,
+  pageClipBridge: 14,
+  pageClipFlare: 6,
+  pageClipLip: 8,
+  pageClipHingeThickness: 0.6,
 
   cakePopMoldHeight: 18,
   cakePopMoldWall: 2.4,

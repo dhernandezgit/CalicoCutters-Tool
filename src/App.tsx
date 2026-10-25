@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Camera,
+  Cookie,
+  Crosshair,
   Eye,
   EyeOff,
   Expand,
@@ -10,11 +12,16 @@ import {
   Layers,
   Maximize2,
   MousePointer2,
+  Move3D,
+  Palette,
   Rotate3D,
+  RotateCcw,
+  Ruler,
   Save,
   Scissors,
   FolderOpen,
   SlidersHorizontal,
+  Sparkles,
   Stamp,
   Upload,
 } from "lucide-react";
@@ -24,6 +31,15 @@ import type { BuildPart, BuildResult, DesignAsset, DesignSettings, PrintCheck } 
 import { DEFAULT_SETTINGS } from "./types";
 import { applyCheckFix, applyPrintableSettings, mergeSettings, modeLabel } from "./lib/settings";
 import { projectFromJson, saveProjectFile } from "./lib/project";
+import {
+  DEFAULT_PREVIEW_PREFERENCES,
+  PRINT_MATERIAL_OPTIONS,
+  SURFACE_OPTIONS,
+  type PreviewPreferences,
+  type PrintFinish,
+  type PrintMaterialStyle,
+  type SurfaceStyle,
+} from "./lib/preview";
 import AssetsPanel, { type AssetRow } from "./components/AssetsPanel";
 import SettingsPanel from "./components/SettingsPanel";
 import Viewport3D, { type Viewport3DHandle } from "./components/Viewport3D";
@@ -39,6 +55,36 @@ import StatusBar from "./components/StatusBar";
 import Logo from "./components/Logo";
 
 const ASSET_COLORS = ["#f39ab1", "#b7a4e8", "#f6c177", "#8ed1c3", "#f08a8a", "#8bb8f0", "#e7b98a"];
+const PREVIEW_KEY = "calicocutters-preview-v1";
+const DOUGH_SCENE_MODES = new Set(["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "cutter-set"]);
+
+function loadPreviewPreferences(): PreviewPreferences {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREVIEW_KEY) || "null") as Partial<PreviewPreferences> | null;
+    if (!saved || typeof saved !== "object") return { ...DEFAULT_PREVIEW_PREFERENCES };
+    return {
+      ...DEFAULT_PREVIEW_PREFERENCES,
+      ...saved,
+      surface: SURFACE_OPTIONS.some((option) => option.id === saved.surface) || saved.surface === "custom"
+        ? String(saved.surface) as SurfaceStyle
+        : DEFAULT_PREVIEW_PREFERENCES.surface,
+      finish: ["matte", "satin", "gloss"].includes(String(saved.finish))
+        ? String(saved.finish) as PrintFinish
+        : DEFAULT_PREVIEW_PREFERENCES.finish,
+      material: PRINT_MATERIAL_OPTIONS.some((option) => option.id === saved.material)
+        ? String(saved.material) as PrintMaterialStyle
+        : DEFAULT_PREVIEW_PREFERENCES.material,
+      customSurface: /^#[0-9a-f]{6}$/i.test(String(saved.customSurface))
+        ? String(saved.customSurface)
+        : DEFAULT_PREVIEW_PREFERENCES.customSurface,
+      secondaryColor: /^#[0-9a-f]{6}$/i.test(String(saved.secondaryColor))
+        ? String(saved.secondaryColor)
+        : DEFAULT_PREVIEW_PREFERENCES.secondaryColor,
+    };
+  } catch {
+    return { ...DEFAULT_PREVIEW_PREFERENCES };
+  }
+}
 
 function combineBuilds(assets: DesignAsset[], builds: Record<string, BuildResult>): BuildResult | null {
   const rows = assets.map((a) => ({ a, b: builds[a.id] })).filter((x) => x.b);
@@ -135,8 +181,9 @@ export default function App() {
   const [shadows, setShadows] = useState(true);
   const [xray, setXray] = useState(false);
   const [explode, setExplode] = useState(0);
-  const [bedStyle, setBedStyle] = useState<"mauve" | "midnight" | "cream" | "rose">("mauve");
-  const [finish, setFinish] = useState<"matte" | "satin" | "gloss">("satin");
+  const [preview, setPreview] = useState<PreviewPreferences>(loadPreviewPreferences);
+  const [viewSection, setViewSection] = useState<"scene" | "material" | "guides">("scene");
+  const [centerPick, setCenterPick] = useState(false);
   const [fitKey, setFitKey] = useState("start");
   const [viewScope, setViewScope] = useState<"all" | "selected">("all");
   const [exportOpen, setExportOpen] = useState(false);
@@ -173,12 +220,26 @@ export default function App() {
     try { localStorage.setItem("calicocutters-pla-price", String(plaPricePerKg)); } catch { /* ignore */ }
   }, [plaPricePerKg]);
 
+  useEffect(() => {
+    try { localStorage.setItem(PREVIEW_KEY, JSON.stringify(preview)); } catch { /* ignore */ }
+  }, [preview]);
+
+  const updatePreview = useCallback((patch: Partial<PreviewPreferences>) => {
+    setPreview((current) => ({ ...current, ...patch }));
+  }, []);
+
   const selectedAssets = useMemo(
     () => assets.filter((a) => selectedIds.includes(a.id)),
     [assets, selectedIds],
   );
   const primary = assets.find((a) => a.id === activeId) ?? selectedAssets[0] ?? assets[0] ?? null;
   const primaryBuild = primary ? builds[primary.id] ?? null : null;
+  const doughSceneAllowed = !!primary && DOUGH_SCENE_MODES.has(primary.settings.mode);
+
+  useEffect(() => {
+    setCenterPick(false);
+    setFitKey(`mode-${primary?.id ?? "none"}-${primary?.settings.mode ?? "none"}-${Date.now()}`);
+  }, [primary?.id, primary?.settings.mode]);
   const checks = useMemo(() => {
     const fromSelected = selectedAssets.flatMap((a) => builds[a.id]?.checks ?? []);
     const source = fromSelected.length ? fromSelected : primaryBuild?.checks ?? [];
@@ -587,7 +648,7 @@ export default function App() {
   };
 
   const partNames = new Set(displayBuild?.parts.map((p) => p.name) ?? []);
-  const hasCutterPart = ["Cortador", "Cortador espejo", "Impronta", "Puzzle", "Cortador sándwich", "Set de cortadores"].some((name) => partNames.has(name));
+  const hasCutterPart = ["Cortador", "Cortador espejo", "Impronta", "Multicortador", "Puzzle", "Cortador sándwich", "Set de cortadores"].some((name) => partNames.has(name));
   const hasStampPart = partNames.has("Sello") || partNames.has("Sello espejo");
 
   useEffect(() => {
@@ -654,11 +715,19 @@ export default function App() {
               <button type="button" title="Vista isométrica" onClick={() => { setTab("3d"); viewportRef.current?.view("iso"); }}><Focus size={16} /></button>
               <button type="button" onClick={() => { setTab("3d"); viewportRef.current?.view("top"); }}>Top</button>
               <button type="button" onClick={() => { setTab("3d"); viewportRef.current?.view("front"); }}>Front</button>
-              <button type="button" onClick={() => { setTab("3d"); viewportRef.current?.fit(); }}><Maximize2 size={16} /></button>
+              <button type="button" title="Ajustar vista" onClick={() => { setTab("3d"); viewportRef.current?.fit(); }}><Maximize2 size={16} /></button>
             </div>
             <div className="toolbar-group">
               <button type="button" className={showEdges ? "on" : ""} onClick={() => setShowEdges((v) => !v)}>{showEdges ? <Eye size={15} /> : <EyeOff size={15} />}</button>
               <button type="button" className={wireframe ? "on" : ""} onClick={() => setWireframe((v) => !v)}><Grid2X2 size={15} /></button>
+              <button
+                type="button"
+                className={centerPick ? "on" : ""}
+                title="Mover el centro de giro: haz clic en la pieza"
+                onClick={() => { setTab("3d"); setCenterPick((v) => !v); }}
+              >
+                <Crosshair size={15} />
+              </button>
             </div>
             <div className="view-options-wrap">
               <button type="button" className={`view-options-button${viewOptionsOpen ? " on" : ""}`} onClick={() => setViewOptionsOpen((v) => !v)}>
@@ -667,41 +736,153 @@ export default function App() {
               {viewOptionsOpen && (
                 <div className="view-options-popover">
                   <div className="view-options-head">
-                    <strong>Visualización</strong>
-                    <button type="button" className="mini-link" onClick={() => setViewOptionsOpen(false)}>Cerrar</button>
+                    <strong>Vista 3D</strong>
+                    <div className="view-options-head-actions">
+                      <button
+                        type="button"
+                        className="mini-link"
+                        title="Restablecer apariencia"
+                        onClick={() => {
+                          setPreview({ ...DEFAULT_PREVIEW_PREFERENCES });
+                          setCenterPick(false);
+                        }}
+                      >
+                        <RotateCcw size={12} /> Restablecer
+                      </button>
+                      <button type="button" className="mini-link" onClick={() => setViewOptionsOpen(false)}>Cerrar</button>
+                    </div>
                   </div>
-                  <div className="view-options-grid">
-                    <Toggle label="Cama" checked={showBed} onChange={setShowBed} />
-                    <Toggle label="Cuadrícula" checked={showGrid} onChange={setShowGrid} />
-                    <Toggle label="Sombras" checked={shadows} onChange={setShadows} />
-                    <Toggle label="Rayos X" checked={xray} onChange={setXray} />
-                    <Toggle label="Giro automático" checked={autoRotate} onChange={setAutoRotate} />
-                    <Toggle label="Vista técnica" hint="Perspectiva baja, casi ortográfica" checked={technical} onChange={setTechnical} />
+                  <div className="segmented view-section-tabs">
+                    <button type="button" className={viewSection === "scene" ? "on" : ""} onClick={() => setViewSection("scene")}><Cookie size={13} /> Escena</button>
+                    <button type="button" className={viewSection === "material" ? "on" : ""} onClick={() => setViewSection("material")}><Sparkles size={13} /> Material</button>
+                    <button type="button" className={viewSection === "guides" ? "on" : ""} onClick={() => setViewSection("guides")}><Ruler size={13} /> Guías</button>
                   </div>
-                  <label className="view-slider">
-                    <span>Superficie de la cama</span>
-                    <select value={bedStyle} onChange={(e) => setBedStyle(e.target.value as typeof bedStyle)}>
-                      <option value="mauve">Malva oscuro</option>
-                      <option value="midnight">Azul medianoche</option>
-                      <option value="cream">Crema cálida</option>
-                      <option value="rose">Rosa oscuro</option>
-                    </select>
-                  </label>
-                  <label className="view-slider">
-                    <span>Acabado de impresión</span>
-                    <select value={finish} onChange={(e) => setFinish(e.target.value as typeof finish)}>
-                      <option value="matte">Mate</option>
-                      <option value="satin">Satinado</option>
-                      <option value="gloss">Brillante</option>
-                    </select>
-                  </label>
-                  <label className="view-slider">
-                    <span>Separar piezas <b>{explode.toFixed(0)} mm</b></span>
-                    <input type="range" min={0} max={30} step={1} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
-                  </label>
+
+                  {viewSection === "scene" && (
+                    <>
+                      <div className="view-section">
+                        <span className="view-section-title"><Palette size={12} /> Superficie</span>
+                        {(["Claro", "Oscuro", "Texturas"] as const).map((group) => (
+                          <div className="surface-row" key={group}>
+                            <span>{group}</span>
+                            <div className="surface-swatches">
+                              {SURFACE_OPTIONS.filter((option) => option.group === group).map((option) => (
+                                <button
+                                  key={option.id}
+                                  type="button"
+                                  className={`surface-swatch${preview.surface === option.id ? " on" : ""}`}
+                                  style={{ background: option.swatch || option.top }}
+                                  title={option.label}
+                                  aria-label={option.label}
+                                  onClick={() => updatePreview({ surface: option.id })}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        <label className={`surface-custom${preview.surface === "custom" ? " on" : ""}`}>
+                          <input
+                            type="color"
+                            value={preview.customSurface}
+                            onChange={(e) => updatePreview({ customSurface: e.target.value, surface: "custom" })}
+                          />
+                          <span>Color propio</span>
+                        </label>
+                      </div>
+                      <div className="view-options-grid">
+                        <Toggle label="Cama" checked={showBed} onChange={setShowBed} />
+                        <Toggle label="Cuadrícula" checked={showGrid} onChange={setShowGrid} />
+                        <Toggle label="Sombras" checked={shadows} onChange={setShadows} />
+                        {doughSceneAllowed ? (
+                          <>
+                            <Toggle label="Galleta y masa" hint="Masa y pieza suelta bajo el cortador" checked={preview.showDough} onChange={(v) => updatePreview({ showDough: v })} />
+                            {preview.showDough && (
+                              <>
+                                <Toggle label="Galleta suelta" checked={preview.showCookie} onChange={(v) => updatePreview({ showCookie: v })} />
+                                <Toggle label="Regla y moneda" checked={preview.showScale} onChange={(v) => updatePreview({ showScale: v })} />
+                              </>
+                            )}
+                          </>
+                        ) : (
+                          <div className="inline-hint scene-unavailable"><Cookie size={13} /><span>La escena de masa está disponible para cortadores, sellos e improntas.</span></div>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {viewSection === "material" && (
+                    <>
+                      <div className="view-section">
+                        <span className="view-section-title"><Sparkles size={12} /> Material de impresión</span>
+                        <div className="material-picker">
+                          {PRINT_MATERIAL_OPTIONS.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              className={`material-card${preview.material === option.id ? " on" : ""}`}
+                              title={option.hint}
+                              onClick={() => updatePreview({ material: option.id })}
+                            >
+                              <i style={{ background: option.swatch }} />
+                              <span>{option.label}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="view-two-colors">
+                        <label>
+                          <span>Color secundario</span>
+                          <input
+                            type="color"
+                            value={preview.secondaryColor}
+                            onChange={(e) => updatePreview({ secondaryColor: e.target.value })}
+                          />
+                        </label>
+                        <label>
+                          <span>Acabado</span>
+                          <select value={preview.finish} onChange={(e) => updatePreview({ finish: e.target.value as PrintFinish })}>
+                            <option value="matte">Mate</option>
+                            <option value="satin">Satinado</option>
+                            <option value="gloss">Brillante</option>
+                          </select>
+                        </label>
+                      </div>
+                      <div className="view-options-grid">
+                        <Toggle label="Aristas" checked={showEdges} onChange={setShowEdges} />
+                        <Toggle label="Malla" checked={wireframe} onChange={setWireframe} />
+                        <Toggle label="Rayos X" checked={xray} onChange={setXray} />
+                        <Toggle label="Giro automático" checked={autoRotate} onChange={setAutoRotate} />
+                      </div>
+                      <div className="inline-hint"><Sparkles size={13} /><span>El material es solo una previsualización: no cambia la geometría exportada.</span></div>
+                    </>
+                  )}
+
+                  {viewSection === "guides" && (
+                    <>
+                      <div className="view-options-grid">
+                        <Toggle label="Medidas" hint="Cotas de ancho, fondo y alto" checked={preview.showMeasurements} onChange={(v) => updatePreview({ showMeasurements: v })} />
+                        <Toggle label="Vista técnica" hint="Perspectiva baja, casi ortográfica" checked={technical} onChange={setTechnical} />
+                        <Toggle label="Cama" checked={showBed} onChange={setShowBed} />
+                        <Toggle label="Cuadrícula" checked={showGrid} onChange={setShowGrid} />
+                      </div>
+                      <button
+                        type="button"
+                        className={`soft-button center-pick-button${centerPick ? " on" : ""}`}
+                        onClick={() => { setTab("3d"); setCenterPick((v) => !v); }}
+                      >
+                        <Move3D size={14} /> {centerPick ? "Haz clic en la pieza…" : "Mover centro de giro"}
+                      </button>
+                      <div className="inline-hint"><Crosshair size={13} /><span>Actívalo y haz clic en cualquier punto del modelo para orbitar alrededor de ese punto. También puedes desplazar con el botón derecho del ratón.</span></div>
+                      <label className="view-slider">
+                        <span>Separar piezas <b>{explode.toFixed(0)} mm</b></span>
+                        <input type="range" min={0} max={30} step={1} value={explode} onChange={(e) => setExplode(Number(e.target.value))} />
+                      </label>
+                    </>
+                  )}
+
                   <div className="view-options-actions">
-                    <button type="button" className="soft-button" onClick={() => viewportRef.current?.fitModel()}><Focus size={13} /> Centrar pieza</button>
-                    <button type="button" className="soft-button" onClick={() => viewportRef.current?.fit()}><Maximize2 size={13} /> Centrar todo</button>
+                    <button type="button" className="soft-button" onClick={() => { setCenterPick(false); viewportRef.current?.fitModel(); }}><Focus size={13} /> Centrar pieza</button>
+                    <button type="button" className="soft-button" onClick={() => { setCenterPick(false); viewportRef.current?.fit(); }}><Maximize2 size={13} /> Centrar todo</button>
                     <button type="button" className="soft-button" onClick={downloadViewScreenshot}><Camera size={13} /> Captura PNG</button>
                     <button type="button" className="soft-button" onClick={toggleFullscreen}><Expand size={13} /> Pantalla completa</button>
                   </div>
@@ -741,8 +922,18 @@ export default function App() {
                 shadows={shadows}
                 xray={xray}
                 explode={explode}
-                bedStyle={bedStyle}
-                finish={finish}
+                bedStyle={preview.surface}
+                customSurface={preview.customSurface}
+                finish={preview.finish}
+                materialStyle={preview.material}
+                secondaryColor={preview.secondaryColor}
+                primaryShape={primary?.shape ?? null}
+                showDough={doughSceneAllowed && preview.showDough}
+                showCookie={preview.showCookie}
+                showScale={preview.showScale}
+                measurements={preview.showMeasurements}
+                centerPick={centerPick}
+                onCenterPicked={() => setCenterPick(false)}
               />
             ) : primary ? (
               <Preview2D shape={primary.shape} lineWidth={primary.settings.lineWidth} />
@@ -756,6 +947,14 @@ export default function App() {
                 {assets.length > 5 && <span className="legend-item">+{assets.length - 5}</span>}
                 <span className="legend-dim">{displayBuild.dimensions.width.toFixed(1)} × {displayBuild.dimensions.height.toFixed(1)} mm</span>
                 <span className="legend-dim bed-dim">Cama {primary?.settings.bedWidth?.toFixed(0) ?? 256} × {primary?.settings.bedDepth?.toFixed(0) ?? 256} mm</span>
+              </div>
+            )}
+
+            {tab === "3d" && centerPick && (
+              <div className="center-pick-hint">
+                <Crosshair size={15} />
+                <span>Haz clic en la pieza para mover el centro de giro</span>
+                <button type="button" onClick={() => setCenterPick(false)}>Cancelar</button>
               </div>
             )}
 
