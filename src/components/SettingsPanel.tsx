@@ -416,36 +416,15 @@ export default function SettingsPanel({
             checked={settings.stampBorder}
             onChange={(v) => onChange({ stampBorder: v })}
           />
-          {advanced && (
-            <>
-              {settings.stampBorder && (
-                <NumberField
-                  label="Ancho del borde"
-                  value={settings.stampBorderWidth}
-                  min={0.8}
-                  max={5}
-                  step={0.2}
-                  onChange={(v) => onChange({ stampBorderWidth: v })}
-                />
-              )}
-              <Toggle
-                label="Borrar contorno exterior"
-                hint="Elimina el contorno exterior del dibujo para que solo queden los detalles interiores."
-                checked={settings.stampRemoveOuterEdge}
-                onChange={(v) => onChange({ stampRemoveOuterEdge: v })}
-              />
-              {settings.stampRemoveOuterEdge && (
-                <label className="field-row">
-                  <span className="field-label">Método</span>
-                  <span className="field-input">
-                    <select value={settings.stampEdgeMethod} onChange={(e) => onChange({ stampEdgeMethod: e.target.value as DesignSettings["stampEdgeMethod"] })}>
-                      <option value="preserve">Preservar silueta</option>
-                      <option value="offset">Recortar hacia dentro</option>
-                    </select>
-                  </span>
-                </label>
-              )}
-            </>
+          {advanced && settings.stampBorder && (
+            <NumberField
+              label="Ancho del borde"
+              value={settings.stampBorderWidth}
+              min={0.8}
+              max={5}
+              step={0.2}
+              onChange={(v) => onChange({ stampBorderWidth: v })}
+            />
           )}
         </Section>
       )}
