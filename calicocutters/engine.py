@@ -405,7 +405,7 @@ def _alignment_locations(
         return None, None
     # Try several directions and take the first place where both materials
     # have room for a clean through-hole.
-    for degrees in (215, 235, 325, 145, 55, 305, 125, 270, 90, 0, 180):
+    for degrees in (45, 135, 315, 225, 55, 305, 125, 270, 90, 0, 180):
         angle = math.radians(degrees)
         dx, dy = math.cos(angle), math.sin(angle)
         far = Point(c.x + dx * span * 2.0, c.y + dy * span * 2.0)
