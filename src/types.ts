@@ -314,7 +314,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   setSpacing: 10,
 
   preprocessSmooth: true,
-  preprocessAmount: 0.15,
+  preprocessAmount: 0.25,
   preprocessSimplify: 0.12,
   preprocessPreserveCorners: false,
   preprocessRemoveTiny: true,

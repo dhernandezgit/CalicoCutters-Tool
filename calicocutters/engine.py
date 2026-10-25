@@ -122,7 +122,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "setStep": 0.18,
     "setSpacing": 10.0,
     "preprocessSmooth": True,
-    "preprocessAmount": 0.15,
+    "preprocessAmount": 0.25,
     "preprocessSimplify": 0.12,
     "preprocessPreserveCorners": False,
     "preprocessRemoveTiny": True,
