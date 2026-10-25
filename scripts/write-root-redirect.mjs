@@ -1,0 +1,12 @@
+import { mkdirSync, writeFileSync } from "node:fs";
+
+mkdirSync("dist", { recursive: true });
+writeFileSync(
+  "dist/index.html",
+  `<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=./web/"><title>CalicoCutters</title></head>
+<body style="font-family:system-ui;background:#f9d7e4;color:#5e4a64;padding:32px">
+<p>Abriendo CalicoCutters… <a href="./web/">Entrar</a></p>
+</body></html>`,
+);
