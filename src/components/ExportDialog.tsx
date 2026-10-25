@@ -1,10 +1,24 @@
 import { useMemo, useState } from "react";
-import { Download, FileBox, Info, Save, X } from "lucide-react";
+import { FileArchive, Info, Save, X } from "lucide-react";
 import type { DesignAsset, DesignSettings } from "../types";
 import type { AssetRow } from "./AssetsPanel";
 import { base64ToBytes, bytesToBlob } from "../hooks/usePythonEngine";
-import { saveBlobWithPicker, saveFilesChoosingLocation, safeFileName, type DownloadFile } from "../lib/download";
+import {
+  saveBlobChoosingLocation,
+  saveZipChoosingLocation,
+  safeFileName,
+  uniqueDownloadFiles,
+  type DownloadFile,
+} from "../lib/download";
 import { projectBlob, projectFileName } from "../lib/project";
+import Toggle from "./Toggle";
+
+type Format = "stl" | "3mf" | "3mf-set";
+type Scope = "selected" | "all";
+
+function stamp() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export default function ExportDialog({
   open,
@@ -31,27 +45,32 @@ export default function ExportDialog({
 }) {
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState(false);
+  const [format, setFormat] = useState<Format>("stl");
+  const [scope, setScope] = useState<Scope>("selected");
+  const [includeProject, setIncludeProject] = useState(true);
+  const [status, setStatus] = useState("");
+  const formatLabel = format === "stl" ? "STL" : format === "3mf" ? "3MF por diseño" : "3MF conjunto";
 
+  const buildable = useMemo(() => assets.filter((a) => a.build), [assets]);
   const chosen = useMemo(
     () => assets.filter((a) => a.build && selected[a.id] !== false),
     [assets, selected],
   );
-  const totalParts = chosen.reduce((sum, a) => sum + (a.build?.parts.length ?? 0), 0);
-  const totalGrams = chosen.reduce((sum, a) => sum + (a.build?.material_grams ?? 0), 0);
+  const scopeAssets = scope === "all" ? buildable : chosen;
+  const totalParts = scopeAssets.reduce((sum, a) => sum + (a.build?.parts.length ?? 0), 0);
+  const totalGrams = scopeAssets.reduce((sum, a) => sum + (a.build?.material_grams ?? 0), 0);
   const totalPrice = (totalGrams / 1000) * plaPricePerKg;
   const projectFile = projectBlob(projectName, assets);
-
-  if (!open) return null;
 
   const projectDownload: DownloadFile = {
     name: projectFileName(projectName),
     blob: projectFile,
   };
 
-  const filesFor = async (asset: AssetRow, format: "stl" | "3mf"): Promise<DownloadFile[]> => {
+  const filesFor = async (asset: AssetRow, kind: "stl" | "3mf"): Promise<DownloadFile[]> => {
     const base = safeFileName(asset.name);
     const parts = asset.build?.parts ?? [];
-    if (format === "stl") {
+    if (kind === "stl") {
       return parts.map((part) => ({
         name: `${base}_${safeFileName(part.name)}.stl`,
         blob: bytesToBlob(base64ToBytes(part.stl_b64), "model/stl"),
@@ -66,57 +85,92 @@ export default function ExportDialog({
     return [{ name: `${base}.3mf`, blob }];
   };
 
-  const downloadOne = async (asset: AssetRow, format: "stl" | "3mf") => {
+  const filesForMany = async (items: AssetRow[], kind: Format): Promise<DownloadFile[]> => {
+    if (kind === "3mf-set") {
+      const blob = await onExport3mfMulti(items, projectName);
+      return [{ name: `${safeFileName(projectName)}_conjunto.3mf`, blob }];
+    }
+    const out: DownloadFile[] = [];
+    for (const asset of items) out.push(...await filesFor(asset, kind));
+    return out;
+  };
+
+  const finish = (result: "saved" | "cancelled" | "unsupported", message: string) => {
+    if (result === "cancelled") {
+      setStatus("Guardado cancelado.");
+      onToast("Guardado cancelado.");
+      return;
+    }
+    setStatus(message);
+    onToast(message);
+  };
+
+  const downloadOne = async (asset: AssetRow, kind: "stl" | "3mf") => {
     if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
+    if (!asset.build) return onToast("Este diseño todavía no tiene geometría.");
     setBusy(true);
+    setStatus(`Preparando ${kind.toUpperCase()} de ${asset.name}…`);
     try {
-      const files = await filesFor(asset, format);
-      const result = await saveFilesChoosingLocation([...files, projectDownload]);
-      if (result === "cancelled") return;
-      onToast(`${format.toUpperCase()} de “${asset.name}” y proyecto guardados.`);
+      const files = await filesFor(asset, kind);
+      const bundle = includeProject ? uniqueDownloadFiles([...files, projectDownload]) : files;
+      if (bundle.length === 1) {
+        const result = await saveBlobChoosingLocation(bundle[0].blob, bundle[0].name, `Modelo ${kind.toUpperCase()}`);
+        finish(result, `Descargado: ${bundle[0].name}`);
+      } else {
+        const zipName = `${safeFileName(asset.name)}_${kind}.zip`;
+        const result = await saveZipChoosingLocation(bundle, zipName);
+        finish(
+          result,
+          `ZIP descargado: ${zipName} (${files.length} archivo(s)${includeProject ? " + proyecto" : ""}).`,
+        );
+      }
     } catch (error) {
-      onToast(String((error as Error)?.message || error));
+      const message = `No se pudo exportar: ${String((error as Error)?.message || error)}`;
+      setStatus(message);
+      onToast(message);
     } finally {
       setBusy(false);
     }
   };
 
-  const downloadAll = async (format: "stl" | "3mf") => {
+  const bulkExport = async () => {
     if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
-    if (!chosen.length) return onToast("Selecciona al menos un diseño.");
+    if (!scopeAssets.length) return onToast("No hay diseños con geometría para exportar.");
     setBusy(true);
+    setStatus(`Generando ${scopeAssets.length} diseño(s) en ${formatLabel}…`);
     try {
-      const files: DownloadFile[] = [];
-      for (const asset of chosen) files.push(...await filesFor(asset, format));
-      const result = await saveFilesChoosingLocation([...files, projectDownload]);
-      if (result === "cancelled") return;
-      onToast(`${files.length} archivo(s) ${format.toUpperCase()} y el proyecto guardados.`);
+      const files = await filesForMany(scopeAssets, format);
+      const bundle = includeProject ? uniqueDownloadFiles([...files, projectDownload]) : files;
+      if (bundle.length === 1) {
+        const result = await saveBlobChoosingLocation(bundle[0].blob, bundle[0].name, "Modelo CalicoCutters");
+        finish(result, `Descargado: ${bundle[0].name}`);
+      } else {
+        const zipName = `${safeFileName(projectName)}_${scope}_${format}_${stamp()}.zip`;
+        const result = await saveZipChoosingLocation(bundle, zipName);
+        finish(
+          result,
+          `ZIP descargado: ${zipName} (${files.length} archivo(s)${includeProject ? " + proyecto" : ""}).`,
+        );
+      }
     } catch (error) {
-      onToast(String((error as Error)?.message || error));
+      const message = `No se pudo preparar la exportación: ${String((error as Error)?.message || error)}`;
+      setStatus(message);
+      onToast(message);
     } finally {
       setBusy(false);
     }
   };
 
-  const downloadCombined3mf = async () => {
-    if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
-    if (!chosen.length) return onToast("Selecciona al menos un diseño.");
-    setBusy(true);
+  const downloadProject = async () => {
     try {
-      const blob = await onExport3mfMulti(chosen, projectName);
-      const result = await saveFilesChoosingLocation([
-        { name: `${safeFileName(projectName)}_conjunto.3mf`, blob },
-        projectDownload,
-      ]);
-      if (result === "cancelled") return;
-      onToast(`3MF conjunto de ${chosen.length} diseño(s) y proyecto guardados.`);
+      const result = await saveBlobChoosingLocation(projectFile, projectFileName(projectName), "Proyecto CalicoCutters");
+      finish(result, `Proyecto descargado: ${projectFileName(projectName)}`);
     } catch (error) {
       onToast(String((error as Error)?.message || error));
-    } finally {
-      setBusy(false);
     }
   };
 
+  if (!open) return null;
 
   return (
     <div className="modal-back" role="dialog" aria-modal="true" aria-label="Exportar modelos">
@@ -150,8 +204,12 @@ export default function ExportDialog({
                         <small>{asset.build ? `${asset.build.parts.length} pieza(s) · ${asset.build.dimensions.width.toFixed(0)} × ${asset.build.dimensions.height.toFixed(0)} mm · ${asset.build.material_grams.toFixed(1)} g` : "sin geometría"}</small>
                       </div>
                       <div className="export-asset-actions" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" className="soft-button" onClick={() => downloadOne(asset, "stl")} disabled={engineBusy || busy || !asset.build}>STL</button>
-                        <button type="button" className="soft-button" onClick={() => downloadOne(asset, "3mf")} disabled={engineBusy || busy || !asset.build}>3MF</button>
+                        <button type="button" className="soft-button" title="Descarga este diseño. Si tiene varias piezas o incluyes el proyecto, se empaqueta en un ZIP." onClick={() => downloadOne(asset, "stl")} disabled={engineBusy || busy || !asset.build}>
+                          STL{includeProject || (asset.build?.parts.length ?? 0) > 1 ? " .zip" : ""}
+                        </button>
+                        <button type="button" className="soft-button" title="3MF de este diseño. Si incluyes el proyecto, se empaqueta en un ZIP." onClick={() => downloadOne(asset, "3mf")} disabled={engineBusy || busy || !asset.build}>
+                          3MF{includeProject ? " .zip" : ""}
+                        </button>
                       </div>
                     </div>
                   );
@@ -160,26 +218,57 @@ export default function ExportDialog({
             </div>
 
             <div className="export-block">
-              <span className="block-label">Descargar todos los seleccionados, uno a uno</span>
-              <div className="export-action-grid">
-                <button type="button" className="soft-button" onClick={() => downloadAll("stl")} disabled={engineBusy || busy}><FileBox size={15} /> Todos en STL</button>
-                <button type="button" className="soft-button" onClick={() => downloadAll("3mf")} disabled={engineBusy || busy}><Download size={15} /> Todos en 3MF</button>
-                <button type="button" className="soft-button" onClick={downloadCombined3mf} disabled={engineBusy || busy || !chosen.length}><Download size={15} /> 3MF conjunto</button>
+              <span className="block-label">Exportación por lotes</span>
+              <div className="export-choice-row">
+                <span className="export-choice-label">Alcance</span>
+                <div className="segmented">
+                  <button type="button" className={scope === "selected" ? "on" : ""} onClick={() => setScope("selected")}>
+                    Seleccionados ({chosen.length})
+                  </button>
+                  <button type="button" className={scope === "all" ? "on" : ""} onClick={() => setScope("all")}>
+                    Todos ({buildable.length})
+                  </button>
+                </div>
               </div>
-              <div className="inline-hint"><Info size={13} /><span>Elige la carpeta o el archivo de destino. El proyecto .calicocutters se guarda también junto a los modelos. El 3MF conjunto coloca todos los diseños en una sola escena.</span></div>
+              <div className="export-choice-row">
+                <span className="export-choice-label">Formato</span>
+                <div className="segmented">
+                  <button type="button" className={format === "stl" ? "on" : ""} onClick={() => setFormat("stl")}>STL</button>
+                  <button type="button" className={format === "3mf" ? "on" : ""} onClick={() => setFormat("3mf")}>3MF</button>
+                  <button type="button" className={format === "3mf-set" ? "on" : ""} onClick={() => setFormat("3mf-set")}>3MF conjunto</button>
+                </div>
+              </div>
+              <div className="export-action-grid single">
+                <button type="button" className="soft-button" onClick={bulkExport} disabled={engineBusy || busy || !scopeAssets.length}>
+                  <FileArchive size={15} /> Guardar archivo…
+                </button>
+              </div>
+              <Toggle
+                label="Incluir copia del proyecto"
+                hint="Si está activo, el .calicocutters se guarda dentro del mismo ZIP elegido."
+                checked={includeProject}
+                onChange={setIncludeProject}
+              />
+              <div className="inline-hint">
+                <Info size={13} />
+                <span>
+                  {formatLabel} · {scopeAssets.length} diseño(s), {totalParts} pieza(s). Elige dónde guardar el archivo: si hay varias piezas o incluyes el proyecto, se guarda un único ZIP con todo dentro.
+                </span>
+              </div>
+              {status && <div className={`export-result${status.includes("cancel") ? " warn" : ""}`} role="status" aria-live="polite">{status}</div>}
             </div>
 
             <div className="project-save-row">
               <Save size={15} />
               <span>El archivo de proyecto incluye todos los diseños, ajustes, nombres y colores.</span>
-              <button type="button" className="mini-link" onClick={async () => { await saveBlobWithPicker(projectFile, projectFileName(projectName), "Proyecto CalicoCutters"); }}>Descargar solo el proyecto</button>
+              <button type="button" className="mini-link" onClick={downloadProject}>Descargar solo el proyecto</button>
             </div>
           </div>
 
           <aside className="export-aside">
             <div className="summary-card">
               <span className="eyebrow">Resumen</span>
-              <div className="summary-line"><span>Diseños</span><strong>{chosen.length}</strong></div>
+              <div className="summary-line"><span>Diseños</span><strong>{scopeAssets.length}</strong></div>
               <div className="summary-line"><span>Piezas</span><strong>{totalParts}</strong></div>
               <div className="summary-line"><span>Peso aprox.</span><strong>{totalGrams.toFixed(1)} g</strong></div>
               <div className="summary-line"><span>Coste PLA</span><strong>{totalPrice.toFixed(2)} €</strong></div>

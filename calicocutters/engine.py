@@ -11,7 +11,7 @@ from typing import Any
 
 import numpy as np
 from shapely import affinity
-from shapely.geometry import MultiPolygon, Polygon
+from shapely.geometry import LineString, MultiPolygon, Point, Polygon
 from shapely.ops import unary_union
 
 from .mesh import (
@@ -42,6 +42,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "lineWidth": 0.4,
     "layerHeight": 0.2,
     "autoPrintable": True,
+    "bedModel": "bambu-p2s",
+    "bedWidth": 256.0,
+    "bedDepth": 256.0,
     "bladeThickness": 0.8,
     "bladeDepth": 12.0,
     "tipWidth": 0.4,
@@ -64,7 +67,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampBack": 5.5,
     "stampRelief": 3.0,
     "stampClearance": 0.8,
-    "stampRemoveOuterEdge": False,
+    "stampRemoveOuterEdge": True,
     "stampEdgeMethod": "preserve",
     "stampBorder": True,
     "stampBorderWidth": 1.6,
@@ -118,6 +121,14 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "setCount": 3,
     "setStep": 0.18,
     "setSpacing": 10.0,
+    "preprocessSmooth": True,
+    "preprocessAmount": 0.15,
+    "preprocessSimplify": 0.12,
+    "preprocessPreserveCorners": False,
+    "preprocessRemoveTiny": True,
+    "preprocessMinDetail": 0.8,
+    "alignmentHole": True,
+    "alignmentHoleDiameter": 1.8,
 }
 
 PRINTERS = {
@@ -140,6 +151,8 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "height": (15.0, 240.0),
     "lineWidth": (0.05, 1.2),
     "layerHeight": (0.05, 0.5),
+    "bedWidth": (50.0, 1000.0),
+    "bedDepth": (50.0, 1000.0),
     "bladeThickness": (0.4, 5.0),
     "bladeDepth": (5.0, 25.0),
     "tipWidth": (0.2, 2.0),
@@ -196,6 +209,10 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "cakePopRelief": (0.2, 8.0),
     "setStep": (0.05, 0.45),
     "setSpacing": (2.0, 40.0),
+    "preprocessAmount": (0.0, 1.5),
+    "preprocessSimplify": (0.0, 0.8),
+    "preprocessMinDetail": (0.1, 20.0),
+    "alignmentHoleDiameter": (0.8, 5.0),
 }
 
 _INTEGER_RANGES: dict[str, tuple[int, int]] = {
@@ -212,6 +229,8 @@ _BOOLEAN_KEYS = {
     "lockAspect", "autoPrintable", "sharpEdge", "extraBlade",
     "addPressHandle", "addBar", "stampRemoveOuterEdge", "stampBorder",
     "mirror", "stencilBridges", "topperInvert",
+    "preprocessSmooth", "preprocessPreserveCorners", "preprocessRemoveTiny",
+    "alignmentHole",
 }
 
 
@@ -254,6 +273,7 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     out["baseShape"] = str(out.get("baseShape")) if str(out.get("baseShape")) in {"rect", "chamfer", "round"} else "chamfer"
     out["stampEdgeMethod"] = "offset" if str(out.get("stampEdgeMethod")) == "offset" else "preserve"
     out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "grid"
+    out["bedModel"] = str(out.get("bedModel") or "bambu-p2s")[:40]
     for key in _BOOLEAN_KEYS:
         out[key] = _as_bool(out.get(key))
     for key, (low, high) in _NUMERIC_RANGES.items():
@@ -273,7 +293,61 @@ def _transform_poly(poly: Polygon, sx: float, sy: float) -> Polygon:
     return affinity.scale(poly, sx, sy, origin=(0, 0))
 
 
-def _sized_geometry(shape: Shape, settings: dict[str, Any]) -> tuple[Polygon, list[Polygon]]:
+def _smooth_polygon(poly: Polygon, amount: float) -> Polygon:
+    if amount <= 0 or poly.is_empty:
+        return poly
+    try:
+        rounded = poly.buffer(amount, join_style=1, quad_segs=8)
+        rounded = rounded.buffer(-amount, join_style=1, quad_segs=8)
+        fixed = rounded if rounded.is_valid else rounded.buffer(0)
+        if isinstance(fixed, MultiPolygon):
+            fixed = max(fixed.geoms, key=lambda p: p.area)
+        return fixed if not fixed.is_empty else poly
+    except Exception:
+        return poly
+
+
+def _preprocess_geometry(
+    main: Polygon,
+    details: list[Polygon],
+    settings: dict[str, Any],
+    warnings: list[str],
+) -> tuple[Polygon, list[Polygon]]:
+    """Lightly clean traced/large SVG geometry without destroying corners."""
+    if not settings["preprocessSmooth"]:
+        return main, details
+    tolerance = settings["preprocessSimplify"]
+    if tolerance > 0:
+        simplified = main.simplify(tolerance, preserve_topology=True)
+        if not simplified.is_empty:
+            main = simplified
+        new_details: list[Polygon] = []
+        for d in details:
+            q = d.simplify(tolerance, preserve_topology=True)
+            if not q.is_empty and q.area > 0.01:
+                new_details.append(q)
+        details = new_details
+    if not settings["preprocessPreserveCorners"] and settings["preprocessAmount"] > 0:
+        main = _smooth_polygon(main, settings["preprocessAmount"])
+        details = [
+            _smooth_polygon(d, settings["preprocessAmount"])
+            for d in details
+        ]
+    if settings["preprocessRemoveTiny"]:
+        minimum = settings["preprocessMinDetail"]
+        before = len(details)
+        details = [d for d in details if d.area >= minimum]
+        removed = before - len(details)
+        if removed > 0:
+            warnings.append(
+                f"Se han descartado {removed} detalle(s) minúsculo(s) menores de "
+                f"{minimum:.1f} mm² para evitar líneas frágiles."
+            )
+    return main, details
+
+
+def _sized_geometry(shape: Shape, settings: dict[str, Any]) -> tuple[Polygon, list[Polygon], list[str]]:
+    warnings: list[str] = []
     main = shape.main_polygon
     b = main.bounds
     bw = max(1e-6, b[2] - b[0])
@@ -290,6 +364,7 @@ def _sized_geometry(shape: Shape, settings: dict[str, Any]) -> tuple[Polygon, li
     if settings.get("mirror"):
         main = affinity.scale(main, -1, 1, origin=(0, 0))
         details = [affinity.scale(p, -1, 1, origin=(0, 0)) for p in details]
+    main, details = _preprocess_geometry(main, details, settings, warnings)
     clipped: list[Polygon] = []
     for d in details:
         c = d.intersection(main)
@@ -299,7 +374,68 @@ def _sized_geometry(shape: Shape, settings: dict[str, Any]) -> tuple[Polygon, li
             clipped.append(c)
         elif isinstance(c, MultiPolygon):
             clipped.extend(p for p in c.geoms if p.area > 1e-5)
-    return main, clipped
+    return main, clipped, warnings
+
+
+def _alignment_locations(
+    main: Polygon,
+    settings: dict[str, Any],
+) -> tuple[tuple[float, float, float] | None, tuple[float, float, float] | None]:
+    """Return matching radial alignment holes for cutter base and stamp plate.
+
+    The two holes sit at the same angle from the shape centre, like the index
+    dots on a camera lens.  They are deliberately small and live outside the
+    cutting line (cutter) or inside the back plate (stamp), so the silhouette
+    is untouched.
+    """
+    if not settings.get("alignmentHole"):
+        return None, None
+    radius = max(0.4, settings["alignmentHoleDiameter"] / 2)
+    clearance = settings["stampClearance"]
+    base_width = settings["baseWidth"]
+    c = main.centroid
+    minx, miny, maxx, maxy = main.bounds
+    span = max(maxx - minx, maxy - miny, 1.0)
+    base_band = (
+        main.buffer(base_width + 0.4, join_style=1, quad_segs=8)
+        .difference(main.buffer(-0.4, join_style=1, quad_segs=8))
+    )
+    stamp_poly = main.buffer(-clearance, join_style=1, quad_segs=8)
+    if stamp_poly.is_empty:
+        return None, None
+    # Try several directions and take the first place where both materials
+    # have room for a clean through-hole.
+    for degrees in (215, 235, 325, 145, 55, 305, 125, 270, 90, 0, 180):
+        angle = math.radians(degrees)
+        dx, dy = math.cos(angle), math.sin(angle)
+        far = Point(c.x + dx * span * 2.0, c.y + dy * span * 2.0)
+        try:
+            boundary = LineString([(c.x, c.y), (far.x, far.y)]).intersection(main.boundary)
+        except Exception:
+            continue
+        candidates: list[Point] = []
+        if boundary.geom_type == "Point":
+            candidates = [boundary]
+        elif boundary.geom_type in {"MultiPoint", "GeometryCollection"}:
+            candidates = [p for p in boundary.geoms if p.geom_type == "Point"]
+        for hit in candidates:
+            cutter_center = Point(
+                hit.x + dx * (radius + 0.9),
+                hit.y + dy * (radius + 0.9),
+            )
+            if not base_band.contains(cutter_center.buffer(radius + 0.15)):
+                continue
+            stamp_center = Point(
+                hit.x - dx * (clearance + (settings["stampBorderWidth"] if settings.get("stampBorder") else 0) + radius + 0.55),
+                hit.y - dy * (clearance + (settings["stampBorderWidth"] if settings.get("stampBorder") else 0) + radius + 0.55),
+            )
+            if not stamp_poly.contains(stamp_center.buffer(radius + 0.2)):
+                continue
+            return (
+                (float(cutter_center.x), float(cutter_center.y), float(radius)),
+                (float(stamp_center.x), float(stamp_center.y), float(radius)),
+            )
+    return None, None
 
 
 def _bar_polygon(main: Polygon, settings: dict[str, Any]) -> Polygon:
@@ -353,6 +489,7 @@ def _build_cutter_set(main: Polygon, settings: dict[str, Any]) -> Mesh:
     meshes: list[Mesh] = []
     for factor in factors:
         scaled = affinity.scale(main, factor, factor, origin="center")
+        cutter_align, _stamp_align = _alignment_locations(scaled, settings)
         mesh = build_cutter(
             scaled,
             blade_thickness=settings["bladeThickness"],
@@ -363,6 +500,7 @@ def _build_cutter_set(main: Polygon, settings: dict[str, Any]) -> Mesh:
             base_width=settings["baseWidth"],
             sharp_edge=bool(settings["sharpEdge"]),
             base_shape=str(settings.get("baseShape", "chamfer")),
+            alignment=cutter_align,
         )
         if mesh.triangles:
             meshes.append(mesh)
@@ -596,14 +734,22 @@ def _checks(
         if settings["cakePopMoldHeight"] < 10:
             out.append(_check("warn", "Molde cake pop poco profundo", "Usa 15–20 mm para que el cake pop tenga cuerpo.", "cakepop_depth"))
 
+    if settings.get("alignmentHole") and (cutter_like or stamp_like):
+        if settings["alignmentHoleDiameter"] < line * 2:
+            out.append(_check("warn", f"Punto de alineación de {settings['alignmentHoleDiameter']:.1f} mm", "Usa al menos 2 líneas para que el agujero no se cierre al imprimir.", "alignment_hole"))
+        if settings["baseWidth"] < settings["alignmentHoleDiameter"] + 0.8:
+            out.append(_check("warn", "Punto de alineación sin espacio", "Aumenta el ancho de la base o reduce el agujero de alineación.", "alignment_space"))
+
     for p in parts:
         w = p["bounds"]["max"][0] - p["bounds"]["min"][0]
         d = p["bounds"]["max"][1] - p["bounds"]["min"][1]
+        bed_w = max(1.0, settings["bedWidth"] - 2.0)
+        bed_d = max(1.0, settings["bedDepth"] - 2.0)
         out.append(_check(
-            "ok" if w <= 250 and d <= 250 else "warn",
+            "ok" if w <= bed_w and d <= bed_d else "warn",
             f"{p['name']}: {w:.1f} × {d:.1f} mm",
-            "Cabe en una cama Bambu de 256 × 256 mm." if w <= 250 and d <= 250
-            else "No cabe en una cama de 256 × 256 mm.",
+            f"Cabe en una cama de {bed_w:.0f} × {bed_d:.0f} mm." if w <= bed_w and d <= bed_d
+            else f"No cabe en una cama de {bed_w:.0f} × {bed_d:.0f} mm.",
             "bed",
         ))
     if settings["printer"] == "fdm04" and settings["layerHeight"] > 0.3:
@@ -629,10 +775,16 @@ def _checks(
 
 
 def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple[str, Any, str]], list[str], Polygon, list[Polygon]]:
-    main, details = _sized_geometry(shape, settings)
-    warnings = list(shape.warnings)
+    main, details, pre_warnings = _sized_geometry(shape, settings)
+    warnings = list(shape.warnings) + pre_warnings
     cutter_modes = {"cutter", "cutter-stamp", "imprint", "multicutter", "sandwich", "cutter-set"}
     stamp_modes = {"stamp", "cutter-stamp"}
+    cutter_alignment, stamp_alignment = _alignment_locations(main, settings)
+    if settings.get("alignmentHole"):
+        if settings["mode"] in cutter_modes and cutter_alignment is None:
+            warnings.append("No hay espacio para el punto de alineación en la base del cortador con este tamaño.")
+        if settings["mode"] in stamp_modes and stamp_alignment is None:
+            warnings.append("No hay espacio para el punto de alineación en el sello con este tamaño.")
     if settings["mode"] in stamp_modes and not details:
         warnings.append("El sello no tiene relieve interior; se imprimirá como una base plana.")
     if settings["mode"] in cutter_modes and settings["bladeThickness"] < PRINTERS[settings["printer"]]["minWall"]:
@@ -679,6 +831,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
                 base_shape=str(settings.get("baseShape", "round")),
+                alignment=cutter_alignment,
             )
             cutter = _add_cutter_extras(cutter, main, settings)
             parts.append(("Cortador", cutter, "#f39ab1"))
@@ -694,6 +847,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 clearance=settings["stampClearance"],
                 border=bool(settings.get("stampBorder", True)),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
+                alignment=stamp_alignment,
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
         if settings["mode"] == "imprint":
@@ -709,6 +863,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 imprint_depth=settings["imprintDepth"],
                 base_shape=str(settings.get("baseShape", "round")),
                 sharp_edge=bool(settings["sharpEdge"]),
+                alignment=cutter_alignment,
             )
             parts.append(("Impronta", imprint, "#f39ab1"))
         if settings["mode"] == "multicutter":
@@ -725,6 +880,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
                 base_shape=str(settings.get("baseShape", "round")),
+                alignment=cutter_alignment,
             )
             base = _add_cutter_extras(base, main, settings)
             rows = max(1, int(settings["multiRows"]))
@@ -763,6 +919,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 dent_depth=settings["sandwichDentDepth"],
                 base_shape=str(settings.get("baseShape", "round")),
                 sharp_edge=bool(settings["sharpEdge"]),
+                alignment=cutter_alignment,
             )
             parts.append(("Cortador sándwich", sandwich, "#f39ab1"))
         if settings["mode"] == "roller":

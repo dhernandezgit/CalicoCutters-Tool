@@ -3,6 +3,7 @@ import {
   Box,
   CircleHelp,
   Crown,
+  Focus,
   Gauge,
   Layers,
   Ruler,
@@ -13,7 +14,7 @@ import {
   Wand2,
 } from "lucide-react";
 import type { BuildResult, DesignSettings, DesignShape, PrintCheck } from "../types";
-import { PRINTER_PROFILES } from "../types";
+import { PRINTER_BEDS, PRINTER_PROFILES } from "../types";
 import Section from "./Section";
 import Toggle from "./Toggle";
 
@@ -439,16 +440,121 @@ export default function SettingsPanel({
           <NumberField label="Línea" value={settings.lineWidth} min={0.2} max={1} step={0.05} onChange={(v) => onChange({ lineWidth: v })} />
           <NumberField label="Altura de capa" value={settings.layerHeight} min={0.05} max={0.4} step={0.05} onChange={(v) => onChange({ layerHeight: v })} />
         </div>
+        <label className="field-row">
+          <span className="field-label">Cama de impresión</span>
+          <span className="field-input">
+            <select
+              value={settings.bedModel}
+              onChange={(e) => {
+                const key = e.target.value;
+                const preset = PRINTER_BEDS[key];
+                if (!preset) return;
+                onChange({ bedModel: key, bedWidth: preset.width, bedDepth: preset.depth });
+              }}
+            >
+              {Object.entries(PRINTER_BEDS).map(([key, bed]) => (
+                <option key={key} value={key}>
+                  {key === "custom" ? `Cama personalizada · ${settings.bedWidth}×${settings.bedDepth}` : `${bed.label} · ${bed.width}×${bed.depth}`}
+                </option>
+              ))}
+            </select>
+          </span>
+        </label>
+        {settings.bedModel === "custom" && (
+          <div className="two-fields">
+            <NumberField label="Ancho de cama" value={settings.bedWidth} min={50} max={1000} step={1} onChange={(v) => onChange({ bedWidth: v, bedModel: "custom" })} />
+            <NumberField label="Fondo de cama" value={settings.bedDepth} min={50} max={1000} step={1} onChange={(v) => onChange({ bedDepth: v, bedModel: "custom" })} />
+          </div>
+        )}
         <div className="inline-hint">
           <SlidersHorizontal size={13} />
           <span>
-            Cuchilla = <strong>{Math.max(1, settings.bladeThickness / line).toFixed(1)} líneas</strong>. Mínimo 2 líneas.
+            Cama de <strong>{settings.bedWidth.toFixed(0)} × {settings.bedDepth.toFixed(0)} mm</strong> en el visor. Cuchilla = <strong>{Math.max(1, settings.bladeThickness / line).toFixed(1)} líneas</strong>. Mínimo 2 líneas.
           </span>
         </div>
         <button type="button" className="soft-button" onClick={onApplyPrintable}>
           <Wand2 size={14} /> Ajustar a líneas imprimibles
         </button>
       </Section>
+      )}
+
+      {advanced && (cutterLike || stampLike) && (
+        <Section id="alignment" title="Alineación" icon={<Focus size={16} />} summary={settings.alignmentHole ? `${settings.alignmentHoleDiameter.toFixed(1)} mm` : "Desactivada"}>
+          <Toggle
+            label="Punto de alineación"
+            hint="Un agujero mínimo en la base del cortador y en el sello, en el mismo ángulo, para orientarlos como las marcas de un objetivo."
+            checked={settings.alignmentHole}
+            onChange={(v) => onChange({ alignmentHole: v })}
+          />
+          {settings.alignmentHole && (
+            <NumberField
+              label="Diámetro del punto"
+              value={settings.alignmentHoleDiameter}
+              min={0.8}
+              max={5}
+              step={0.1}
+              onChange={(v) => onChange({ alignmentHoleDiameter: v })}
+            />
+          )}
+        </Section>
+      )}
+
+      {advanced && (
+        <Section id="preprocess" title="Preprocesado del dibujo" icon={<Wand2 size={16} />} summary={settings.preprocessSmooth ? "Suave" : "Original"}>
+          <Toggle
+            label="Suavizar dibujo"
+            hint="Limpia conexiones rectas y microdientes del trazado sin cambiar el tamaño final."
+            checked={settings.preprocessSmooth}
+            onChange={(v) => onChange({ preprocessSmooth: v })}
+          />
+          {settings.preprocessSmooth && (
+            <>
+              <div className="two-fields">
+                <NumberField
+                  label="Simplificar trazos"
+                  value={settings.preprocessSimplify}
+                  min={0}
+                  max={0.8}
+                  step={0.02}
+                  hint="0 = sin simplificar"
+                  onChange={(v) => onChange({ preprocessSimplify: v })}
+                />
+                <NumberField
+                  label="Redondeo de uniones"
+                  value={settings.preprocessAmount}
+                  min={0}
+                  max={1.5}
+                  step={0.05}
+                  hint={settings.preprocessPreserveCorners ? "Se aplica al desactivar respetar esquinas" : "Radio pequeño"}
+                  onChange={(v) => onChange({ preprocessAmount: v })}
+                />
+              </div>
+              <Toggle
+                label="Respetar esquinas"
+                hint="Mantén los vértices marcados del dibujo; solo se simplifican los trazos."
+                checked={settings.preprocessPreserveCorners}
+                onChange={(v) => onChange({ preprocessPreserveCorners: v })}
+              />
+              <Toggle
+                label="Quitar detalles minúsculos"
+                hint="Evita líneas y puntos que se romperían al imprimir."
+                checked={settings.preprocessRemoveTiny}
+                onChange={(v) => onChange({ preprocessRemoveTiny: v })}
+              />
+              {settings.preprocessRemoveTiny && (
+                <NumberField
+                  label="Área mínima de detalle"
+                  value={settings.preprocessMinDetail}
+                  min={0.1}
+                  max={20}
+                  step={0.1}
+                  unit="mm²"
+                  onChange={(v) => onChange({ preprocessMinDetail: v })}
+                />
+              )}
+            </>
+          )}
+        </Section>
       )}
 
       {cutterLike && (
@@ -577,7 +683,7 @@ export default function SettingsPanel({
           </div>
           <Toggle
             label="Borde perimetral del sello"
-            hint="Deja un marco elevado alrededor del sello. Desactívalo para un sello sin borde."
+            hint="Deja un marco elevado a la misma altura que el dibujo. Desactívalo para que el borde quede a la altura de la base plana."
             checked={settings.stampBorder}
             onChange={(v) => onChange({ stampBorder: v })}
           />

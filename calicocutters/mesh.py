@@ -456,6 +456,7 @@ def build_cutter(
     extra_blade_depth: float = 0.0,
     extra_blade_thickness: float = 0.0,
     base_shape: str = "round",
+    alignment: tuple[float, float, float] | None = None,
 ) -> Mesh:
     base_parts, blade_parts, tip_parts = cutter_rings(
         main, blade_thickness, base_width, tip_width, base_shape=base_shape
@@ -469,6 +470,30 @@ def build_cutter(
         centre = base.centroid
         blade = _nearest(blade_parts, centre, used)
         tip = _nearest(tip_parts, centre, used)
+        if alignment is not None:
+            ax, ay, ar = alignment
+            hole = Point(ax, ay).buffer(max(0.3, ar), quad_segs=24)
+            base_with_hole = base.difference(hole)
+            base_pieces = [p for p in _ring_parts(base_with_hole) if p.area > 0.01]
+            if not base_pieces:
+                base_pieces = [base]
+            for bp in base_pieces:
+                meshes.append(extrude_polygon(bp, 0.0, base_height))
+            if blade is not None:
+                outer_blade = list(blade.exterior.coords[:-1])
+                inner_blade = list(blade.interiors[0].coords[:-1])
+                blade_layers: list[tuple[float, list[tuple[float, float]], list[tuple[float, float]]]] = [
+                    (max(0.01, base_height - 0.01), outer_blade, inner_blade),
+                ]
+                if sharp_edge and chamfer_height > 0.2 and tip is not None:
+                    outer_tip = list(tip.exterior.coords[:-1])
+                    inner_tip = list(tip.interiors[0].coords[:-1])
+                    blade_layers.append((base_height + blade_depth - chamfer_height, outer_blade, inner_blade))
+                    blade_layers.append((base_height + blade_depth, outer_tip, inner_tip))
+                else:
+                    blade_layers.append((base_height + blade_depth, outer_blade, inner_blade))
+                meshes.append(_ring_loft(blade_layers).oriented())
+            continue
         outer_base = list(base.exterior.coords[:-1])
         inner_base = list(base.interiors[0].coords[:-1])
         if blade is None:
@@ -499,6 +524,9 @@ def build_cutter(
         out = out.append(m)
     if extra_blade and extra_blade_depth > 0.2 and extra_blade_thickness > 0.05:
         extra_ring = main.buffer(blade_thickness + extra_blade_thickness, join_style=1, quad_segs=8).difference(main)
+        if alignment is not None:
+            ax, ay, ar = alignment
+            extra_ring = extra_ring.difference(Point(ax, ay).buffer(max(0.3, ar), quad_segs=24))
         for p in _ring_parts(extra_ring):
             if p.area > 0.001:
                 out = out.append(extrude_polygon(
@@ -543,12 +571,18 @@ def build_stamp(
     clearance: float,
     border: bool = True,
     border_width: float = 1.6,
+    alignment: tuple[float, float, float] | None = None,
 ) -> Mesh:
     stamp_poly = main.buffer(-clearance, join_style=1, quad_segs=8)
     if stamp_poly.is_empty:
         stamp_poly = main.buffer(-min(0.3, clearance), join_style=1, quad_segs=8)
     if stamp_poly.is_empty:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
+    if alignment is not None:
+        ax, ay, ar = alignment
+        stamp_poly = stamp_poly.difference(Point(ax, ay).buffer(max(0.3, ar), quad_segs=24))
+        if stamp_poly.is_empty:
+            stamp_poly = main.buffer(-min(0.3, clearance), join_style=1, quad_segs=8)
     stamp_components = _ring_parts(stamp_poly)
     parts: list[Mesh] = []
     for stamp_component in stamp_components:
@@ -568,16 +602,24 @@ def build_stamp(
             for p in _ring_parts(strip):
                 if p.area > 0.01:
                     parts.append(extrude_polygon(
-                        p, back_height - 0.25, min(relief, 1.4) + 0.25
+                        p, back_height - 0.25, max(0.3, relief) + 0.25
                     ))
         for d in details:
             clipped = d.intersection(stamp_component)
             if clipped.is_empty:
                 continue
             for p in _ring_parts(clipped):
-                # Drop hairline islands; they become fragile spikes on a stamp.
-                if p.area > 0.15:
-                    parts.append(extrude_polygon(p, back_height - 0.25, relief + 0.25))
+                # Drop hairline islands and details that hug the outer edge.
+                # They print as tall, fragile ridges that look like a second
+                # border and never line up with the stamp frame.
+                if p.area <= 0.15:
+                    continue
+                try:
+                    if p.distance(stamp_component.exterior) < max(0.9, clearance + 0.3):
+                        continue
+                except Exception:
+                    pass
+                parts.append(extrude_polygon(p, back_height - 0.25, relief + 0.25))
     if not parts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
     out = parts[0]
@@ -599,6 +641,7 @@ def build_imprint(
     imprint_depth: float,
     base_shape: str = "round",
     sharp_edge: bool = True,
+    alignment: tuple[float, float, float] | None = None,
 ) -> Mesh:
     cutter = build_cutter(
         main,
@@ -610,6 +653,7 @@ def build_imprint(
         base_width=base_width,
         base_shape=base_shape,
         sharp_edge=sharp_edge,
+        alignment=alignment,
     )
     floor_poly = main.buffer(-max(0.5, blade_thickness * 0.8), join_style=2)
     if floor_poly.is_empty:
@@ -643,6 +687,7 @@ def build_sandwich(
     dent_depth: float,
     base_shape: str = "round",
     sharp_edge: bool = True,
+    alignment: tuple[float, float, float] | None = None,
 ) -> Mesh:
     """Cutter + inner sealing ring with crimping bumps."""
     cutter = build_cutter(
@@ -655,6 +700,7 @@ def build_sandwich(
         base_width=base_width,
         base_shape=base_shape,
         sharp_edge=sharp_edge,
+        alignment=alignment,
     )
     seal_outer = main.buffer(-max(0.2, gap), join_style=1, quad_segs=8)
     seal_inner = seal_outer.buffer(-max(0.5, seal_width), join_style=1, quad_segs=8)

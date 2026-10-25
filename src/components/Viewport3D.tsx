@@ -17,6 +17,8 @@ interface Props {
   fitKey: string;
   selectedIds?: string[];
   onSelectAsset?: (id: string, additive: boolean) => void;
+  bedWidth?: number;
+  bedDepth?: number;
 }
 
 const COLORS: Record<string, number> = {
@@ -25,8 +27,67 @@ const COLORS: Record<string, number> = {
   Impronta: 0xf39ab1,
 };
 
+function createBed(width: number, depth: number): THREE.Group {
+  const bed = new THREE.Group();
+  const w = Math.max(20, width);
+  const d = Math.max(20, depth);
+  const bodyMat = new THREE.MeshStandardMaterial({ color: 0x3f303f, roughness: 0.92, metalness: 0.02 });
+  const topMat = new THREE.MeshStandardMaterial({ color: 0x594356, roughness: 0.88, metalness: 0.01 });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, 3, d), bodyMat);
+  body.position.y = -1.55;
+  body.receiveShadow = true;
+  body.castShadow = true;
+  bed.add(body);
+
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(w - 2, d - 2), topMat);
+  top.rotation.x = -Math.PI / 2;
+  top.position.y = -0.02;
+  top.receiveShadow = true;
+  bed.add(top);
+
+  const minor: number[] = [];
+  const major: number[] = [];
+  const startX = -Math.floor((w / 2 - 1) / 10) * 10;
+  const startZ = -Math.floor((d / 2 - 1) / 10) * 10;
+  for (let x = startX; x <= w / 2 - 1; x += 10) {
+    const target = Math.abs((Math.abs(x) % 50)) < 0.01 ? major : minor;
+    target.push(x, 0.002, -d / 2 + 1, x, 0.002, d / 2 - 1);
+  }
+  for (let z = startZ; z <= d / 2 - 1; z += 10) {
+    const target = Math.abs((Math.abs(z) % 50)) < 0.01 ? major : minor;
+    target.push(-w / 2 + 1, 0.002, z, w / 2 - 1, 0.002, z);
+  }
+  const makeGrid = (values: number[], color: number, opacity: number) => {
+    if (!values.length) return null;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(values, 3));
+    return new THREE.LineSegments(
+      geometry,
+      new THREE.LineBasicMaterial({ color, transparent: true, opacity }),
+    );
+  };
+  const minorGrid = makeGrid(minor, 0xf7dfe8, 0.28);
+  const majorGrid = makeGrid(major, 0xfff0f6, 0.5);
+  if (minorGrid) bed.add(minorGrid);
+  if (majorGrid) bed.add(majorGrid);
+
+  const borderPoints = [
+    new THREE.Vector3(-w / 2 + 0.8, 0.004, -d / 2 + 0.8),
+    new THREE.Vector3(w / 2 - 0.8, 0.004, -d / 2 + 0.8),
+    new THREE.Vector3(w / 2 - 0.8, 0.004, d / 2 - 0.8),
+    new THREE.Vector3(-w / 2 + 0.8, 0.004, d / 2 - 0.8),
+  ];
+  const border = new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints(borderPoints),
+    new THREE.LineBasicMaterial({ color: 0xf3c9d7, transparent: true, opacity: 0.45 }),
+  );
+  bed.add(border);
+  return bed;
+}
+
+
 const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
-  { build, showEdges, wireframe, isolate, fitKey, selectedIds = [], onSelectAsset },
+  { build, showEdges, wireframe, isolate, fitKey, selectedIds = [], onSelectAsset, bedWidth = 256, bedDepth = 256 },
   ref,
 ) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -36,8 +97,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     camera: THREE.PerspectiveCamera;
     controls: OrbitControls;
     group: THREE.Group;
-    ground: THREE.Mesh;
-    grid: THREE.GridHelper;
+    bed: THREE.Group;
     fit: () => void;
     view: (kind: "iso" | "top" | "front" | "side") => void;
     resize: () => void;
@@ -53,6 +113,8 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     if (!scene || !model) return;
     const box = new THREE.Box3().setFromObject(model);
     if (box.isEmpty()) return;
+    const bedBox = new THREE.Box3().setFromObject(scene.bed);
+    if (!bedBox.isEmpty()) box.union(bedBox);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z, 10);
@@ -67,12 +129,8 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     scene.camera.updateProjectionMatrix();
     scene.controls.target.copy(center);
     scene.controls.update();
-    scene.ground.position.set(center.x, -0.02, center.z);
-    scene.grid.position.set(center.x, 0, center.z);
-    const gridSize = Math.max(160, Math.ceil(radius / 40) * 40 + 40);
-    if (Math.abs(scene.grid.scale.x - gridSize / 200) > 0.01) {
-      scene.grid.scale.setScalar(gridSize / 200);
-    }
+    scene.controls.minDistance = Math.max(18, radius * 0.08);
+    scene.controls.maxDistance = Math.max(1200, radius * 8);
   };
 
   const setView = (kind: "iso" | "top" | "front" | "side") => {
@@ -81,6 +139,8 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     if (!scene || !model) return;
     const box = new THREE.Box3().setFromObject(model);
     if (box.isEmpty()) return;
+    const bedBox = new THREE.Box3().setFromObject(scene.bed);
+    if (!bedBox.isEmpty()) box.union(bedBox);
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z, 10);
@@ -172,20 +232,8 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     fill.position.set(-100, 80, -60);
     scene.add(fill);
 
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(800, 800),
-      new THREE.MeshStandardMaterial({ color: 0xfffaf6, roughness: 0.96, metalness: 0 }),
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.02;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    const grid = new THREE.GridHelper(200, 20, 0xeec6d5, 0xf4dce5);
-    grid.position.y = 0.01;
-    (grid.material as THREE.Material).transparent = true;
-    (grid.material as THREE.Material).opacity = 0.65;
-    scene.add(grid);
+    const bed = createBed(bedWidth, bedDepth);
+    scene.add(bed);
 
     const group = new THREE.Group();
     group.rotation.x = -Math.PI / 2;
@@ -210,7 +258,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     };
     tick();
 
-    sceneRef.current = { renderer, scene, camera, controls, group, ground, grid, fit: doFit, view: setView, resize };
+    sceneRef.current = { renderer, scene, camera, controls, group, bed, fit: doFit, view: setView, resize };
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
@@ -221,7 +269,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
       renderer.dispose();
       renderer.domElement.remove();
       scene.traverse((obj) => {
-        if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments) {
+        if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments || obj instanceof THREE.LineLoop) {
           obj.geometry?.dispose();
           if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
           else obj.material?.dispose();
@@ -230,6 +278,23 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
       sceneRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    scene.scene.remove(scene.bed);
+    scene.bed.traverse((obj) => {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.LineSegments || obj instanceof THREE.LineLoop) {
+        obj.geometry?.dispose();
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+        else obj.material?.dispose();
+      }
+    });
+    const bed = createBed(bedWidth, bedDepth);
+    scene.scene.add(bed);
+    scene.bed = bed;
+    requestAnimationFrame(doFit);
+  }, [bedWidth, bedDepth]);
 
   useEffect(() => {
     const scene = sceneRef.current;

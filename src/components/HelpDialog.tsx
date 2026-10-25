@@ -44,8 +44,8 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
             <span className="help-num">4</span>
             <Download size={20} />
             <div>
-              <strong>Exporta STL o 3MF</strong>
-              <p>El STL es universal. El 3MF conserva cortador y sello como objetos separados, con nombres y colores, y es el formato recomendado para Bambu Studio.</p>
+              <strong>Elige formato y guarda</strong>
+              <p>STL o 3MF, por diseño o de los seleccionados/todos. Si hay varias piezas o activas la copia del proyecto, se guarda un único ZIP en la ubicación que elijas; si no, se guarda el archivo directo. También puedes descargar solo el proyecto.</p>
             </div>
           </div>
           <div className="help-step">
@@ -56,6 +56,16 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
               <p>Cortador con la base en la cama y filo hacia arriba. Sello con el respaldo en la cama. 0,2 mm de capa, 3–4 perímetros y 15–20 % de relleno.</p>
             </div>
           </div>
+        </div>
+
+        <div className="help-note">
+          <strong>Base, suavizado y alineación</strong>
+          <p>
+            En Avanzado puedes elegir la cama de tu impresora (Bambu, Prusa, Creality, Elegoo, Anycubic, Sovol, QIDI,
+            Voron y más) o introducir medidas personalizadas. El preprocesado suaviza trazos rectos y elimina detalles
+            minúsculos; el punto de alineación añade un agujero mínimo en la base del cortador y en el sello para
+            orientarlos como las marcas de un objetivo. Puedes desactivarlo.
+          </p>
         </div>
 
         <div className="help-note">

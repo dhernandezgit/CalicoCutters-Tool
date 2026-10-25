@@ -29,6 +29,9 @@ export interface DesignSettings {
   lineWidth: number;
   layerHeight: number;
   autoPrintable: boolean;
+  bedModel: string;
+  bedWidth: number;
+  bedDepth: number;
 
   bladeThickness: number;
   bladeDepth: number;
@@ -119,6 +122,16 @@ export interface DesignSettings {
   setStep: number;
   setSpacing: number;
 
+  preprocessSmooth: boolean;
+  preprocessAmount: number;
+  preprocessSimplify: number;
+  preprocessPreserveCorners: boolean;
+  preprocessRemoveTiny: boolean;
+  preprocessMinDetail: number;
+
+  alignmentHole: boolean;
+  alignmentHoleDiameter: number;
+
   /** Colour of this design in preview / 3MF. */
   color?: string;
 }
@@ -207,6 +220,9 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   lineWidth: 0.4,
   layerHeight: 0.2,
   autoPrintable: true,
+  bedModel: "bambu-p2s",
+  bedWidth: 256,
+  bedDepth: 256,
 
   bladeThickness: 0.8,
   bladeDepth: 12,
@@ -234,7 +250,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampBack: 5.5,
   stampRelief: 3,
   stampClearance: 0.8,
-  stampRemoveOuterEdge: false,
+  stampRemoveOuterEdge: true,
   stampEdgeMethod: "preserve",
   stampBorder: true,
   stampBorderWidth: 1.6,
@@ -296,6 +312,16 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   setCount: 3,
   setStep: 0.18,
   setSpacing: 10,
+
+  preprocessSmooth: true,
+  preprocessAmount: 0.15,
+  preprocessSimplify: 0.12,
+  preprocessPreserveCorners: false,
+  preprocessRemoveTiny: true,
+  preprocessMinDetail: 0.8,
+
+  alignmentHole: true,
+  alignmentHoleDiameter: 1.8,
 };
 
 export const PRINTER_PROFILES: Record<
@@ -305,6 +331,36 @@ export const PRINTER_PROFILES: Record<
   fdm04: { label: "FDM 0,4 mm", lineWidth: 0.4, layerHeight: 0.2, minWall: 0.8, tip: 0.4, hole: 2 },
   fdm06: { label: "FDM 0,6 mm", lineWidth: 0.6, layerHeight: 0.3, minWall: 1.2, tip: 0.6, hole: 2.4 },
   resin: { label: "Resina", lineWidth: 0.05, layerHeight: 0.05, minWall: 0.6, tip: 0.3, hole: 1.2 },
+};
+
+export const PRINTER_BEDS: Record<string, { label: string; width: number; depth: number }> = {
+  "bambu-p2s": { label: "Bambu Lab P2S", width: 256, depth: 256 },
+  "bambu-a1mini": { label: "Bambu Lab A1 mini", width: 180, depth: 180 },
+  "bambu-a1": { label: "Bambu Lab A1", width: 256, depth: 256 },
+  "bambu-p1p": { label: "Bambu Lab P1P", width: 256, depth: 256 },
+  "bambu-p1s": { label: "Bambu Lab P1S", width: 256, depth: 256 },
+  "bambu-x1c": { label: "Bambu Lab X1 Carbon", width: 256, depth: 256 },
+  "bambu-x1e": { label: "Bambu Lab X1E", width: 256, depth: 256 },
+  "bambu-h2d": { label: "Bambu Lab H2D", width: 325, depth: 320 },
+  "bambu-h2s": { label: "Bambu Lab H2S", width: 350, depth: 320 },
+  "prusa-mk4": { label: "Prusa MK4 / MK3S+", width: 250, depth: 210 },
+  "prusa-mini": { label: "Prusa MINI+", width: 180, depth: 180 },
+  "prusa-xl": { label: "Prusa XL", width: 360, depth: 360 },
+  "creality-ender3": { label: "Creality Ender-3", width: 220, depth: 220 },
+  "creality-k1": { label: "Creality K1", width: 220, depth: 220 },
+  "creality-k1max": { label: "Creality K1 Max", width: 300, depth: 300 },
+  "creality-k2plus": { label: "Creality K2 Plus", width: 350, depth: 350 },
+  "elegoo-neptune4": { label: "Elegoo Neptune 4", width: 235, depth: 235 },
+  "elegoo-neptune4max": { label: "Elegoo Neptune 4 Max", width: 300, depth: 300 },
+  "anycubic-kobra2": { label: "Anycubic Kobra 2", width: 220, depth: 220 },
+  "anycubic-kobra2max": { label: "Anycubic Kobra 2 Max", width: 300, depth: 300 },
+  "sovol-sv06": { label: "Sovol SV06", width: 220, depth: 220 },
+  "sovol-sv07": { label: "Sovol SV07", width: 300, depth: 300 },
+  "qidi-xplus3": { label: "QIDI X-Plus 3", width: 280, depth: 280 },
+  "qidi-xmax3": { label: "QIDI X-Max 3", width: 325, depth: 325 },
+  "voron24": { label: "Voron 2.4 (350)", width: 350, depth: 350 },
+  "artillery-x2": { label: "Artillery Sidewinder X2", width: 300, depth: 300 },
+  custom: { label: "Cama personalizada", width: 256, depth: 256 },
 };
 
 export const BAMBU_PRINTERS: Record<string, { label: string; width: number; depth: number }> = {

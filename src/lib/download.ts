@@ -1,3 +1,5 @@
+import { zip, type Zippable } from "fflate";
+
 export interface DownloadFile {
   name: string;
   blob: Blob;
@@ -18,19 +20,68 @@ export function downloadBlob(blob: Blob, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export async function downloadFilesSequentially(files: DownloadFile[], delayMs = 180) {
-  for (const file of files) {
-    downloadBlob(file.blob, file.name);
-    if (files.length > 1) await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+export function uniqueDownloadFiles(files: DownloadFile[]): DownloadFile[] {
+  const used = new Set<string>();
+  return files.map((file) => {
+    let name = file.name;
+    if (!used.has(name)) {
+      used.add(name);
+      return file;
+    }
+    const dot = name.lastIndexOf(".");
+    const stem = dot > 0 ? name.slice(0, dot) : name;
+    const ext = dot > 0 ? name.slice(dot) : "";
+    let n = 2;
+    while (used.has(`${stem}-${n}${ext}`)) n += 1;
+    name = `${stem}-${n}${ext}`;
+    used.add(name);
+    return { ...file, name };
+  });
+}
+
+export async function filesToZip(files: DownloadFile[]): Promise<Blob> {
+  const unique = uniqueDownloadFiles(files);
+  const entries: Zippable = {};
+  for (const file of unique) {
+    entries[file.name] = new Uint8Array(await file.blob.arrayBuffer());
   }
+  return new Promise((resolve, reject) => {
+    zip(entries, { level: 6 }, (error, data) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      const copy = new Uint8Array(data.byteLength);
+      copy.set(data);
+      resolve(new Blob([copy.buffer], { type: "application/zip" }));
+    });
+  });
+}
+
+/** Save one file with the native picker, or fall back to a normal download. */
+export async function saveBlobChoosingLocation(
+  blob: Blob,
+  filename: string,
+  description = "Archivo CalicoCutters",
+): Promise<SaveResult> {
+  const result = await saveBlobWithPicker(blob, filename, description);
+  if (result === "unsupported") {
+    downloadBlob(blob, filename);
+    return "saved";
+  }
+  return result;
+}
+
+/** Save a ZIP; this always produces one normal download when pickers fail. */
+export async function saveZipChoosingLocation(
+  files: DownloadFile[],
+  zipName: string,
+): Promise<SaveResult> {
+  const blob = await filesToZip(files);
+  return saveBlobChoosingLocation(blob, zipName, "Archivos CalicoCutters");
 }
 
 type PickerWindow = Window & {
-  showDirectoryPicker?: (opts?: { mode?: string }) => Promise<{
-    getFileHandle: (name: string, opts?: { create?: boolean }) => Promise<{
-      createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
-    }>;
-  }>;
   showSaveFilePicker?: (opts?: {
     suggestedName?: string;
     types?: Array<{ description: string; accept: Record<string, string[]> }>;
@@ -38,23 +89,6 @@ type PickerWindow = Window & {
     createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }>;
   }>;
 };
-
-export async function saveFilesToDirectory(files: DownloadFile[]): Promise<SaveResult> {
-  const picker = (window as PickerWindow).showDirectoryPicker;
-  if (!picker) return "unsupported";
-  try {
-    const dir = await picker({ mode: "readwrite" });
-    for (const file of files) {
-      const handle = await dir.getFileHandle(file.name, { create: true });
-      const writable = await handle.createWritable();
-      await writable.write(file.blob);
-      await writable.close();
-    }
-    return "saved";
-  } catch (error) {
-    return (error as { name?: string })?.name === "AbortError" ? "cancelled" : "unsupported";
-  }
-}
 
 function extensionOf(filename: string): string {
   const i = filename.lastIndexOf(".");
@@ -83,22 +117,6 @@ export async function saveBlobWithPicker(
   } catch (error) {
     return (error as { name?: string })?.name === "AbortError" ? "cancelled" : "unsupported";
   }
-}
-
-/**
- * Ask for a destination.  Chrome/Edge use the native save picker; browsers
- * without the File System Access API fall back to their normal download flow.
- */
-export async function saveFilesChoosingLocation(files: DownloadFile[]): Promise<SaveResult> {
-  if (files.length === 1) {
-    const result = await saveBlobWithPicker(files[0].blob, files[0].name);
-    if (result !== "unsupported") return result;
-  } else {
-    const result = await saveFilesToDirectory(files);
-    if (result !== "unsupported") return result;
-  }
-  await downloadFilesSequentially(files);
-  return "unsupported";
 }
 
 export function safeFileName(input: string, fallback = "calicocutters"): string {

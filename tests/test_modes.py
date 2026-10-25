@@ -314,3 +314,73 @@ def test_invalid_settings_are_clamped_instead_of_crashing():
     assert result["dimensions"]["width"] > 0
     assert result["dimensions"]["height"] > 0
 
+
+def test_stamp_border_is_flush_with_relief_by_default():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "stampBorder": True,
+        "stampRelief": 3,
+    }})
+    mesh = _mesh(result["parts"][0])
+    z_values = {round(float(z), 2) for z in mesh.vertices[:, 2]}
+    assert 8.5 in z_values
+    # The old border stopped at an intermediate 6.9 mm level, creating a step.
+    assert 6.9 not in z_values
+
+
+def test_stamp_interior_outline_near_edge_is_cleaned():
+    from calicocutters.mesh import build_stamp
+    from shapely.geometry import Point
+
+    main = _shape().main_polygon
+    outside_detail = main.buffer(-0.65).difference(main.buffer(-0.8))
+    inside_detail = Point(0, 0).buffer(4)
+    mesh = build_stamp(
+        main,
+        [outside_detail, inside_detail],
+        back_height=5.5,
+        relief=3,
+        clearance=0.8,
+        border=False,
+        alignment=None,
+    )
+    clean = build_stamp(
+        main,
+        [inside_detail],
+        back_height=5.5,
+        relief=3,
+        clearance=0.8,
+        border=False,
+        alignment=None,
+    )
+    assert _mesh({"stl_b64": __import__("base64").b64encode(mesh.stl_bytes()).decode(), "name": "Sello"}).is_watertight
+    assert mesh.volume() == pytest.approx(clean.volume(), rel=0.02)
+
+    from calicocutters.engine import _alignment_locations, _settings, _sized_geometry
+
+    shape = _shape()
+    settings = _settings(DEFAULT_SETTINGS)
+    main, _details, _warnings = _sized_geometry(shape, settings)
+    cutter_hole, stamp_hole = _alignment_locations(main, settings)
+    assert cutter_hole is not None and stamp_hole is not None
+    result = build({"shape": shape.to_dict(), "settings": settings})
+    for part in result["parts"]:
+        mesh = _mesh(part)
+        assert mesh.is_watertight
+        assert mesh.volume > 0
+
+
+def test_custom_bed_size_is_used_by_checks():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter",
+        "bedModel": "custom",
+        "bedWidth": 60,
+        "bedDepth": 60,
+    }})
+    bed_checks = [c for c in result["checks"] if c.get("code") == "bed"]
+    assert bed_checks
+    assert any(c["level"] == "warn" for c in bed_checks)
+
+

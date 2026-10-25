@@ -21,8 +21,11 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Vista previa 3D real, vista 2D, selección múltiple y vista de un solo archivo.
 - Ajustes básicos rápidos y modo avanzado con impresión, base, barras, color, nombres y coste.
 - Comprobaciones de impresión: agua estanco, grosor de pared, filo, holgura, separación entre copias y encaje en cama.
-- Exporta STL y 3MF por archivo o por separado, sin ZIP obligatorio, además de un 3MF conjunto opcional.
-- Guarda junto a cada exportación el proyecto `.calicocutters` completo, con formas, ajustes, nombres y colores.
+- Exporta STL y 3MF de forma individual, de los seleccionados o de todos, guardando un archivo directo o un único ZIP.
+- El proyecto `.calicocutters` se incluye dentro del ZIP por defecto (se puede desactivar); también hay 3MF conjunto y descarga directa por diseño.
+- Base 3D con cama realista (256 × 256 de Bambu Lab P2S por defecto), cuadrícula de 1 cm, muchos perfiles de impresora y dimensiones personalizadas.
+- Preprocesado avanzado: simplificado, suavizado, protección de esquinas y eliminación de detalles minúsculos.
+- Punto de alineación opcional (activo por defecto) en la base del cortador y el sello, como las marcas de un objetivo.
 - El botón **Importar** recupera el proyecto en otro PC sin instalar nada.
 - Peso y coste estimado con precio editable del PLA (14 €/kg por defecto).
 
@@ -73,7 +76,8 @@ Los tests comprueban:
 - Cuchilla: 0,8 mm = 2 líneas.
 - Altura de cuchilla: 12 mm.
 - Base: 3,5 mm de alto × 4 mm de ancho.
-- Sello: 5,5 mm de respaldo + 3 mm de relieve y 0,8 mm de holgura.
+- Sello: 5,5 mm de respaldo + 3 mm de relieve y 0,8 mm de holgura. El borde, si está activo, queda a la misma altura que el relieve; sin borde, la zona exterior queda a la altura de la base.
+- Punto de alineación de 1,8 mm en la base del cortador y el sello (activo por defecto).
 - Stencil: 1,5 mm de lámina y puentes de unión para islas interiores.
 - Cake pop: molde con agujero de palito y prensador a juego.
 - Cama: 256 × 256 mm.

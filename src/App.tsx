@@ -637,6 +637,8 @@ export default function App() {
                 fitKey={fitKey}
                 selectedIds={selectedIds}
                 onSelectAsset={(id, additive) => selectAsset(id, additive ? "toggle" : "single")}
+                bedWidth={primary?.settings.bedWidth ?? 256}
+                bedDepth={primary?.settings.bedDepth ?? 256}
               />
             ) : primary ? (
               <Preview2D shape={primary.shape} lineWidth={primary.settings.lineWidth} />
@@ -649,6 +651,7 @@ export default function App() {
                 {assets.slice(0, 5).map((a) => <span key={a.id} className="legend-item"><i style={{ background: a.color }} />{a.name}</span>)}
                 {assets.length > 5 && <span className="legend-item">+{assets.length - 5}</span>}
                 <span className="legend-dim">{displayBuild.dimensions.width.toFixed(1)} × {displayBuild.dimensions.height.toFixed(1)} mm</span>
+                <span className="legend-dim bed-dim">Cama {primary?.settings.bedWidth?.toFixed(0) ?? 256} × {primary?.settings.bedDepth?.toFixed(0) ?? 256} mm</span>
               </div>
             )}
 

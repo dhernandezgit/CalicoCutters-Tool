@@ -757,6 +757,11 @@ def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0) -> 
             if q.area > 0.02:
                 clipped_details.append(q)
     details = clipped_details
+    # Remove line-art components that hug the outer contour.  They are part of
+    # the silhouette outline, not a printable inner detail, and would otherwise
+    # become a tall, fragile ridge on the stamp.
+    edge_band = max(0.6, min(main.bounds[2] - main.bounds[0], main.bounds[3] - main.bounds[1]) * 0.018)
+    details = [p for p in details if p.distance(main.exterior) > edge_band]
     detail_rings: list[list[Point2]] = []
     for d in details:
         detail_rings.append([(float(x), float(y)) for x, y in d.exterior.coords[:-1]])

@@ -122,6 +122,10 @@ export function applyCheckFix(settings: DesignSettings, code: string): DesignSet
       return { ...settings, cakePopMoldHeight: Math.max(16, settings.cakePopMoldHeight) };
     case "small_set":
       return { ...settings, setCount: Math.max(2, settings.setCount - 1) };
+    case "alignment_hole":
+      return { ...settings, alignmentHoleDiameter: Math.max(settings.lineWidth * 2, 1.6) };
+    case "alignment_space":
+      return { ...settings, baseWidth: Math.max(settings.baseWidth, settings.alignmentHoleDiameter + 1.2) };
     case "sandwich_seal":
       return { ...settings, sandwichSealWidth: Math.max(settings.lineWidth * 2, 4) };
     case "sandwich_dent":
