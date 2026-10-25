@@ -442,6 +442,22 @@ def _ring_parts(geom) -> list[Polygon]:
     return []
 
 
+def _polygon_only(geom) -> Polygon | None:
+    if geom is None or geom.is_empty:
+        return None
+    if isinstance(geom, MultiPolygon):
+        geom = max(geom.geoms, key=lambda p: p.area)
+    if not isinstance(geom, Polygon):
+        return None
+    if not geom.is_valid:
+        geom = geom.buffer(0)
+        if isinstance(geom, MultiPolygon):
+            geom = max(geom.geoms, key=lambda p: p.area)
+    if not isinstance(geom, Polygon) or geom.is_empty or geom.area <= 1e-6:
+        return None
+    return geom
+
+
 def build_cutter(
     main: Polygon,
     *,
@@ -599,16 +615,7 @@ def build_stamp(
                 if p.area <= 0.15:
                     continue
                 try:
-                    if p.distance(stamp_component.exterior) < max(0.9, clearance + 0.3):
-                        continue
-                    sb = stamp_component.bounds
-                    pb = p.bounds
-                    sw, sh = sb[2] - sb[0], sb[3] - sb[1]
-                    pw, ph = pb[2] - pb[0], pb[3] - pb[1]
-                    covers_sheet = sw > 0 and sh > 0 and pw > sw * 0.8 and ph > sh * 0.8
-                    hull = p.convex_hull.area
-                    thin_outline = hull > 1e-6 and (p.area / hull) < 0.4
-                    if covers_sheet and thin_outline:
+                    if p.distance(stamp_component.exterior) < max(0.4, clearance * 0.25):
                         continue
                 except Exception:
                     pass
@@ -1040,6 +1047,82 @@ def build_practice(
     for p in _ring_parts(ring):
         if p.area > 0.01:
             parts.append(extrude_polygon(p, 0.0, max(thickness, wall_height)))
+    out = parts[0]
+    for p in parts[1:]:
+        out = out.append(p)
+    return out
+
+
+def build_bookmark(
+    main: Polygon,
+    details: list[Polygon],
+    *,
+    width: float,
+    height: float,
+    thickness: float,
+    corner: float,
+    margin: float,
+    hole: bool,
+    hole_diameter: float,
+    hole_margin: float,
+    relief: float,
+    style: str = "line",
+    line_width: float = 0.4,
+) -> Mesh:
+    """Flat, printable page bookmark with an optional tassel hole and motif."""
+    w = max(20.0, float(width))
+    h = max(50.0, float(height))
+    body = rounded_rect(w, h, max(0.0, float(corner)))
+    hole_r = max(1.0, float(hole_diameter) / 2)
+    hole_y = h / 2 - max(hole_r + 2.0, float(hole_margin))
+    hole_circle: Polygon | None = None
+    if hole:
+        hole_circle = Point(0, hole_y).buffer(hole_r, quad_segs=32)
+        body = body.difference(hole_circle)
+    parts: list[Mesh] = [extrude_polygon(body, 0.0, max(1.2, thickness))]
+    if style not in {"line", "relief"} or relief <= 0:
+        return parts[0]
+
+    zone_top = (hole_y - hole_r - max(1.0, margin)) if hole else (h / 2 - margin)
+    zone_bottom = -h / 2 + margin
+    zone_h = zone_top - zone_bottom
+    zone_w = w - margin * 2
+    if zone_h < 4 or zone_w < 4:
+        return parts[0]
+    b = main.bounds
+    bw = max(1e-6, b[2] - b[0])
+    bh = max(1e-6, b[3] - b[1])
+    scale = min(zone_w / bw, zone_h / bh)
+    design = affinity.scale(main, scale, scale, origin="center")
+    db = design.bounds
+    dx = 0.0 - (db[0] + db[2]) / 2
+    dy = (zone_top + zone_bottom) / 2 - (db[1] + db[3]) / 2
+    design = affinity.translate(design, dx, dy)
+    design = _polygon_only(design.intersection(body))
+    if design is None:
+        return parts[0]
+
+    if style == "relief":
+        parts.append(extrude_polygon(design, max(0.0, thickness - 0.2), relief + 0.2))
+    else:
+        stroke = max(0.8, line_width * 2)
+        outline = design.buffer(stroke / 2, join_style=1, quad_segs=8).difference(
+            design.buffer(-stroke / 2, join_style=1, quad_segs=8)
+        )
+        for p in _ring_parts(outline):
+            if p.area > 0.02:
+                parts.append(extrude_polygon(p, max(0.0, thickness - 0.2), relief + 0.2))
+        scaled_details: list[Polygon] = []
+        for d in details:
+            q = affinity.scale(d, scale, scale, origin="center")
+            q = affinity.translate(q, dx, dy)
+            q = q.intersection(design)
+            for p in _ring_parts(q):
+                if p.area > 0.08:
+                    scaled_details.append(p)
+        for p in scaled_details:
+            parts.append(extrude_polygon(p, max(0.0, thickness - 0.15), relief + 0.15))
+
     out = parts[0]
     for p in parts[1:]:
         out = out.append(p)

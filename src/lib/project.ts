@@ -1,10 +1,10 @@
 import { DEFAULT_SETTINGS, type DesignAsset, type DesignShape, type DesignSettings } from "../types";
 import { saveBlobWithPicker } from "./download";
 
-const VERSION = 1;
+const VERSION = 2;
 const MODES = new Set([
   "cutter-stamp", "cutter", "stamp", "imprint", "multicutter", "sandwich",
-  "roller", "stencil", "topper", "practice", "cakepop", "cutter-set",
+  "roller", "stencil", "topper", "practice", "cakepop", "cutter-set", "bookmark",
 ]);
 
 function finitePoint(p: unknown): p is [number, number] {
@@ -123,11 +123,20 @@ export function projectFromJson(text: string): { name: string; assets: DesignAss
     let id = String(a.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
     while (usedIds.has(id)) id = `${id}-${Math.random().toString(36).slice(2, 6)}`;
     usedIds.add(id);
+    const migratedSettings = normalizeSettings(a.settings);
+    if ((Number(data.version) || 1) < 2) {
+      // Older projects saved the aggressive preprocessing defaults.  Preserve
+      // thin line-art details unless the user explicitly re-enables them.
+      migratedSettings.preprocessSmooth = false;
+      migratedSettings.preprocessRemoveTiny = false;
+      migratedSettings.preprocessSmoothDetails = false;
+      migratedSettings.stampRemoveOuterEdge = false;
+    }
     return {
       id,
       name: String(a.name || "Diseño").slice(0, 120),
       color: /^#[0-9a-f]{6}$/i.test(a.color) ? a.color : "#f39ab1",
-      settings: normalizeSettings(a.settings),
+      settings: migratedSettings,
       shape: {
         ...a.shape,
         id: String(a.shape.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),

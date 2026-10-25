@@ -676,3 +676,6 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
 .profile-row > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; font-weight: 700; }
 .profile-row .mini-link.danger { color: var(--danger); }
 .view-slider select { width: 100%; padding: 5px 7px; font-size: 10.5px; }
+.mode-group-title { display: inline-flex; align-items: center; gap: 5px; }
+.mode-icon-pair { display: inline-flex; align-items: center; justify-content: center; gap: 2px; }
+.mode-icon-pair svg:last-child { transform: translateY(2px); opacity: .8; }

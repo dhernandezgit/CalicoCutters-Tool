@@ -46,7 +46,7 @@ def test_default_dimensions_and_nested_parts():
         assert mesh.bounds[0][2] == pytest.approx(0.0, abs=0.01)
 
 
-@pytest.mark.parametrize("mode", ["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "roller", "stencil", "topper", "practice", "cakepop", "cutter-set"])
+@pytest.mark.parametrize("mode", ["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "roller", "stencil", "topper", "practice", "cakepop", "cutter-set", "bookmark"])
 def test_all_creation_modes_produce_printable_meshes(mode):
     settings = {
         **DEFAULT_SETTINGS,
@@ -427,3 +427,34 @@ def test_custom_bed_size_is_used_by_checks():
     bed_checks = [c for c in result["checks"] if c.get("code") == "bed"]
     assert bed_checks
     assert any(c["level"] == "warn" for c in bed_checks)
+
+
+def test_bookmark_is_flat_watertight_and_has_a_tassel_hole():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "bookmark",
+    }})
+    assert result["parts"][0]["name"] == "Marcapáginas"
+    mesh = _mesh(result["parts"][0])
+    assert mesh.is_watertight
+    assert mesh.bounds[1][0] - mesh.bounds[0][0] == pytest.approx(50, abs=0.3)
+    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(150, abs=0.3)
+    # The tassel hole is a through-hole: a section across it is not solid.
+    section = mesh.section(plane_origin=[0, 55, 1.2], plane_normal=[0, 0, 1])
+    assert section is not None
+
+
+def test_preprocess_defaults_preserve_fine_details():
+    assert DEFAULT_SETTINGS["preprocessSmooth"] is False
+    assert DEFAULT_SETTINGS["preprocessRemoveTiny"] is False
+    assert DEFAULT_SETTINGS["preprocessSmoothDetails"] is False
+    assert DEFAULT_SETTINGS["stampRemoveOuterEdge"] is False
+
+    from tests.test_engine import _line_art_png
+    from calicocutters.shape import parse_raster
+    shape = parse_raster(_line_art_png(), "line.png", 75)
+    result = build({"shape": shape.to_dict(), "settings": {**DEFAULT_SETTINGS, "mode": "cutter-stamp"}})
+    assert len(shape.details) >= 3
+    assert result["parts"]
+    assert not any("minúsculo" in warning for warning in result["warnings"])
+

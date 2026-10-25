@@ -2,17 +2,28 @@
 import {
   Bookmark,
   Box,
+  CakeSlice,
   ChevronDown,
   ChevronRight,
+  CircleDashed,
   CircleHelp,
+  Cookie,
   Crown,
+  Cylinder,
+  Fingerprint,
+  Flower2,
   Focus,
   Gauge,
+  Gem,
+  Grid3X3,
   Layers,
+  Lollipop,
+  PaintRoller,
+  Puzzle,
   Ruler,
+  Sandwich,
   Scissors,
   SlidersHorizontal,
-  Sparkles,
   Stamp,
   Wand2,
 } from "lucide-react";
@@ -312,47 +323,59 @@ export default function SettingsPanel({
           {
             label: "Galletas",
             basic: true,
+            icon: <Cookie size={12} />,
             modes: [
-              { value: "cutter-stamp" as const, label: "Stamper + cortador", icon: <Layers size={20} />, sub: "El modo por defecto" },
+              { value: "cutter-stamp" as const, label: "Stamper + cortador", icon: <span className="mode-icon-pair"><Scissors size={16} /><Stamp size={14} /></span>, sub: "El modo por defecto" },
               { value: "cutter" as const, label: "Cortador", icon: <Scissors size={20} />, sub: "Contorno exterior" },
-              { value: "imprint" as const, label: "Impronta", icon: <Sparkles size={20} />, sub: "Corte + relieve en una pieza" },
-              { value: "multicutter" as const, label: "Puzzle", icon: <Layers size={20} />, sub: "Rejilla de copias" },
-              { value: "cutter-set" as const, label: "Set de cortadores", icon: <Scissors size={20} />, sub: "Varios tamaños" },
+              { value: "imprint" as const, label: "Impronta", icon: <Fingerprint size={20} />, sub: "Corte + relieve en una pieza" },
+              { value: "multicutter" as const, label: "Puzzle", icon: <Puzzle size={20} />, sub: "Rejilla de copias" },
+              { value: "cutter-set" as const, label: "Set de cortadores", icon: <Layers size={20} />, sub: "Varios tamaños" },
             ],
           },
           {
             label: "Sellos",
             basic: true,
+            icon: <Stamp size={12} />,
             modes: [
               { value: "stamp" as const, label: "Sello", icon: <Stamp size={20} />, sub: "Para marcar detalles" },
             ],
           },
           {
             label: "Sándwich",
-            basic: false,
+            basic: true,
+            icon: <Sandwich size={12} />,
             modes: [
-              { value: "sandwich" as const, label: "Cortador sándwich", icon: <Box size={20} />, sub: "Corte + sellado" },
+              { value: "sandwich" as const, label: "Cortador sándwich", icon: <Sandwich size={20} />, sub: "Corte + sellado" },
             ],
           },
           {
             label: "Rodillo",
-            basic: false,
+            basic: true,
+            icon: <Cylinder size={12} />,
             modes: [
-              { value: "roller" as const, label: "Rodillo de textura", icon: <Crown size={20} />, sub: "Patrón repetido" },
+              { value: "roller" as const, label: "Rodillo de textura", icon: <PaintRoller size={20} />, sub: "Patrón repetido" },
             ],
           },
           {
             label: "Repostería",
-            basic: false,
+            basic: true,
+            icon: <CakeSlice size={12} />,
             modes: [
-              { value: "topper" as const, label: "Topper de tarta", icon: <Crown size={20} />, sub: "Relieve + pin" },
-              { value: "stencil" as const, label: "Stencil", icon: <Layers size={20} />, sub: "Plantilla calada" },
-              { value: "practice" as const, label: "Galleta de práctica", icon: <Scissors size={20} />, sub: "Forma con fondo" },
-              { value: "cakepop" as const, label: "Molde cake pop", icon: <Box size={20} />, sub: "Molde + prensador" },
+              { value: "topper" as const, label: "Topper de tarta", icon: <CakeSlice size={20} />, sub: "Relieve + pin" },
+              { value: "stencil" as const, label: "Stencil", icon: <Grid3X3 size={20} />, sub: "Plantilla calada" },
+              { value: "practice" as const, label: "Galleta de práctica", icon: <CircleDashed size={20} />, sub: "Forma con fondo" },
+              { value: "cakepop" as const, label: "Molde cake pop", icon: <Lollipop size={20} />, sub: "Molde + prensador" },
+            ],
+          },
+          {
+            label: "Papelería",
+            basic: true,
+            icon: <Bookmark size={12} />,
+            modes: [
+              { value: "bookmark" as const, label: "Marcapáginas", icon: <Bookmark size={20} />, sub: "Para páginas de papel" },
             ],
           },
         ]
-          .filter((group) => advanced || group.basic || group.modes.some((m) => m.value === settings.mode))
           .map((group) => {
             const explicitlyOpen = openGroups[group.label];
             const hasActive = group.modes.some((m) => m.value === settings.mode);
@@ -365,7 +388,7 @@ export default function SettingsPanel({
                   aria-expanded={open}
                   onClick={() => setOpenGroups((prev) => ({ ...prev, [group.label]: !open }))}
                 >
-                  <span>{group.label}</span>
+                  <span className="mode-group-title">{group.icon}<span>{group.label}</span></span>
                   {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
                 {open && (
@@ -388,81 +411,79 @@ export default function SettingsPanel({
             );
           })}
 
-        {advanced && (
-          <div className="mode-group">
+        <div className="mode-group">
+          <button
+            type="button"
+            className={`mode-group-head${openGroups.Cerámica ? " open" : ""}`}
+            aria-expanded={!!openGroups.Cerámica}
+            onClick={() => setOpenGroups((prev) => ({ ...prev, Cerámica: !prev.Cerámica }))}
+          >
+            <span className="mode-group-title"><Flower2 size={12} /><span>Cerámica</span></span>
+            {openGroups.Cerámica ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+          </button>
+          {openGroups.Cerámica && (
+          <div className="mode-grid">
             <button
               type="button"
-              className={`mode-group-head${openGroups.Cerámica ? " open" : ""}`}
-              aria-expanded={!!openGroups.Cerámica}
-              onClick={() => setOpenGroups((prev) => ({ ...prev, Cerámica: !prev.Cerámica }))}
+              className="mode-card clay-preset"
+              onClick={() => onChange({
+                mode: "cutter",
+                printer: "fdm04",
+                lineWidth: 0.4,
+                layerHeight: 0.2,
+                bladeThickness: 1.2,
+                bladeDepth: 10,
+                baseHeight: 3,
+                tipWidth: 0.4,
+                stampRelief: 2,
+              })}
             >
-              <span>Cerámica</span>
-              {openGroups.Cerámica ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <Scissors size={20} />
+              <strong>Cortador de arcilla</strong>
+              <small>Pared 1,2 mm y altura 10 mm</small>
             </button>
-            {openGroups.Cerámica && (
-            <div className="mode-grid">
-              <button
-                type="button"
-                className="mode-card clay-preset"
-                onClick={() => onChange({
-                  mode: "cutter",
-                  printer: "fdm04",
-                  lineWidth: 0.4,
-                  layerHeight: 0.2,
-                  bladeThickness: 1.2,
-                  bladeDepth: 10,
-                  baseHeight: 3,
-                  tipWidth: 0.4,
-                  stampRelief: 2,
-                })}
-              >
-                <Scissors size={20} />
-                <strong>Cortador de arcilla</strong>
-                <small>Pared 1,2 mm y altura 10 mm</small>
-              </button>
-              <button
-                type="button"
-                className="mode-card clay-preset"
-                onClick={() => onChange({
-                  mode: "multicutter",
-                  longest: 25,
-                  bladeThickness: 1,
-                  bladeDepth: 8,
-                  baseHeight: 2.5,
-                  baseWidth: 3,
-                  tipWidth: 0.4,
-                  multiRows: 2,
-                  multiCols: 3,
-                  multiSpacing: 4,
-                })}
-              >
-                <Layers size={20} />
-                <strong>Set de pendientes</strong>
-                <small>6 cortadores pequeños</small>
-              </button>
-              <button
-                type="button"
-                className="mode-card clay-preset"
-                onClick={() => onChange({
-                  mode: "stamp",
-                  bladeThickness: 1,
-                  stampBack: 5,
-                  stampRelief: 2,
-                  stampClearance: 0.8,
-                  stampBorder: false,
-                })}
-              >
-                <Stamp size={20} />
-                <strong>Sello de arcilla</strong>
-                <small>Relieve suave sin borde</small>
-              </button>
-            </div>
-            )}
+            <button
+              type="button"
+              className="mode-card clay-preset"
+              onClick={() => onChange({
+                mode: "multicutter",
+                longest: 25,
+                bladeThickness: 1,
+                bladeDepth: 8,
+                baseHeight: 2.5,
+                baseWidth: 3,
+                tipWidth: 0.4,
+                multiRows: 2,
+                multiCols: 3,
+                multiSpacing: 4,
+              })}
+            >
+              <Gem size={20} />
+              <strong>Set de pendientes</strong>
+              <small>6 cortadores pequeños</small>
+            </button>
+            <button
+              type="button"
+              className="mode-card clay-preset"
+              onClick={() => onChange({
+                mode: "stamp",
+                bladeThickness: 1,
+                stampBack: 5,
+                stampRelief: 2,
+                stampClearance: 0.8,
+                stampBorder: false,
+              })}
+            >
+              <Stamp size={20} />
+              <strong>Sello de arcilla</strong>
+              <small>Relieve suave sin borde</small>
+            </button>
           </div>
-        )}
+          )}
+        </div>
       </Section>
 
-      {settings.mode !== "stencil" && (
+      {settings.mode !== "stencil" && settings.mode !== "bookmark" && (
       <Section
         id="size"
         title="Tamaño"
@@ -587,7 +608,7 @@ export default function SettingsPanel({
         <Section id="preprocess" title="Preprocesado del dibujo" icon={<Wand2 size={16} />} summary={settings.preprocessSmooth ? "Suave" : "Original"}>
           <Toggle
             label="Suavizar dibujo"
-            hint="Limpia conexiones rectas y microdientes del trazado sin cambiar el tamaño final."
+            hint="Desactivado por defecto para conservar los detalles finos del dibujo."
             checked={settings.preprocessSmooth}
             onChange={(v) => onChange({ preprocessSmooth: v })}
           />
@@ -620,23 +641,29 @@ export default function SettingsPanel({
                 onChange={(v) => onChange({ preprocessPreserveCorners: v })}
               />
               <Toggle
-                label="Quitar detalles minúsculos"
-                hint="Evita líneas y puntos que se romperían al imprimir."
-                checked={settings.preprocessRemoveTiny}
-                onChange={(v) => onChange({ preprocessRemoveTiny: v })}
+                label="Suavizar también los detalles"
+                hint="Puede perder trazos muy finos. Desactivado por defecto."
+                checked={settings.preprocessSmoothDetails}
+                onChange={(v) => onChange({ preprocessSmoothDetails: v })}
               />
-              {settings.preprocessRemoveTiny && (
-                <NumberField
-                  label="Área mínima de detalle"
-                  value={settings.preprocessMinDetail}
-                  min={0.1}
-                  max={20}
-                  step={0.1}
-                  unit="mm²"
-                  onChange={(v) => onChange({ preprocessMinDetail: v })}
-                />
-              )}
             </>
+          )}
+          <Toggle
+            label="Quitar detalles minúsculos"
+            hint="Puede eliminar detalles del dibujo. Desactivado por defecto."
+            checked={settings.preprocessRemoveTiny}
+            onChange={(v) => onChange({ preprocessRemoveTiny: v })}
+          />
+          {settings.preprocessRemoveTiny && (
+            <NumberField
+              label="Área mínima de detalle"
+              value={settings.preprocessMinDetail}
+              min={0.1}
+              max={20}
+              step={0.1}
+              unit="mm²"
+              onChange={(v) => onChange({ preprocessMinDetail: v })}
+            />
           )}
         </Section>
       )}
@@ -962,6 +989,46 @@ export default function SettingsPanel({
             <NumberField label="Altura de pared" value={settings.practiceWallHeight} min={2} max={20} step={0.5} onChange={(v) => onChange({ practiceWallHeight: v })} />
           </div>
           <NumberField label="Grosor de pared" value={settings.practiceWallWidth} min={0.8} max={5} step={0.1} onChange={(v) => onChange({ practiceWallWidth: v })} />
+        </Section>
+      )}
+
+      {settings.mode === "bookmark" && (
+        <Section id="bookmark" title="Marcapáginas" icon={<Bookmark size={16} />} defaultOpen summary={`${settings.bookmarkWidth.toFixed(0)} × ${settings.bookmarkHeight.toFixed(0)} mm`}>
+          <div className="two-fields">
+            <NumberField label="Ancho" value={settings.bookmarkWidth} min={20} max={150} step={1} onChange={(v) => onChange({ bookmarkWidth: v })} />
+            <NumberField label="Alto" value={settings.bookmarkHeight} min={50} max={300} step={1} onChange={(v) => onChange({ bookmarkHeight: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Grosor" value={settings.bookmarkThickness} min={1.2} max={8} step={0.2} onChange={(v) => onChange({ bookmarkThickness: v })} />
+            <NumberField label="Radio de esquina" value={settings.bookmarkCorner} min={0} max={30} step={0.5} onChange={(v) => onChange({ bookmarkCorner: v })} />
+          </div>
+          <NumberField label="Margen del dibujo" value={settings.bookmarkMargin} min={2} max={30} step={0.5} onChange={(v) => onChange({ bookmarkMargin: v })} />
+          <Toggle
+            label="Agujero para cinta"
+            hint="Un agujero pasante en la parte superior para lana, cinta o cordón."
+            checked={settings.bookmarkHole}
+            onChange={(v) => onChange({ bookmarkHole: v })}
+          />
+          {settings.bookmarkHole && (
+            <div className="two-fields">
+              <NumberField label="Diámetro del agujero" value={settings.bookmarkHoleDiameter} min={2} max={20} step={0.5} onChange={(v) => onChange({ bookmarkHoleDiameter: v })} />
+              <NumberField label="Margen al borde" value={settings.bookmarkHoleMargin} min={5} max={60} step={1} onChange={(v) => onChange({ bookmarkHoleMargin: v })} />
+            </div>
+          )}
+          <div className="two-fields">
+            <NumberField label="Relieve del dibujo" value={settings.bookmarkRelief} min={0} max={3} step={0.1} onChange={(v) => onChange({ bookmarkRelief: v })} />
+            <label className="field-row">
+              <span className="field-label">Estilo del dibujo</span>
+              <span className="field-input">
+                <select value={settings.bookmarkDesignStyle} onChange={(e) => onChange({ bookmarkDesignStyle: e.target.value as DesignSettings["bookmarkDesignStyle"] })}>
+                  <option value="line">Línea</option>
+                  <option value="relief">Silueta</option>
+                  <option value="none">Sin dibujo</option>
+                </select>
+              </span>
+            </label>
+          </div>
+          <div className="inline-hint"><Bookmark size={13} /><span>Lámina plana con diseño en relieve. Si el dibujo tiene muchos detalles finos, usa estilo Línea y revisa la vista previa.</span></div>
         </Section>
       )}
 

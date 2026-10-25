@@ -13,7 +13,8 @@ export type CreateMode =
   | "topper"
   | "practice"
   | "cakepop"
-  | "cutter-set";
+  | "cutter-set"
+  | "bookmark";
 
 export type PrinterProfile = "fdm04" | "fdm06" | "resin";
 
@@ -112,6 +113,17 @@ export interface DesignSettings {
   practiceWallHeight: number;
   practiceWallWidth: number;
 
+  bookmarkWidth: number;
+  bookmarkHeight: number;
+  bookmarkThickness: number;
+  bookmarkCorner: number;
+  bookmarkMargin: number;
+  bookmarkHole: boolean;
+  bookmarkHoleDiameter: number;
+  bookmarkHoleMargin: number;
+  bookmarkRelief: number;
+  bookmarkDesignStyle: "line" | "relief" | "none";
+
   cakePopMoldHeight: number;
   cakePopMoldWall: number;
   cakePopBase: number;
@@ -129,6 +141,7 @@ export interface DesignSettings {
   preprocessAmount: number;
   preprocessSimplify: number;
   preprocessPreserveCorners: boolean;
+  preprocessSmoothDetails: boolean;
   preprocessRemoveTiny: boolean;
   preprocessMinDetail: number;
 
@@ -254,7 +267,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampBack: 5.5,
   stampRelief: 3,
   stampClearance: 0.8,
-  stampRemoveOuterEdge: true,
+  stampRemoveOuterEdge: false,
   stampRecessed: false,
   stampEdgeMethod: "preserve",
   stampBorder: true,
@@ -306,6 +319,17 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   practiceWallHeight: 8,
   practiceWallWidth: 1.4,
 
+  bookmarkWidth: 50,
+  bookmarkHeight: 150,
+  bookmarkThickness: 2.4,
+  bookmarkCorner: 6,
+  bookmarkMargin: 6,
+  bookmarkHole: true,
+  bookmarkHoleDiameter: 6,
+  bookmarkHoleMargin: 10,
+  bookmarkRelief: 0.8,
+  bookmarkDesignStyle: "line",
+
   cakePopMoldHeight: 18,
   cakePopMoldWall: 2.4,
   cakePopBase: 2,
@@ -319,11 +343,12 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   setStep: 0.18,
   setSpacing: 10,
 
-  preprocessSmooth: true,
+  preprocessSmooth: false,
   preprocessAmount: 0.25,
   preprocessSimplify: 0.12,
   preprocessPreserveCorners: false,
-  preprocessRemoveTiny: true,
+  preprocessSmoothDetails: false,
+  preprocessRemoveTiny: false,
   preprocessMinDetail: 0.8,
 
   alignmentHole: true,

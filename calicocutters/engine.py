@@ -16,6 +16,7 @@ from shapely.ops import unary_union
 
 from .mesh import (
     Mesh,
+    build_bookmark,
     build_cake_pop,
     build_cutter,
     build_imprint,
@@ -68,7 +69,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampBack": 5.5,
     "stampRelief": 3.0,
     "stampClearance": 0.8,
-    "stampRemoveOuterEdge": True,
+    "stampRemoveOuterEdge": False,
     "stampRecessed": False,
     "stampEdgeMethod": "preserve",
     "stampBorder": True,
@@ -113,6 +114,16 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "practiceThickness": 3.0,
     "practiceWallHeight": 8.0,
     "practiceWallWidth": 1.4,
+    "bookmarkWidth": 50.0,
+    "bookmarkHeight": 150.0,
+    "bookmarkThickness": 2.4,
+    "bookmarkCorner": 6.0,
+    "bookmarkMargin": 6.0,
+    "bookmarkHole": True,
+    "bookmarkHoleDiameter": 6.0,
+    "bookmarkHoleMargin": 10.0,
+    "bookmarkRelief": 0.8,
+    "bookmarkDesignStyle": "line",
     "cakePopMoldHeight": 18.0,
     "cakePopMoldWall": 2.4,
     "cakePopBase": 2.0,
@@ -124,11 +135,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "setCount": 3,
     "setStep": 0.18,
     "setSpacing": 10.0,
-    "preprocessSmooth": True,
+    "preprocessSmooth": False,
     "preprocessAmount": 0.25,
     "preprocessSimplify": 0.12,
     "preprocessPreserveCorners": False,
-    "preprocessRemoveTiny": True,
+    "preprocessSmoothDetails": False,
+    "preprocessRemoveTiny": False,
     "preprocessMinDetail": 0.8,
     "alignmentHole": True,
     "alignmentHoleDiameter": 1.8,
@@ -144,6 +156,7 @@ PRINTERS = {
 VALID_MODES = {
     "cutter-stamp", "cutter", "stamp", "imprint", "multicutter", "sandwich",
     "roller", "stencil", "topper", "practice", "cakepop", "cutter-set",
+    "bookmark",
 }
 
 # Every numeric setting has a safe range.  Values outside the range are
@@ -202,6 +215,14 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "practiceThickness": (1.0, 12.0),
     "practiceWallHeight": (2.0, 25.0),
     "practiceWallWidth": (0.6, 8.0),
+    "bookmarkWidth": (20.0, 150.0),
+    "bookmarkHeight": (50.0, 300.0),
+    "bookmarkThickness": (1.2, 8.0),
+    "bookmarkCorner": (0.0, 30.0),
+    "bookmarkMargin": (2.0, 30.0),
+    "bookmarkHoleDiameter": (2.0, 20.0),
+    "bookmarkHoleMargin": (5.0, 60.0),
+    "bookmarkRelief": (0.0, 3.0),
     "cakePopMoldHeight": (6.0, 40.0),
     "cakePopMoldWall": (1.2, 8.0),
     "cakePopBase": (1.0, 8.0),
@@ -232,7 +253,8 @@ _BOOLEAN_KEYS = {
     "lockAspect", "autoPrintable", "sharpEdge", "extraBlade",
     "addPressHandle", "pressHandlesBothEnds", "addBar", "stampRemoveOuterEdge", "stampBorder",
     "mirror", "mirrorPair", "stencilBridges", "topperInvert", "stampRecessed",
-    "preprocessSmooth", "preprocessPreserveCorners", "preprocessRemoveTiny",
+    "bookmarkHole",
+    "preprocessSmooth", "preprocessPreserveCorners", "preprocessSmoothDetails", "preprocessRemoveTiny",
     "alignmentHole",
 }
 
@@ -276,6 +298,7 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     out["baseShape"] = str(out.get("baseShape")) if str(out.get("baseShape")) in {"rect", "chamfer", "round"} else "chamfer"
     out["stampEdgeMethod"] = "offset" if str(out.get("stampEdgeMethod")) == "offset" else "preserve"
     out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "random" if str(out.get("stencilPattern")) == "random" else "grid"
+    out["bookmarkDesignStyle"] = str(out.get("bookmarkDesignStyle")) if str(out.get("bookmarkDesignStyle")) in {"line", "relief", "none"} else "line"
     out["bedModel"] = str(out.get("bedModel") or "bambu-p2s")[:40]
     for key in _BOOLEAN_KEYS:
         out[key] = _as_bool(out.get(key))
@@ -332,10 +355,11 @@ def _preprocess_geometry(
         details = new_details
     if not settings["preprocessPreserveCorners"] and settings["preprocessAmount"] > 0:
         main = _smooth_polygon(main, settings["preprocessAmount"])
-        details = [
-            _smooth_polygon(d, settings["preprocessAmount"])
-            for d in details
-        ]
+        if settings.get("preprocessSmoothDetails"):
+            details = [
+                _smooth_polygon(d, settings["preprocessAmount"])
+                for d in details
+            ]
     if settings["preprocessRemoveTiny"]:
         minimum = settings["preprocessMinDetail"]
         before = len(details)
@@ -733,6 +757,19 @@ def _checks(
         if settings["practiceThickness"] < 2:
             out.append(_check("warn", "Fondo de práctica fino", "Usa al menos 3 mm para que no se comba.", "practice_base"))
 
+    if mode == "bookmark":
+        if settings["bookmarkThickness"] < max(1.6, line * 3):
+            out.append(_check("warn", f"Marcapáginas de {settings['bookmarkThickness']:.1f} mm", "Una lámina de menos de 2 mm se dobla. Usa 2–3 mm.", "bookmark_thin"))
+        if settings["bookmarkHeight"] < 80:
+            out.append(_check("warn", f"Marcapáginas de {settings['bookmarkHeight']:.0f} mm", "Para una página de libro suele necesitarse al menos 100 mm.", "bookmark_short"))
+        if settings.get("bookmarkHole"):
+            if settings["bookmarkHoleDiameter"] < line * 2:
+                out.append(_check("warn", "Agujero de cinta demasiado pequeño", "Usa al menos 4–6 mm para pasar una cinta o lana.", "bookmark_hole"))
+            if settings["bookmarkHoleDiameter"] > settings["bookmarkWidth"] * 0.4:
+                out.append(_check("warn", "Agujero de cinta demasiado grande", "Deja al menos 6 mm de material a cada lado.", "bookmark_hole_large"))
+        if settings["bookmarkRelief"] > max(0.2, settings["bookmarkThickness"]):
+            out.append(_check("warn", "Relieve del marcapáginas muy alto", "Reduce el relieve o aumenta el grosor de la lámina.", "bookmark_relief"))
+
     if mode == "cakepop":
         if settings["cakePopMoldWall"] < max(1.2, line * 3):
             out.append(_check("warn", f"Pared del molde de {settings['cakePopMoldWall']:.1f} mm", "Usa al menos 3 líneas para que el molde no se deforme.", "cakepop_wall"))
@@ -981,6 +1018,23 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 wall_width=settings["practiceWallWidth"],
             )
             parts.append(("Galleta de práctica", practice, "#f39ab1"))
+        if settings["mode"] == "bookmark":
+            bookmark = build_bookmark(
+                main,
+                details,
+                width=settings["bookmarkWidth"],
+                height=settings["bookmarkHeight"],
+                thickness=settings["bookmarkThickness"],
+                corner=settings["bookmarkCorner"],
+                margin=settings["bookmarkMargin"],
+                hole=bool(settings["bookmarkHole"]),
+                hole_diameter=settings["bookmarkHoleDiameter"],
+                hole_margin=settings["bookmarkHoleMargin"],
+                relief=settings["bookmarkRelief"],
+                style=str(settings["bookmarkDesignStyle"]),
+                line_width=settings["lineWidth"],
+            )
+            parts.append(("Marcapáginas", bookmark, "#f39ab1"))
         if settings["mode"] == "cakepop":
             tray, plunger = build_cake_pop(
                 main,
