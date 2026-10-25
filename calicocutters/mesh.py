@@ -617,6 +617,15 @@ def build_stamp(
                 try:
                     if p.distance(stamp_component.exterior) < max(0.9, clearance + 0.3):
                         continue
+                    sb = stamp_component.bounds
+                    pb = p.bounds
+                    sw, sh = sb[2] - sb[0], sb[3] - sb[1]
+                    pw, ph = pb[2] - pb[0], pb[3] - pb[1]
+                    covers_sheet = sw > 0 and sh > 0 and pw > sw * 0.8 and ph > sh * 0.8
+                    hull = p.convex_hull.area
+                    thin_outline = hull > 1e-6 and (p.area / hull) < 0.4
+                    if covers_sheet and thin_outline:
+                        continue
                 except Exception:
                     pass
                 parts.append(extrude_polygon(p, back_height - 0.25, relief + 0.25))
