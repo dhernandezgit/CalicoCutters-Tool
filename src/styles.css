@@ -616,3 +616,9 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
 }
 .check-fix { margin-left: auto; flex: none; border: 1.5px solid var(--accent); background: #fff8fb; color: var(--accent3); border-radius: 7px; padding: 4px 7px; font-size: 9.5px; font-weight: 800; display: inline-flex; align-items: center; gap: 3px; }
 .check-fix:hover { background: #fff0f6; border-color: var(--accent2); }
+.mode-group { margin-bottom: 8px; }
+.mode-group:last-child { margin-bottom: 0; }
+.mode-group-label { display: block; margin: 0 0 4px 2px; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--textSoft); }
+.mode-group .mode-grid { gap: 5px; }
+.mode-card.clay-preset { width: 100%; margin-top: 1px; border-color: #e4cdb9; background: #fffaf4; }
+.mode-card.clay-preset:hover { border-color: var(--caramel); }

@@ -18,6 +18,7 @@ from xml.sax.saxutils import escape
 import numpy as np
 from shapely import affinity
 from shapely.geometry import MultiPolygon, Point, Polygon, box
+from shapely.ops import unary_union
 from shapely.geometry.polygon import orient
 
 from .vendor.earcut import earcut
@@ -720,6 +721,92 @@ def build_roller(
             r_in = Point(0, 0).buffer(radius, quad_segs=64)
             ring = r_out.difference(r_in)
             parts.append(extrude_polygon(ring, z0, rim_width))
+    out = parts[0]
+    for p in parts[1:]:
+        out = out.append(p)
+    return out
+
+
+def build_stencil(
+    main: Polygon,
+    *,
+    width: float,
+    height: float,
+    rows: int,
+    cols: int,
+    spacing: float,
+    thickness: float,
+) -> Mesh:
+    """Flat stencil sheet with the motif repeated as through-cut openings."""
+    rows = max(1, int(rows))
+    cols = max(1, int(cols))
+    sheet = box(-width / 2, -height / 2, width / 2, height / 2)
+    b = main.bounds
+    bw = max(1e-6, b[2] - b[0])
+    bh = max(1e-6, b[3] - b[1])
+    cell_w = width / cols
+    cell_h = height / rows
+    scale = min((cell_w - max(0.5, spacing)) / bw, (cell_h - max(0.5, spacing)) / bh)
+    pattern = affinity.scale(main, max(0.05, scale), max(0.05, scale), origin="center")
+    cuts: list[Polygon] = []
+    for r in range(rows):
+        for c in range(cols):
+            cx = -width / 2 + (c + 0.5) * cell_w
+            cy = -height / 2 + (r + 0.5) * cell_h
+            cuts.append(affinity.translate(pattern, cx, cy))
+    holes = unary_union(cuts)
+    result = sheet.difference(holes)
+    parts: list[Mesh] = []
+    for p in _ring_parts(result):
+        if p.area > 0.05:
+            parts.append(extrude_polygon(p, 0.0, max(0.6, thickness)))
+    if not parts:
+        return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
+    out = parts[0]
+    for p in parts[1:]:
+        out = out.append(p)
+    return out
+
+
+def build_topper(
+    main: Polygon,
+    details: list[Polygon],
+    *,
+    thickness: float,
+    relief: float,
+    pin_length: float,
+    pin_width: float,
+) -> Mesh:
+    """Flat cake topper with a printable stake in the same plane."""
+    parts = [extrude_polygon(main, 0.0, max(1.0, thickness))]
+    for d in details:
+        clipped = d.intersection(main)
+        for p in _ring_parts(clipped):
+            if p.area > 0.15:
+                parts.append(extrude_polygon(p, thickness - 0.2, max(0.3, relief) + 0.2))
+    b = main.bounds
+    pin = box(-max(1.0, pin_width) / 2, b[1] - max(2.0, pin_length), max(1.0, pin_width) / 2, b[1] + 0.5)
+    parts.append(extrude_polygon(pin, 0.0, max(1.0, thickness)))
+    out = parts[0]
+    for p in parts[1:]:
+        out = out.append(p)
+    return out
+
+
+def build_practice(
+    main: Polygon,
+    *,
+    thickness: float,
+    wall_height: float,
+    wall_width: float,
+) -> Mesh:
+    """Shallow solid-backed practice cookie with a wall following the outline."""
+    base = extrude_polygon(main, 0.0, max(1.0, thickness))
+    ring = main.buffer(max(0.4, wall_width), join_style=1, quad_segs=8).difference(main)
+    parts = [base]
+    for p in _ring_parts(ring):
+        if p.area > 0.01:
+            parts.append(extrude_polygon(p, 0.0, max(thickness, wall_height)))
     out = parts[0]
     for p in parts[1:]:
         out = out.append(p)

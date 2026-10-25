@@ -8,7 +8,10 @@ export type CreateMode =
   | "imprint"
   | "multicutter"
   | "sandwich"
-  | "roller";
+  | "roller"
+  | "stencil"
+  | "topper"
+  | "practice";
 
 export type PrinterProfile = "fdm04" | "fdm06" | "resin";
 
@@ -76,6 +79,22 @@ export interface DesignSettings {
   rollerRepeatsAround: number;
   rollerRepeatsAlong: number;
   rollerRim: number;
+
+  stencilWidth: number;
+  stencilHeight: number;
+  stencilRows: number;
+  stencilCols: number;
+  stencilSpacing: number;
+  stencilThickness: number;
+
+  topperThickness: number;
+  topperRelief: number;
+  topperPinLength: number;
+  topperPinWidth: number;
+
+  practiceThickness: number;
+  practiceWallHeight: number;
+  practiceWallWidth: number;
 
   /** Colour of this design in preview / 3MF. */
   color?: string;
@@ -217,6 +236,22 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   rollerRepeatsAround: 2,
   rollerRepeatsAlong: 1,
   rollerRim: 2,
+
+  stencilWidth: 100,
+  stencilHeight: 100,
+  stencilRows: 3,
+  stencilCols: 3,
+  stencilSpacing: 3,
+  stencilThickness: 1.5,
+
+  topperThickness: 5,
+  topperRelief: 2,
+  topperPinLength: 40,
+  topperPinWidth: 6,
+
+  practiceThickness: 3,
+  practiceWallHeight: 8,
+  practiceWallWidth: 1.4,
 };
 
 export const PRINTER_PROFILES: Record<

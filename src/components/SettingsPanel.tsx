@@ -198,30 +198,93 @@ export default function SettingsPanel({
       )}
 
       <Section id="mode" title="Qué vas a crear" icon={<Crown size={16} />} defaultOpen summary={settings.mode === "cutter-stamp" ? "2 piezas" : "1 pieza"}>
-        <div className="mode-grid">
-          {[
-            { value: "cutter-stamp" as const, label: "Stamper + cortador", icon: <Layers size={20} />, sub: "El modo por defecto" },
-            { value: "cutter" as const, label: "Solo cortador", icon: <Scissors size={20} />, sub: "Contorno exterior" },
-            { value: "stamp" as const, label: "Solo sello", icon: <Stamp size={20} />, sub: "Para marcar detalles" },
-            { value: "imprint" as const, label: "Impronta", icon: <Sparkles size={20} />, sub: "Corte + relieve en una pieza" },
-            { value: "multicutter" as const, label: "Puzzle", icon: <Layers size={20} />, sub: "Rejilla de copias" },
-            { value: "sandwich" as const, label: "Sándwich", icon: <Box size={20} />, sub: "Corte + sellado" },
-            { value: "roller" as const, label: "Rodillo", icon: <Crown size={20} />, sub: "Textura repetida" },
-          ]
-            .filter((m) => advanced || m.value === settings.mode || ["cutter-stamp", "cutter", "stamp", "imprint"].includes(m.value))
-            .map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              className={`mode-card${settings.mode === m.value ? " on" : ""}`}
-              onClick={() => onChange({ mode: m.value })}
-            >
-              {m.icon}
-              <strong>{m.label}</strong>
-              <small>{m.sub}</small>
-            </button>
+        {[
+          {
+            label: "Galletas",
+            basic: true,
+            modes: [
+              { value: "cutter-stamp" as const, label: "Stamper + cortador", icon: <Layers size={20} />, sub: "El modo por defecto" },
+              { value: "cutter" as const, label: "Cortador", icon: <Scissors size={20} />, sub: "Contorno exterior" },
+              { value: "imprint" as const, label: "Impronta", icon: <Sparkles size={20} />, sub: "Corte + relieve en una pieza" },
+              { value: "multicutter" as const, label: "Puzzle", icon: <Layers size={20} />, sub: "Rejilla de copias" },
+            ],
+          },
+          {
+            label: "Sellos",
+            basic: true,
+            modes: [
+              { value: "stamp" as const, label: "Sello", icon: <Stamp size={20} />, sub: "Para marcar detalles" },
+            ],
+          },
+          {
+            label: "Sándwich",
+            basic: false,
+            modes: [
+              { value: "sandwich" as const, label: "Cortador sándwich", icon: <Box size={20} />, sub: "Corte + sellado" },
+            ],
+          },
+          {
+            label: "Rodillo",
+            basic: false,
+            modes: [
+              { value: "roller" as const, label: "Rodillo de textura", icon: <Crown size={20} />, sub: "Patrón repetido" },
+            ],
+          },
+          {
+            label: "Repostería",
+            basic: false,
+            modes: [
+              { value: "topper" as const, label: "Topper de tarta", icon: <Crown size={20} />, sub: "Relieve + pin" },
+              { value: "stencil" as const, label: "Stencil", icon: <Layers size={20} />, sub: "Plantilla calada" },
+              { value: "practice" as const, label: "Galleta de práctica", icon: <Scissors size={20} />, sub: "Forma con fondo" },
+            ],
+          },
+        ]
+          .filter((group) => advanced || group.basic)
+          .map((group) => (
+            <div className="mode-group" key={group.label}>
+              <span className="mode-group-label">{group.label}</span>
+              <div className="mode-grid">
+                {group.modes.map((m) => (
+                  <button
+                    key={m.value}
+                    type="button"
+                    className={`mode-card${settings.mode === m.value ? " on" : ""}`}
+                    onClick={() => onChange({ mode: m.value })}
+                  >
+                    {m.icon}
+                    <strong>{m.label}</strong>
+                    <small>{m.sub}</small>
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
-        </div>
+
+        {advanced && (
+          <div className="mode-group">
+            <span className="mode-group-label">Cerámica</span>
+            <button
+              type="button"
+              className="mode-card clay-preset"
+              onClick={() => onChange({
+                mode: "cutter",
+                printer: "fdm04",
+                lineWidth: 0.4,
+                layerHeight: 0.2,
+                bladeThickness: 1.2,
+                bladeDepth: 10,
+                baseHeight: 3,
+                tipWidth: 0.4,
+                stampRelief: 2,
+              })}
+            >
+              <Scissors size={20} />
+              <strong>Cortador de arcilla</strong>
+              <small>Aplica pared 1,2 mm y altura 10 mm</small>
+            </button>
+          </div>
+        )}
       </Section>
 
       <Section
@@ -482,6 +545,46 @@ export default function SettingsPanel({
             <NumberField label="A lo largo" value={settings.rollerRepeatsAlong} min={1} max={16} step={1} unit="" onChange={(v) => onChange({ rollerRepeatsAlong: Math.round(v) })} />
           </div>
           <NumberField label="Borde de extremo" value={settings.rollerRim} min={0} max={8} step={0.5} onChange={(v) => onChange({ rollerRim: v })} />
+        </Section>
+      )}
+
+      {settings.mode === "stencil" && (
+        <Section id="stencil" title="Stencil" icon={<Layers size={16} />} defaultOpen summary={`${settings.stencilWidth.toFixed(0)} × ${settings.stencilHeight.toFixed(0)} mm`}>
+          <div className="two-fields">
+            <NumberField label="Ancho de lámina" value={settings.stencilWidth} min={30} max={250} step={1} onChange={(v) => onChange({ stencilWidth: v })} />
+            <NumberField label="Alto de lámina" value={settings.stencilHeight} min={30} max={250} step={1} onChange={(v) => onChange({ stencilHeight: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Filas" value={settings.stencilRows} min={1} max={10} step={1} unit="" onChange={(v) => onChange({ stencilRows: Math.round(v) })} />
+            <NumberField label="Columnas" value={settings.stencilCols} min={1} max={10} step={1} unit="" onChange={(v) => onChange({ stencilCols: Math.round(v) })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Separación" value={settings.stencilSpacing} min={1} max={20} step={0.5} onChange={(v) => onChange({ stencilSpacing: v })} />
+            <NumberField label="Grosor" value={settings.stencilThickness} min={0.6} max={4} step={0.1} onChange={(v) => onChange({ stencilThickness: v })} />
+          </div>
+        </Section>
+      )}
+
+      {settings.mode === "topper" && (
+        <Section id="topper" title="Topper de tarta" icon={<Crown size={16} />} defaultOpen summary={`${settings.topperThickness.toFixed(1)} mm base`}>
+          <div className="two-fields">
+            <NumberField label="Grosor de base" value={settings.topperThickness} min={1} max={12} step={0.5} onChange={(v) => onChange({ topperThickness: v })} />
+            <NumberField label="Altura de relieve" value={settings.topperRelief} min={0.2} max={6} step={0.2} onChange={(v) => onChange({ topperRelief: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Largo del pin" value={settings.topperPinLength} min={5} max={120} step={1} onChange={(v) => onChange({ topperPinLength: v })} />
+            <NumberField label="Ancho del pin" value={settings.topperPinWidth} min={2} max={20} step={0.5} onChange={(v) => onChange({ topperPinWidth: v })} />
+          </div>
+        </Section>
+      )}
+
+      {settings.mode === "practice" && (
+        <Section id="practice" title="Galleta de práctica" icon={<Scissors size={16} />} defaultOpen summary={`${settings.practiceWallHeight.toFixed(0)} mm pared`}>
+          <div className="two-fields">
+            <NumberField label="Grosor del fondo" value={settings.practiceThickness} min={1} max={10} step={0.5} onChange={(v) => onChange({ practiceThickness: v })} />
+            <NumberField label="Altura de pared" value={settings.practiceWallHeight} min={2} max={20} step={0.5} onChange={(v) => onChange({ practiceWallHeight: v })} />
+          </div>
+          <NumberField label="Grosor de pared" value={settings.practiceWallWidth} min={0.8} max={5} step={0.1} onChange={(v) => onChange({ practiceWallWidth: v })} />
         </Section>
       )}
 

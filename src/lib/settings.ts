@@ -84,6 +84,14 @@ export function applyCheckFix(settings: DesignSettings, code: string): DesignSet
       return settings.sizeMode === "longest"
         ? { ...settings, longest: Math.max(20, settings.longest * 0.85) }
         : { ...settings, width: Math.max(20, settings.width * 0.85), height: Math.max(20, settings.height * 0.85) };
+    case "stencil_thin":
+      return { ...settings, stencilThickness: Math.max(1.5, settings.stencilThickness) };
+    case "topper_pin":
+      return { ...settings, topperPinWidth: Math.max(6, settings.topperPinWidth) };
+    case "practice_wall":
+      return { ...settings, practiceWallWidth: Math.max(1.2, settings.practiceWallWidth) };
+    case "roller_bore":
+      return { ...settings, rollerBore: Math.max(0, Math.min(settings.rollerBore, settings.rollerDiameter * 0.5)) };
     default:
       return applyPrintableSettings(settings);
   }
@@ -96,5 +104,8 @@ export function modeLabel(mode: DesignSettings["mode"]): string {
   if (mode === "multicutter") return "Puzzle";
   if (mode === "sandwich") return "Sándwich";
   if (mode === "roller") return "Rodillo";
+  if (mode === "stencil") return "Stencil";
+  if (mode === "topper") return "Topper";
+  if (mode === "practice") return "Práctica";
   return "Impronta";
 }

@@ -17,9 +17,12 @@ from .mesh import (
     Mesh,
     build_cutter,
     build_imprint,
+    build_practice,
     build_roller,
     build_sandwich,
     build_stamp,
+    build_stencil,
+    build_topper,
     extrude_polygon,
     rounded_rect,
     three_mf_bytes,
@@ -81,6 +84,19 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "rollerRepeatsAround": 2,
     "rollerRepeatsAlong": 1,
     "rollerRim": 2.0,
+    "stencilWidth": 100.0,
+    "stencilHeight": 100.0,
+    "stencilRows": 3,
+    "stencilCols": 3,
+    "stencilSpacing": 3.0,
+    "stencilThickness": 1.5,
+    "topperThickness": 5.0,
+    "topperRelief": 2.0,
+    "topperPinLength": 40.0,
+    "topperPinWidth": 6.0,
+    "practiceThickness": 3.0,
+    "practiceWallHeight": 8.0,
+    "practiceWallWidth": 1.4,
 }
 
 PRINTERS = {
@@ -110,6 +126,9 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
         "multiSpacing", "sandwichSealWidth", "sandwichGap", "sandwichDentSize",
         "sandwichDentSpacing", "sandwichDentDepth", "rollerDiameter",
         "rollerLength", "rollerRelief", "rollerBore", "rollerRim",
+        "stencilWidth", "stencilHeight", "stencilSpacing", "stencilThickness",
+        "topperThickness", "topperRelief", "topperPinLength", "topperPinWidth",
+        "practiceThickness", "practiceWallHeight", "practiceWallWidth",
     ):
         out[key] = float(out[key])
     return out
@@ -313,6 +332,34 @@ def _checks(
             "Una pared alta y delgada puede oscilar, despegarse o romperse con el tiempo. Sube el grosor a 3 líneas o baja la profundidad a 12 mm.",
             "tall_blade",
         ))
+    if settings["mode"] == "stencil" and settings["stencilThickness"] < max(0.8, line * 2):
+        out.append(_check(
+            "warn",
+            f"Stencil de {settings['stencilThickness']:.1f} mm",
+            "Una lámina tan fina se puede romper al despegar. Usa al menos 1,5 mm.",
+            "stencil_thin",
+        ))
+    if settings["mode"] == "topper" and settings["topperPinWidth"] < max(3.0, line * 4):
+        out.append(_check(
+            "warn",
+            f"Pin de {settings['topperPinWidth']:.1f} mm",
+            "Un pin estrecho se dobla o se rompe dentro del bizcocho. Usa al menos 6 mm.",
+            "topper_pin",
+        ))
+    if settings["mode"] == "practice" and settings["practiceWallWidth"] < max(0.8, line * 2):
+        out.append(_check(
+            "warn",
+            f"Pared de práctica de {settings['practiceWallWidth']:.1f} mm",
+            "La pared puede romperse al desmoldar. Usa al menos 2 líneas.",
+            "practice_wall",
+        ))
+    if settings["mode"] == "roller" and settings["rollerBore"] > max(0.0, settings["rollerDiameter"] * 0.55):
+        out.append(_check(
+            "warn",
+            f"Eje de {settings['rollerBore']:.1f} mm",
+            "El eje es demasiado grande para el diámetro del rodillo; deja al menos 3 mm de pared.",
+            "roller_bore",
+        ))
     out.append(_check(
         "warn" if warnings else "ok",
         f"{len(warnings)} aviso(s) de geometría" if warnings else "Geometría validada",
@@ -462,6 +509,35 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 rim=settings["rollerRim"],
             )
             parts.append(("Rodillo", roller, "#f39ab1"))
+        if settings["mode"] == "stencil":
+            stencil = build_stencil(
+                main,
+                width=settings["stencilWidth"],
+                height=settings["stencilHeight"],
+                rows=int(settings["stencilRows"]),
+                cols=int(settings["stencilCols"]),
+                spacing=settings["stencilSpacing"],
+                thickness=settings["stencilThickness"],
+            )
+            parts.append(("Stencil", stencil, "#f39ab1"))
+        if settings["mode"] == "topper":
+            topper = build_topper(
+                main,
+                details,
+                thickness=settings["topperThickness"],
+                relief=settings["topperRelief"],
+                pin_length=settings["topperPinLength"],
+                pin_width=settings["topperPinWidth"],
+            )
+            parts.append(("Topper", topper, "#f39ab1"))
+        if settings["mode"] == "practice":
+            practice = build_practice(
+                main,
+                thickness=settings["practiceThickness"],
+                wall_height=settings["practiceWallHeight"],
+                wall_width=settings["practiceWallWidth"],
+            )
+            parts.append(("Galleta de práctica", practice, "#f39ab1"))
     except Exception as exc:
         raise ValueError(f"No se pudo generar la geometría: {exc}") from exc
     if not parts:

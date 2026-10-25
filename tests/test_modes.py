@@ -46,7 +46,7 @@ def test_default_dimensions_and_nested_parts():
         assert mesh.bounds[0][2] == pytest.approx(0.0, abs=0.01)
 
 
-@pytest.mark.parametrize("mode", ["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "roller"])
+@pytest.mark.parametrize("mode", ["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "roller", "stencil", "topper", "practice"])
 def test_all_creation_modes_produce_printable_meshes(mode):
     settings = {
         **DEFAULT_SETTINGS,
