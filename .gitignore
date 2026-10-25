@@ -11,7 +11,6 @@ venv/
 *.log
 .DS_Store
 Thumbs.db
-test_*.py
 thumb_*.png
 detail_mask.png
 sil_mask.png
