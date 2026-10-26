@@ -45,7 +45,7 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
             <Download size={20} />
             <div>
               <strong>Elige formato y guarda</strong>
-              <p>STL, OBJ, 3MF o PDF de contorno, por diseño o de los seleccionados/todos. Cortador y sello van juntos en el mismo archivo. Se pide una ubicación por archivo y el navegador propone la misma carpeta; el proyecto se guarda también allí. También puedes descargar solo el proyecto.</p>
+              <p>STL, OBJ, SVG, 3MF, PDF de contorno o mockup PNG, por diseño o de los seleccionados/todos. Cortador y sello van juntos en el mismo archivo. Se pide una ubicación por archivo y el navegador propone la misma carpeta; el proyecto se guarda también allí.</p>
             </div>
           </div>
           <div className="help-step">
@@ -65,6 +65,15 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
             materiales sólidos, bicolor, degradado, glitter o seda; masa con galleta suelta, regla y moneda;
             medidas 3D y centro de giro movible. Haz clic en la pieza o en la masa para orbitar alrededor de ese punto;
             con el botón derecho desplazas la vista. También hay captura PNG, pantalla completa y ajuste de cámara.
+          </p>
+        </div>
+
+        <div className="help-note">
+          <strong>Preparación y primera impresión</strong>
+          <p>
+            Antes de exportar, revisa la pieza desde arriba, de lado y por debajo y comprueba que el filo sea continuo.
+            Empieza con un tamaño de 3–4 pulgadas, imprime una prueba, mide el lado mayor y pruébala con masa fría.
+            El panel de comprobaciones incluye atajos de vista y consejos de imagen para siluetas limpias.
           </p>
         </div>
 

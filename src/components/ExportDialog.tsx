@@ -12,10 +12,12 @@ import {
 import { combineBinaryStls } from "../lib/stl";
 import { binaryStlsToObj } from "../lib/obj";
 import { outlinePdf } from "../lib/pdf";
+import { createMockup } from "../lib/mockup";
+import { outlineSvg } from "../lib/svg";
 import { projectBlob, projectFileName } from "../lib/project";
 import Toggle from "./Toggle";
 
-type Format = "stl" | "obj" | "pdf" | "3mf" | "3mf-set";
+type Format = "stl" | "obj" | "svg" | "pdf" | "3mf" | "3mf-set";
 type Scope = "selected" | "all";
 
 export default function ExportDialog({
@@ -50,9 +52,10 @@ export default function ExportDialog({
   const formatLabel =
     format === "stl" ? "STL"
       : format === "obj" ? "OBJ"
-        : format === "pdf" ? "PDF de contorno"
-          : format === "3mf" ? "3MF por diseño"
-            : "3MF conjunto";
+        : format === "svg" ? "SVG de contorno"
+          : format === "pdf" ? "PDF de contorno"
+            : format === "3mf" ? "3MF por diseño"
+              : "3MF conjunto";
 
   const buildable = useMemo(() => assets.filter((a) => a.build), [assets]);
   const chosen = useMemo(
@@ -70,11 +73,14 @@ export default function ExportDialog({
     blob: projectFile,
   };
 
-  const filesFor = async (asset: AssetRow, kind: "stl" | "obj" | "pdf" | "3mf"): Promise<DownloadFile[]> => {
+  const filesFor = async (asset: AssetRow, kind: "stl" | "obj" | "svg" | "pdf" | "3mf"): Promise<DownloadFile[]> => {
     const base = safeFileName(asset.name);
     const parts = asset.build?.parts ?? [];
     if (kind === "pdf") {
       return [{ name: `${base}-contorno.pdf`, blob: outlinePdf(asset) }];
+    }
+    if (kind === "svg") {
+      return [{ name: `${base}-contorno.svg`, blob: outlineSvg(asset) }];
     }
     if (kind === "stl") {
       if (!parts.length) return [];
@@ -122,7 +128,7 @@ export default function ExportDialog({
     onToast(message);
   };
 
-  const downloadOne = async (asset: AssetRow, kind: "stl" | "obj" | "pdf" | "3mf") => {
+  const downloadOne = async (asset: AssetRow, kind: "stl" | "obj" | "svg" | "pdf" | "3mf") => {
     if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
     if (!asset.build) return onToast("Este diseño todavía no tiene geometría.");
     setBusy(true);
@@ -137,6 +143,23 @@ export default function ExportDialog({
       );
     } catch (error) {
       const message = `No se pudo exportar: ${String((error as Error)?.message || error)}`;
+      setStatus(message);
+      onToast(message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const downloadMockup = async (asset: AssetRow) => {
+    if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
+    setBusy(true);
+    setStatus(`Preparando mockup de ${asset.name}…`);
+    try {
+      const image = await createMockup(asset, asset.build);
+      const result = await saveBlobChoosingLocation(image.blob, image.name, "Mockup PNG");
+      finish(result, `Mockup PNG guardado: ${image.name}`);
+    } catch (error) {
+      const message = `No se pudo crear el mockup: ${String((error as Error)?.message || error)}`;
       setStatus(message);
       onToast(message);
     } finally {
@@ -212,7 +235,9 @@ export default function ExportDialog({
                         <button type="button" className="soft-button" title="Cortador y sello en un solo archivo STL." onClick={() => downloadOne(asset, "stl")} disabled={engineBusy || busy || !asset.build}>STL</button>
                         <button type="button" className="soft-button" title="Mallas agrupadas en un archivo OBJ." onClick={() => downloadOne(asset, "obj")} disabled={engineBusy || busy || !asset.build}>OBJ</button>
                         <button type="button" className="soft-button" title="Cortador y sello en un solo archivo 3MF." onClick={() => downloadOne(asset, "3mf")} disabled={engineBusy || busy || !asset.build}>3MF</button>
+                        <button type="button" className="soft-button" title="Contorno vectorial SVG." onClick={() => downloadOne(asset, "svg")} disabled={engineBusy || busy}>SVG</button>
                         <button type="button" className="soft-button" title="Contorno imprimible en PDF." onClick={() => downloadOne(asset, "pdf")} disabled={engineBusy || busy}>PDF</button>
+                        <button type="button" className="soft-button" title="Mockup PNG para catálogo o redes." onClick={() => downloadMockup(asset)} disabled={engineBusy || busy}>PNG</button>
                       </div>
                     </div>
                   );
@@ -238,6 +263,7 @@ export default function ExportDialog({
                 <div className="segmented">
                   <button type="button" className={format === "stl" ? "on" : ""} onClick={() => setFormat("stl")}>STL</button>
                   <button type="button" className={format === "obj" ? "on" : ""} onClick={() => setFormat("obj")}>OBJ</button>
+                  <button type="button" className={format === "svg" ? "on" : ""} onClick={() => setFormat("svg")}>SVG</button>
                   <button type="button" className={format === "3mf" ? "on" : ""} onClick={() => setFormat("3mf")}>3MF</button>
                   <button type="button" className={format === "pdf" ? "on" : ""} onClick={() => setFormat("pdf")}>PDF</button>
                   <button type="button" className={format === "3mf-set" ? "on" : ""} onClick={() => setFormat("3mf-set")}>3MF conjunto</button>

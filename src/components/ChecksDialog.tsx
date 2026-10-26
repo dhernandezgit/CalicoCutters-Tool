@@ -6,11 +6,15 @@ export default function ChecksDialog({
   onClose,
   checks,
   onApplyFix,
+  onView,
+  onExport,
 }: {
   open: boolean;
   onClose: () => void;
   checks: PrintCheck[];
   onApplyFix?: (code: string) => void;
+  onView?: (kind: "top" | "front" | "side" | "bottom") => void;
+  onExport?: () => void;
 }) {
   if (!open) return null;
   return (
@@ -40,6 +44,24 @@ export default function ChecksDialog({
               )}
             </div>
           ))}
+        </div>
+        <div className="preflight-card">
+          <div>
+            <span className="eyebrow">Antes de imprimir</span>
+            <strong>Revisión rápida del modelo</strong>
+            <p>Mira la pieza desde arriba, de lado y por debajo. Comprueba que el filo es continuo y que no hay islas sueltas.</p>
+          </div>
+          <div className="preflight-actions">
+            {onView && (
+              <>
+                <button type="button" className="soft-button" onClick={() => onView("top")}>Superior</button>
+                <button type="button" className="soft-button" onClick={() => onView("side")}>Lateral</button>
+                <button type="button" className="soft-button" onClick={() => onView("bottom")}>Inferior</button>
+              </>
+            )}
+            {onExport && <button type="button" className="soft-button" onClick={onExport}>Exportar</button>}
+          </div>
+          <small>Después imprime una prueba, mide el lado mayor y pruébala con masa fría antes de hacer una tanda.</small>
         </div>
         <div className="help-note soft">
           <p>

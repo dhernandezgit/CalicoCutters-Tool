@@ -532,6 +532,13 @@ export default function SettingsPanel({
           ]}
           onChange={(v) => onChange({ sizeMode: v })}
         />
+        <div className="size-presets">
+          <span>Tamaño recomendado</span>
+          <button type="button" className={settings.sizeMode === "longest" && Math.abs(settings.longest - 76) < 0.6 ? "on" : ""} onClick={() => onChange({ sizeMode: "longest", longest: 76 })}>3″</button>
+          <button type="button" className={settings.sizeMode === "longest" && Math.abs(settings.longest - 89) < 0.6 ? "on" : ""} onClick={() => onChange({ sizeMode: "longest", longest: 89 })}>3,5″</button>
+          <button type="button" className={settings.sizeMode === "longest" && Math.abs(settings.longest - 102) < 0.6 ? "on" : ""} onClick={() => onChange({ sizeMode: "longest", longest: 102 })}>4″</button>
+          <small>para empezar</small>
+        </div>
         {settings.sizeMode === "longest" ? (
           <NumberField
             label="Lado mayor del diseño"

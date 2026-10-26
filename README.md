@@ -1,12 +1,12 @@
 # CalicoCutters
 
-**Versión 0.4.0** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.5.0** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
 - Web: `https://dhernandezgit.github.io/CalicoCutters-Tool/web/`
 - Repo: `https://github.com/dhernandezgit/CalicoCutters-Tool`
-- Formatos de salida: **STL**, **OBJ**, **3MF** y **PDF de contorno**, más el proyecto `.calicocutters` importable
+- Formatos de salida: **STL**, **OBJ**, **SVG**, **3MF**, **PDF de contorno** y **mockup PNG**, más el proyecto `.calicocutters` importable
 - Modo por defecto: **Stamper + cortador** (2 piezas, sello dentro del cortador)
 
 ## Qué hace
@@ -27,6 +27,8 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - **Medidas 3D** con líneas y cotas de ancho, fondo y alto.
 - **Modo oscuro** manual y según la preferencia del sistema.
 - **Buscador de ajustes** por nombre y contenido de cada sección.
+- **Flujo guiado**: presets de 3–4 pulgadas, consejos de imagen, revisión superior/lateral/inferior y checklist de primera impresión.
+- **Mockup PNG** para catálogo o redes y **SVG** de contorno para edición o listings.
 - **Multicortador** de una sola pieza: varias copias comparten una placa de presión y se cortan de una vez.
 - **Rodillo de textura avanzado**: patrones repetido, ladrillo y reflejado; giro del origen, margen, inversión, grosor posterior, borde exterior y curvas de profundidad.
 - **Bandeja de cake pop** opcional: hueco girado y dimensionable, holgura, margen, longitud de apoyo y altura.
@@ -36,7 +38,7 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - **Perfil del relieve del sello** (recto, chaflán o redondeado) y engrosado de líneas finas para decorar sin perder detalle.
 - **Forma del mango de presión**: redonda, redondeada o rectangular.
 - Comprobaciones de impresión: agua estanco, grosor de pared, filo, holgura, separación entre copias y encaje en cama.
-- Exporta STL, OBJ y 3MF de forma individual, de los seleccionados o de todos. Cortador y sello van juntos en el mismo archivo. La exportación PDF genera una hoja imprimible con el contorno y las cotas.
+- Exporta STL, OBJ y 3MF de forma individual, de los seleccionados o de todos; incluye SVG y PDF de contorno y un mockup PNG por diseño. Cortador y sello van juntos en el mismo archivo.
 - Se pide una ubicación por archivo y el navegador propone la misma carpeta que el primer archivo; el proyecto `.calicocutters` se guarda también allí. También hay 3MF conjunto.
 - Base 3D con cama realista (256 × 256 de Bambu Lab P2S por defecto), cuadrícula de 1 cm, muchos perfiles de impresora y dimensiones personalizadas.
 - Preprocesado avanzado: simplificado, suavizado, protección de esquinas y eliminación de detalles minúsculos.

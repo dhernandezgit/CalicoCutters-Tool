@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.5.0 — 2026-10-26
+
+Aplicación pulida: mockups de catálogo, SVG, flujo de revisión y ayuda de preparación.
+
+### Salida y catálogo
+
+- **SVG de contorno** para edición, corte o listings.
+- **Mockup PNG 1200 × 1200** con marca, dimensiones, modo y acabado, generado localmente.
+- Botones por diseño para STL, OBJ, SVG, 3MF, PDF y PNG.
+- Formatos de lote STL / OBJ / SVG / 3MF / PDF / 3MF conjunto.
+
+### Flujo y calidad
+
+- Presets de tamaño recomendado de 3, 3,5 y 4 pulgadas.
+- Consejos de imagen para siluetas limpias y detalles imprimibles.
+- Revisión preflight con vistas superior, lateral e inferior y exportación directa.
+- Checklist de primera impresión y prueba con masa fría.
+- Vista inferior de la cámara y ayuda actualizada.
+
+### Calidad
+
+- 54 tests, typecheck y build de producción.
+
 ## 0.4.0 — 2026-10-26
 
 Rodillo de textura avanzado, bandeja de cake pop y base para nuevas fases de paridad.

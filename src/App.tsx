@@ -1061,7 +1061,21 @@ export default function App() {
         plaPricePerKg={plaPricePerKg}
       />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
-      <ChecksDialog open={checksOpen} onClose={() => setChecksOpen(false)} checks={checks} onApplyFix={applyCheck} />
+      <ChecksDialog
+        open={checksOpen}
+        onClose={() => setChecksOpen(false)}
+        checks={checks}
+        onApplyFix={applyCheck}
+        onView={(kind) => {
+          setChecksOpen(false);
+          setTab("3d");
+          window.setTimeout(() => viewportRef.current?.view(kind), 60);
+        }}
+        onExport={() => {
+          setChecksOpen(false);
+          if (assets.length) setExportOpen(true);
+        }}
+      />
       <DonateDialog open={donateOpen} onClose={() => setDonateOpen(false)} />
       <TextDialog
         open={textOpen}

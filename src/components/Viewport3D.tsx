@@ -13,7 +13,7 @@ import {
 export interface Viewport3DHandle {
   fit: () => void;
   fitModel: () => void;
-  view: (kind: "iso" | "top" | "front" | "side") => void;
+  view: (kind: "iso" | "top" | "front" | "side" | "bottom") => void;
   screenshot: () => string | null;
 }
 
@@ -623,7 +623,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     group: THREE.Group;
     bed: THREE.Group;
     fit: () => void;
-    view: (kind: "iso" | "top" | "front" | "side") => void;
+    view: (kind: "iso" | "top" | "front" | "side" | "bottom") => void;
     resize: () => void;
   } | null>(null);
   const modelRef = useRef<THREE.Group | null>(null);
@@ -667,7 +667,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     if (centerMarkerRef.current) centerMarkerRef.current.visible = false;
   };
 
-  const setView = (kind: "iso" | "top" | "front" | "side") => {
+  const setView = (kind: "iso" | "top" | "front" | "side" | "bottom") => {
     const scene = sceneRef.current;
     const model = modelRef.current;
     if (!scene || !model) return;
@@ -685,6 +685,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     const fitWidth = fitHeight / Math.max(1, scene.camera.aspect);
     const distance = Math.max(fitHeight, fitWidth) * (Math.max(size.x, size.y, size.z) > 120 ? 1.42 : 1.18) + radius * 0.08;
     if (kind === "top") scene.camera.position.set(center.x, center.y + distance, center.z + 0.01);
+    else if (kind === "bottom") scene.camera.position.set(center.x, center.y - distance, center.z + 0.01);
     else if (kind === "front") scene.camera.position.set(center.x, center.y + radius * 0.25, center.z + distance);
     else if (kind === "side") scene.camera.position.set(center.x + distance, center.y + radius * 0.25, center.z + 0.01);
     else {

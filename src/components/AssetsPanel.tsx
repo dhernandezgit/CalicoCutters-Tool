@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Check, Copy, Eye, FolderOpen, ImagePlus, Plus, RefreshCw, Shapes, Sparkles, Trash2, Type, Upload } from "lucide-react";
+import { Check, Copy, Eye, FolderOpen, ImagePlus, Info, Plus, RefreshCw, Shapes, Sparkles, Trash2, Type, Upload } from "lucide-react";
 import type { BuildResult, DesignAsset, DesignShape } from "../types";
 import { modeLabel } from "../lib/settings";
 import { BUILTIN_SHAPES } from "../data/shapes";
@@ -52,6 +52,7 @@ export default function AssetsPanel({
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [over, setOver] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
 
   const pick = (files: FileList | null) => {
     if (files?.length) onFiles(Array.from(files));
@@ -115,6 +116,23 @@ export default function AssetsPanel({
           <FolderOpen size={14} /> Elegir
         </button>
       </div>
+
+      <button type="button" className="asset-tips-toggle" onClick={() => setTipsOpen((value) => !value)} aria-expanded={tipsOpen}>
+        <Info size={13} /> {tipsOpen ? "Ocultar consejos" : "Consejos para una buena silueta"}
+      </button>
+      {tipsOpen && (
+        <div className="asset-tips">
+          <strong>Antes de subir</strong>
+          <span>Un contorno claro y cerrado funciona mejor que una foto con sombras o fondos.</span>
+          <ul>
+            <li>Usa arte de un solo color o siluetas con buen contraste.</li>
+            <li>Evita textos diminutos y líneas de menos de 0,8 mm.</li>
+            <li>Engrosa cuellos y puntas; conecta islas sueltas.</li>
+            <li>Para empezar, prueba 3–4 pulgadas (76–102 mm).</li>
+          </ul>
+          <span>Revisa siempre la vista superior, lateral e inferior antes de exportar.</span>
+        </div>
+      )}
 
       <div className="asset-tools">
         <button type="button" onClick={() => inputRef.current?.click()}><Plus size={13} /> Añadir</button>
