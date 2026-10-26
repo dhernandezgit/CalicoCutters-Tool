@@ -71,7 +71,7 @@ export default function StatusBar({
         </button>
       )}
       <span className="status-lang">ES</span>
-      <span className="status-version">v0.5.1</span>
+      <span className="status-version">v0.6.0</span>
       {building && (
         <div className="statusbar-progress" role="status" aria-live="polite">
           <div className="statusbar-progress-bar" />

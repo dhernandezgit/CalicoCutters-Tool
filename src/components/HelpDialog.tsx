@@ -99,10 +99,10 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
         <div className="help-note">
           <strong>Más que un cortador</strong>
           <p>
-            El menú “Qué vas a crear” agrupa galletas, sellos, sándwich, rodillo, repostería, papelería y cerámica:
-            stamper + cortador, cortador, impronta, multicortador de placa compartida, set de tamaños, sello,
-            sándwich, rodillo de textura, topper, stencil, galleta de práctica, molde cake pop, pinza de página
-            plana con bisagras vivas y perfil de arcilla.
+            El menú “Qué vas a crear” agrupa galletas, sellos, sándwich, rodillo, repostería y papelería:
+            cortador + sello, cortador, cortador con relieve, sello, sándwich, rodillo de textura, topper,
+            stencil, galleta de práctica, molde cake pop y pinza de página plana con bisagras vivas.
+            Cada tipo cambia el resultado; no hay variantes que repitan el mismo cortador.
           </p>
         </div>
 

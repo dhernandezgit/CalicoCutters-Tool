@@ -144,17 +144,17 @@ export function applyCheckFix(settings: DesignSettings, code: string): DesignSet
 }
 
 export function modeLabel(mode: DesignSettings["mode"]): string {
-  if (mode === "cutter-stamp") return "Stamper + cortador";
-  if (mode === "cutter") return "Solo cortador";
-  if (mode === "stamp") return "Solo sello";
+  if (mode === "cutter-stamp") return "Cortador + sello";
+  if (mode === "cutter") return "Cortador";
+  if (mode === "stamp") return "Sello";
   if (mode === "multicutter") return "Multicortador";
-  if (mode === "sandwich") return "Sándwich";
-  if (mode === "roller") return "Rodillo";
-  if (mode === "stencil") return "Stencil";
-  if (mode === "topper") return "Topper";
-  if (mode === "practice") return "Práctica";
-  if (mode === "cakepop") return "Cake pop";
+  if (mode === "sandwich") return "Cortador sándwich";
+  if (mode === "roller") return "Rodillo de textura";
+  if (mode === "stencil") return "Plantilla stencil";
+  if (mode === "topper") return "Topper para tarta";
+  if (mode === "practice") return "Galleta de práctica";
+  if (mode === "cakepop") return "Molde cake pop";
   if (mode === "cutter-set") return "Set de cortadores";
   if (mode === "bookmark") return "Pinza de página";
-  return "Impronta";
+  return "Cortador con relieve";
 }

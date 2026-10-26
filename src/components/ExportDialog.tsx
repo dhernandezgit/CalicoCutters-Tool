@@ -311,7 +311,7 @@ export default function ExportDialog({
               <strong>Impresión</strong>
               <p>
                 {settings.mode === "cutter-stamp"
-                  ? "Base plana sobre la cama y sin soportes. En Stamper + cortador, el sello va dentro del cortador."
+                  ? "Base plana sobre la cama y sin soportes. En Cortador + sello, el sello va dentro del cortador."
                   : settings.mode === "stencil"
                     ? "Lámina plana sobre la cama. Revisa que los puentes y las islas queden unidos en la vista previa."
                     : settings.mode === "cakepop"

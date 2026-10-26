@@ -11,10 +11,8 @@ import {
   Crown,
   Cylinder,
   Fingerprint,
-  Flower2,
   Focus,
   Gauge,
-  Gem,
   Grid3X3,
   Layers,
   Lollipop,
@@ -352,17 +350,19 @@ export default function SettingsPanel({
       )}
 
       <Section id="mode" title="Qué vas a crear" icon={<Crown size={16} />} defaultOpen summary={build ? `${build.parts.length} pieza${build.parts.length === 1 ? "" : "s"}` : (settings.mode === "cutter-stamp" || settings.mode === "cakepop" ? "2 piezas" : "1 pieza")}>
+        <p className="mode-guide">
+          Elige por resultado: cortar, marcar, sellar, texturizar o decorar. Cada tipo produce una herramienta distinta;
+          no hay variantes que repitan el mismo cortador.
+        </p>
         {[
           {
             label: "Galletas",
             basic: true,
             icon: <Cookie size={12} />,
             modes: [
-              { value: "cutter-stamp" as const, label: "Stamper + cortador", icon: <span className="mode-icon-pair"><Scissors size={16} /><Stamp size={14} /></span>, sub: "El modo por defecto" },
-              { value: "cutter" as const, label: "Cortador", icon: <Scissors size={20} />, sub: "Contorno exterior" },
-              { value: "imprint" as const, label: "Impronta", icon: <Fingerprint size={20} />, sub: "Corte + relieve en una pieza" },
-              { value: "multicutter" as const, label: "Multicortador", icon: <Grid3X3 size={20} />, sub: "Base común para varias copias" },
-              { value: "cutter-set" as const, label: "Set de cortadores", icon: <Layers size={20} />, sub: "Varios tamaños" },
+              { value: "cutter-stamp" as const, label: "Cortador + sello", icon: <span className="mode-icon-pair"><Scissors size={16} /><Stamp size={14} /></span>, sub: "Corta y marca con dos piezas" },
+              { value: "cutter" as const, label: "Cortador", icon: <Scissors size={20} />, sub: "Solo el contorno, sin relieve" },
+              { value: "imprint" as const, label: "Cortador con relieve", icon: <Fingerprint size={20} />, sub: "Corte y dibujo en una pieza" },
             ],
           },
           {
@@ -370,7 +370,7 @@ export default function SettingsPanel({
             basic: true,
             icon: <Stamp size={12} />,
             modes: [
-              { value: "stamp" as const, label: "Sello", icon: <Stamp size={20} />, sub: "Para marcar detalles" },
+              { value: "stamp" as const, label: "Sello de relieve", icon: <Stamp size={20} />, sub: "Marca detalles sin cortar" },
             ],
           },
           {
@@ -378,7 +378,7 @@ export default function SettingsPanel({
             basic: true,
             icon: <Sandwich size={12} />,
             modes: [
-              { value: "sandwich" as const, label: "Cortador sándwich", icon: <Sandwich size={20} />, sub: "Corte + sellado" },
+              { value: "sandwich" as const, label: "Cortador sándwich", icon: <Sandwich size={20} />, sub: "Corta y sella el borde" },
             ],
           },
           {
@@ -386,7 +386,7 @@ export default function SettingsPanel({
             basic: true,
             icon: <Cylinder size={12} />,
             modes: [
-              { value: "roller" as const, label: "Rodillo de textura", icon: <PaintRoller size={20} />, sub: "Patrón repetido" },
+              { value: "roller" as const, label: "Rodillo de textura", icon: <PaintRoller size={20} />, sub: "Textura repetida para masas" },
             ],
           },
           {
@@ -394,10 +394,10 @@ export default function SettingsPanel({
             basic: true,
             icon: <CakeSlice size={12} />,
             modes: [
-              { value: "topper" as const, label: "Topper de tarta", icon: <CakeSlice size={20} />, sub: "Relieve + pin" },
-              { value: "stencil" as const, label: "Stencil", icon: <Grid3X3 size={20} />, sub: "Plantilla calada" },
-              { value: "practice" as const, label: "Galleta de práctica", icon: <CircleDashed size={20} />, sub: "Forma con fondo" },
-              { value: "cakepop" as const, label: "Molde cake pop", icon: <Lollipop size={20} />, sub: "Molde + prensador" },
+              { value: "topper" as const, label: "Topper para tarta", icon: <CakeSlice size={20} />, sub: "Adorno con varilla" },
+              { value: "stencil" as const, label: "Plantilla stencil", icon: <Grid3X3 size={20} />, sub: "Para cacao o aerógrafo" },
+              { value: "practice" as const, label: "Galleta de práctica", icon: <CircleDashed size={20} />, sub: "Base sólida para glaseado" },
+              { value: "cakepop" as const, label: "Molde cake pop", icon: <Lollipop size={20} />, sub: "Molde, prensador y bandeja" },
             ],
           },
           {
@@ -431,6 +431,7 @@ export default function SettingsPanel({
                         key={m.value}
                         type="button"
                         className={`mode-card${settings.mode === m.value ? " on" : ""}`}
+                        title={m.sub}
                         onClick={() => onChange({ mode: m.value })}
                       >
                         {m.icon}
@@ -444,76 +445,6 @@ export default function SettingsPanel({
             );
           })}
 
-        <div className="mode-group">
-          <button
-            type="button"
-            className={`mode-group-head${openGroups.Cerámica ? " open" : ""}`}
-            aria-expanded={!!openGroups.Cerámica}
-            onClick={() => setOpenGroups((prev) => ({ ...prev, Cerámica: !prev.Cerámica }))}
-          >
-            <span className="mode-group-title"><Flower2 size={12} /><span>Cerámica</span></span>
-            {openGroups.Cerámica ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-          </button>
-          {openGroups.Cerámica && (
-          <div className="mode-grid">
-            <button
-              type="button"
-              className="mode-card clay-preset"
-              onClick={() => onChange({
-                mode: "cutter",
-                printer: "fdm04",
-                lineWidth: 0.4,
-                layerHeight: 0.2,
-                bladeThickness: 1.2,
-                bladeDepth: 10,
-                baseHeight: 3,
-                tipWidth: 0.4,
-                stampRelief: 2,
-              })}
-            >
-              <Scissors size={20} />
-              <strong>Cortador de arcilla</strong>
-              <small>Pared 1,2 mm y altura 10 mm</small>
-            </button>
-            <button
-              type="button"
-              className="mode-card clay-preset"
-              onClick={() => onChange({
-                mode: "multicutter",
-                longest: 25,
-                bladeThickness: 1,
-                bladeDepth: 8,
-                baseHeight: 2.5,
-                baseWidth: 3,
-                tipWidth: 0.4,
-                multiRows: 2,
-                multiCols: 3,
-                multiSpacing: 4,
-              })}
-            >
-              <Gem size={20} />
-              <strong>Set de pendientes</strong>
-              <small>6 cortadores pequeños</small>
-            </button>
-            <button
-              type="button"
-              className="mode-card clay-preset"
-              onClick={() => onChange({
-                mode: "stamp",
-                bladeThickness: 1,
-                stampBack: 5,
-                stampRelief: 2,
-                stampClearance: 0.8,
-                stampBorder: false,
-              })}
-            >
-              <Stamp size={20} />
-              <strong>Sello de arcilla</strong>
-              <small>Relieve suave sin borde</small>
-            </button>
-          </div>
-          )}
-        </div>
       </Section>
 
       {settings.mode !== "stencil" && settings.mode !== "bookmark" && (

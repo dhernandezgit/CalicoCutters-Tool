@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.0 — 2026-10-26
+
+Curaduría del menú de creación y aclaración de cada tipo de herramienta.
+
+### Menú final
+
+- Se retiraron del selector **Set de cortadores**, **Multicortador** y los presets de
+  Cerámica porque repetían variantes del mismo cortador o solo cambiaban ajustes.
+- Los proyectos antiguos con esos modos siguen abriéndose por compatibilidad.
+- Se aclararon nombres y descripciones: Cortador + sello, Cortador, Cortador con
+  relieve, Sello de relieve, Cortador sándwich, Rodillo de textura, Topper para tarta,
+  Plantilla stencil, Galleta de práctica, Molde cake pop y Pinza de página.
+- Guía en el selector: elegir por resultado, no por variantes repetidas.
+
+### Calidad
+
+- 57 tests, typecheck y build.
+
 ## 0.5.1 — 2026-10-26
 
 Corrección de geometría con ilustraciones multiparte y ajuste del dibujo por tipo.
@@ -7,7 +25,7 @@ Corrección de geometría con ilustraciones multiparte y ajuste del dibujo por t
 ### Correcciones
 
 - Corregido el error `'MultiPolygon' object has no attribute 'exterior'` en el sellado del cortador de sándwich y en extrusión de geometrías multiparte.
-- Los sellos individuales usan el tamaño completo del diseño; la holgura del cortador solo se aplica a Stamper + cortador.
+- Los sellos individuales usan el tamaño completo del diseño; la holgura del cortador solo se aplica a Cortador + sello.
 - El rodillo conserva los detalles interiores del dibujo además de la silueta.
 
 ### Calidad

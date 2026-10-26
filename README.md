@@ -1,13 +1,13 @@
 # CalicoCutters
 
-**Versión 0.5.1** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.6.0** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
 - Web: `https://dhernandezgit.github.io/CalicoCutters-Tool/web/`
 - Repo: `https://github.com/dhernandezgit/CalicoCutters-Tool`
 - Formatos de salida: **STL**, **OBJ**, **SVG**, **3MF**, **PDF de contorno** y **mockup PNG**, más el proyecto `.calicocutters` importable
-- Modo por defecto: **Stamper + cortador** (2 piezas, sello dentro del cortador)
+- Modo por defecto: **Cortador + sello** (2 piezas, sello dentro del cortador)
 
 ## Qué hace
 
@@ -15,12 +15,12 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Crea siluetas desde texto con tipografía, espaciado, mayúsculas y unión por la base.
 - Vectoriza dibujos de líneas y conserva los detalles interiores para el sello.
 - Genera un cortador exterior con cuchilla, base y mango opcional (desactivado por defecto).
-- Genera un sello coordinado con respaldo y relieve; en Stamper + cortador se muestra dentro del cortador.
+- Genera un sello coordinado con respaldo y relieve; en Cortador + sello se muestra dentro del cortador.
 - Relieve positivo, relieve negativo hundido, borde a ras del dibujo, par espejo y mangos en uno o ambos extremos.
-- Menú agrupado y plegable por **Galletas, Sellos, Sándwich, Rodillo, Repostería, Papelería y Cerámica**:
-  Stamper + cortador, cortador, impronta, multicortador, set de tamaños, sello, sándwich,
-  rodillo de textura, topper, stencil, galleta de práctica, molde cake pop,
-  pinza de página y perfiles de arcilla. Todos los tipos están disponibles también en Básico.
+- Menú agrupado y plegable por **Galletas, Sellos, Sándwich, Rodillo, Repostería y Papelería**:
+  Cortador + sello, cortador, cortador con relieve, sello, sándwich, rodillo de textura,
+  topper, stencil, galleta de práctica, molde cake pop y pinza de página.
+  Todos los tipos están disponibles también en Básico.
 - **Pinza de página plana**: dos placas rectangulares con tres bisagras vivas, pestaña de apertura y dibujo calado. Se imprime tumbada, sin soportes y sin montaje.
 - **Visualización 3D tipo CookieCAD V8**: 14 superficies de color, mármol, madera o color propio; materiales sólido, bicolor, degradado, glitter y seda; masa, galleta suelta, regla y moneda.
 - **Centro de giro movible**: haz clic en cualquier punto del modelo o de la masa para orbitar alrededor de ese punto; también puedes desplazar con el botón derecho.
@@ -29,7 +29,6 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - **Buscador de ajustes** por nombre y contenido de cada sección.
 - **Flujo guiado**: presets de 3–4 pulgadas, consejos de imagen, revisión superior/lateral/inferior y checklist de primera impresión.
 - **Mockup PNG** para catálogo o redes y **SVG** de contorno para edición o listings.
-- **Multicortador** de una sola pieza: varias copias comparten una placa de presión y se cortan de una vez.
 - **Rodillo de textura avanzado**: patrones repetido, ladrillo y reflejado; giro del origen, margen, inversión, grosor posterior, borde exterior y curvas de profundidad.
 - **Bandeja de cake pop** opcional: hueco girado y dimensionable, holgura, margen, longitud de apoyo y altura.
 - Perfiles guardables de fabricación y preprocesado; opción de incluir el tamaño final y la escena de la vista previa.
@@ -82,7 +81,7 @@ Los tests comprueban:
 - Parseo y normalización de SVG, huecos y transforms.
 - Vectorización de dibujos de líneas, PNG transparente y arte coloreado sobre blanco.
 - Extrusiones y loft watertight.
-- Todos los modos, incluyendo stencil, topper, cake pop, práctica y set de cortadores.
+- Todos los modos actuales y compatibilidad de lectura con modos antiguos.
 - Avisos de imprimibilidad y correcciones aplicables.
 - Exportación STL y 3MF con objetos separados y colocación sin solapes.
 - Importación de proyectos y normalización de ajustes.
