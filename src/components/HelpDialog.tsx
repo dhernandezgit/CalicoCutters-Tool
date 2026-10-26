@@ -45,7 +45,7 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
             <Download size={20} />
             <div>
               <strong>Elige formato y guarda</strong>
-              <p>STL o 3MF, por diseño o de los seleccionados/todos. Cortador y sello van juntos en el mismo archivo. Se pide una ubicación por archivo y el navegador propone la misma carpeta; el proyecto se guarda también allí. También puedes descargar solo el proyecto.</p>
+              <p>STL, OBJ, 3MF o PDF de contorno, por diseño o de los seleccionados/todos. Cortador y sello van juntos en el mismo archivo. Se pide una ubicación por archivo y el navegador propone la misma carpeta; el proyecto se guarda también allí. También puedes descargar solo el proyecto.</p>
             </div>
           </div>
           <div className="help-step">
@@ -79,10 +79,11 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
         </div>
 
         <div className="help-note">
-          <strong>Perfiles</strong>
+          <strong>Perfiles, búsqueda y tema</strong>
           <p>
-            En Avanzado puedes guardar tus ajustes de cuchilla, base, sello, cama y preprocesado con un nombre.
-            Aplícalos después a otros diseños sin repetir la configuración.
+            En Avanzado puedes guardar ajustes de cuchilla, base, sello, cama y preprocesado, incluyendo opcionalmente
+            el tamaño final y la escena de la vista previa. El buscador de ajustes filtra por nombre y contenido.
+            El botón de tema de la cabecera alterna entre modo claro y oscuro y recuerda tu elección.
           </p>
         </div>
 

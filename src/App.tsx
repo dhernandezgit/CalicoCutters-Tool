@@ -11,6 +11,7 @@ import {
   HelpCircle,
   Layers,
   Maximize2,
+  Moon,
   MousePointer2,
   Move3D,
   Palette,
@@ -23,6 +24,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Stamp,
+  Sun,
   Upload,
 } from "lucide-react";
 import { usePythonEngine } from "./hooks/usePythonEngine";
@@ -56,7 +58,16 @@ import Logo from "./components/Logo";
 
 const ASSET_COLORS = ["#f39ab1", "#b7a4e8", "#f6c177", "#8ed1c3", "#f08a8a", "#8bb8f0", "#e7b98a"];
 const PREVIEW_KEY = "calicocutters-preview-v1";
+const THEME_KEY = "calicocutters-theme";
 const DOUGH_SCENE_MODES = new Set(["cutter", "cutter-stamp", "stamp", "imprint", "multicutter", "sandwich", "cutter-set"]);
+
+function initialTheme(): "light" | "dark" {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "light" || saved === "dark") return saved;
+  } catch { /* ignore */ }
+  return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 function loadPreviewPreferences(): PreviewPreferences {
   try {
@@ -169,6 +180,7 @@ export default function App() {
   const [fileBusy, setFileBusy] = useState(false);
   const [projectName, setProjectName] = useState("mi-coleccion");
   const [advanced, setAdvanced] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark">(initialTheme);
   const [tab, setTab] = useState<"3d" | "2d">("3d");
   const [isolate, setIsolate] = useState<"all" | "cutter" | "stamp" | "imprint">("all");
   const [showEdges, setShowEdges] = useState(false);
@@ -223,6 +235,11 @@ export default function App() {
   useEffect(() => {
     try { localStorage.setItem(PREVIEW_KEY, JSON.stringify(preview)); } catch { /* ignore */ }
   }, [preview]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem(THEME_KEY, theme); } catch { /* ignore */ }
+  }, [theme]);
 
   const updatePreview = useCallback((patch: Partial<PreviewPreferences>) => {
     setPreview((current) => ({ ...current, ...patch }));
@@ -682,6 +699,9 @@ export default function App() {
           />
           <button type="button" className="icon-text" onClick={saveProject} title="Guardar proyecto"><Save size={16} /> Guardar</button>
           <button type="button" className="icon-text" onClick={() => projectInputRef.current?.click()} title="Abrir proyecto"><FolderOpen size={16} /> Importar</button>
+          <button type="button" className="icon-text theme-toggle" onClick={() => setTheme((value) => value === "dark" ? "light" : "dark")} title={theme === "dark" ? "Cambiar a modo claro" : "Cambiar a modo oscuro"}>
+            {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />} {theme === "dark" ? "Claro" : "Oscuro"}
+          </button>
           <button type="button" className="icon-text" onClick={() => setHelpOpen(true)}><HelpCircle size={16} /> Ayuda</button>
           <button type="button" className="primary" onClick={() => assets.length ? setExportOpen(true) : setToast("Añade un diseño primero.")}><Upload size={16} /> Exportar</button>
         </div>
@@ -1005,6 +1025,8 @@ export default function App() {
             onApplyPrintable={applyPrintable}
             onOpenChecks={() => setChecksOpen(true)}
             onExport={() => assets.length ? setExportOpen(true) : setToast("Añade un diseño primero.")}
+            preview={preview}
+            onPreviewChange={updatePreview}
             advanced={advanced}
             setAdvanced={setAdvanced}
           />

@@ -23,13 +23,15 @@ import {
   Ruler,
   Sandwich,
   Scissors,
+  Search,
   SlidersHorizontal,
   Stamp,
   Wand2,
 } from "lucide-react";
 import type { BuildResult, DesignSettings, DesignShape, PrintCheck } from "../types";
 import { DEFAULT_SETTINGS, PRINTER_BEDS, PRINTER_PROFILES } from "../types";
-import Section from "./Section";
+import type { PreviewPreferences } from "../lib/preview";
+import Section, { SettingsSearchContext } from "./Section";
 import Toggle from "./Toggle";
 
 function levelOf(checks: PrintCheck[]): "ok" | "warn" | "error" {
@@ -43,6 +45,8 @@ interface SavedProfile {
   name: string;
   savedAt: string;
   settings: DesignSettings;
+  includeSize?: boolean;
+  preview?: PreviewPreferences;
 }
 
 const PROFILE_KEY = "calicocutters-profiles";
@@ -53,7 +57,10 @@ function loadProfiles(): SavedProfile[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((p) => p && typeof p.name === "string" && p.settings).slice(0, 30);
+    return parsed
+      .filter((p) => p && typeof p.name === "string" && p.settings)
+      .slice(0, 30)
+      .map((p) => ({ ...p, includeSize: p.includeSize !== false }));
   } catch {
     return [];
   }
@@ -193,7 +200,11 @@ export default function SettingsPanel({
   onRenameAll,
   plaPricePerKg = 14,
   onPlaPriceChange,
+  preview,
+  onPreviewChange,
 }: {
+  preview?: PreviewPreferences;
+  onPreviewChange?: (patch: Partial<PreviewPreferences>) => void;
   settings: DesignSettings;
   shape: DesignShape | null;
   build: BuildResult | null;
@@ -219,6 +230,9 @@ export default function SettingsPanel({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ Galletas: true });
   const [profiles, setProfiles] = useState<SavedProfile[]>(() => loadProfiles());
   const [profileName, setProfileName] = useState("");
+  const [includeProfileSize, setIncludeProfileSize] = useState(true);
+  const [includeProfileScene, setIncludeProfileScene] = useState(false);
+  const [settingsSearch, setSettingsSearch] = useState("");
   useEffect(() => {
     setNameDraft(assetName || selectionNames[0] || "");
   }, [assetName, selectionNames[0]]);
@@ -256,6 +270,8 @@ export default function SettingsPanel({
       name,
       savedAt: new Date().toISOString(),
       settings: { ...DEFAULT_SETTINGS, ...rest },
+      includeSize: includeProfileSize,
+      preview: includeProfileScene ? preview : undefined,
     };
     const existing = profiles.find((p) => p.name.toLowerCase() === name.toLowerCase());
     const next = existing
@@ -267,7 +283,13 @@ export default function SettingsPanel({
 
   const applyProfile = (profile: SavedProfile) => {
     const { color: _color, ...rest } = profile.settings;
-    onChange(rest);
+    if (profile.includeSize === false) {
+      const { sizeMode: _sizeMode, longest: _longest, width: _width, height: _height, lockAspect: _lock, ...withoutSize } = rest;
+      onChange(withoutSize);
+    } else {
+      onChange(rest);
+    }
+    if (profile.preview && onPreviewChange) onPreviewChange(profile.preview);
   };
 
   const removeProfile = (id: string) => {
@@ -275,6 +297,7 @@ export default function SettingsPanel({
   };
 
   return (
+    <SettingsSearchContext.Provider value={settingsSearch}>
     <div className="settings-panel">
       <div className="panel-heading settings-heading">
         <div>
@@ -290,6 +313,16 @@ export default function SettingsPanel({
           onChange={(v) => setAdvanced(v === "adv")}
         />
       </div>
+      <label className="settings-search">
+        <Search size={14} />
+        <input
+          value={settingsSearch}
+          onChange={(event) => setSettingsSearch(event.target.value)}
+          placeholder="Buscar ajuste: sello, cuchilla, cama…"
+          aria-label="Buscar ajustes"
+        />
+        {settingsSearch && <button type="button" onClick={() => setSettingsSearch("")} aria-label="Limpiar búsqueda">×</button>}
+      </label>
 
       {selectionCount > 1 && (
         <div className="selection-banner">
@@ -1163,6 +1196,18 @@ export default function SettingsPanel({
 
       {advanced && (
         <Section id="profiles" title="Perfiles" icon={<Bookmark size={16} />} summary={`${profiles.length} guardado${profiles.length === 1 ? "" : "s"}`}>
+          <Toggle
+            label="Incluir tamaño final"
+            hint="Al aplicar el perfil también restaura las dimensiones del diseño."
+            checked={includeProfileSize}
+            onChange={setIncludeProfileSize}
+          />
+          <Toggle
+            label="Guardar escena con el perfil"
+            hint="Conserva superficie, material y escena de vista previa."
+            checked={includeProfileScene}
+            onChange={setIncludeProfileScene}
+          />
           <div className="profile-save">
             <input
               value={profileName}
@@ -1224,8 +1269,9 @@ export default function SettingsPanel({
         <Scissors size={17} />
         Exportar modelos
       </button>
-      <div className="panel-footnote">STL · 3MF · proyecto .calicocutters importable</div>
+      <div className="panel-footnote">STL · OBJ · 3MF · PDF · proyecto .calicocutters importable</div>
     </div>
+    </SettingsSearchContext.Provider>
   );
 }
 

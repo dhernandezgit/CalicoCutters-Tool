@@ -10,10 +10,12 @@ import {
   type DownloadFile,
 } from "../lib/download";
 import { combineBinaryStls } from "../lib/stl";
+import { binaryStlsToObj } from "../lib/obj";
+import { outlinePdf } from "../lib/pdf";
 import { projectBlob, projectFileName } from "../lib/project";
 import Toggle from "./Toggle";
 
-type Format = "stl" | "3mf" | "3mf-set";
+type Format = "stl" | "obj" | "pdf" | "3mf" | "3mf-set";
 type Scope = "selected" | "all";
 
 export default function ExportDialog({
@@ -45,7 +47,12 @@ export default function ExportDialog({
   const [scope, setScope] = useState<Scope>("selected");
   const [includeProject, setIncludeProject] = useState(true);
   const [status, setStatus] = useState("");
-  const formatLabel = format === "stl" ? "STL" : format === "3mf" ? "3MF por diseño" : "3MF conjunto";
+  const formatLabel =
+    format === "stl" ? "STL"
+      : format === "obj" ? "OBJ"
+        : format === "pdf" ? "PDF de contorno"
+          : format === "3mf" ? "3MF por diseño"
+            : "3MF conjunto";
 
   const buildable = useMemo(() => assets.filter((a) => a.build), [assets]);
   const chosen = useMemo(
@@ -63,9 +70,12 @@ export default function ExportDialog({
     blob: projectFile,
   };
 
-  const filesFor = async (asset: AssetRow, kind: "stl" | "3mf"): Promise<DownloadFile[]> => {
+  const filesFor = async (asset: AssetRow, kind: "stl" | "obj" | "pdf" | "3mf"): Promise<DownloadFile[]> => {
     const base = safeFileName(asset.name);
     const parts = asset.build?.parts ?? [];
+    if (kind === "pdf") {
+      return [{ name: `${base}-contorno.pdf`, blob: outlinePdf(asset) }];
+    }
     if (kind === "stl") {
       if (!parts.length) return [];
       const merged = combineBinaryStls(parts.map((part) => ({
@@ -73,6 +83,15 @@ export default function ExportDialog({
         offset: part.preview_offset,
       })));
       return [{ name: `${base}.stl`, blob: bytesToBlob(merged, "model/stl") }];
+    }
+    if (kind === "obj") {
+      if (!parts.length) return [];
+      const text = binaryStlsToObj(parts.map((part) => ({
+        name: part.name,
+        data: base64ToBytes(part.stl_b64),
+        offset: part.preview_offset,
+      })));
+      return [{ name: `${base}.obj`, blob: new Blob([text], { type: "model/obj" }) }];
     }
     const blob = await onExport3mf(
       asset,
@@ -103,7 +122,7 @@ export default function ExportDialog({
     onToast(message);
   };
 
-  const downloadOne = async (asset: AssetRow, kind: "stl" | "3mf") => {
+  const downloadOne = async (asset: AssetRow, kind: "stl" | "obj" | "pdf" | "3mf") => {
     if (engineBusy || busy) return onToast("Espera a que termine la generación actual.");
     if (!asset.build) return onToast("Este diseño todavía no tiene geometría.");
     setBusy(true);
@@ -191,7 +210,9 @@ export default function ExportDialog({
                       </div>
                       <div className="export-asset-actions" onClick={(e) => e.stopPropagation()}>
                         <button type="button" className="soft-button" title="Cortador y sello en un solo archivo STL." onClick={() => downloadOne(asset, "stl")} disabled={engineBusy || busy || !asset.build}>STL</button>
+                        <button type="button" className="soft-button" title="Mallas agrupadas en un archivo OBJ." onClick={() => downloadOne(asset, "obj")} disabled={engineBusy || busy || !asset.build}>OBJ</button>
                         <button type="button" className="soft-button" title="Cortador y sello en un solo archivo 3MF." onClick={() => downloadOne(asset, "3mf")} disabled={engineBusy || busy || !asset.build}>3MF</button>
+                        <button type="button" className="soft-button" title="Contorno imprimible en PDF." onClick={() => downloadOne(asset, "pdf")} disabled={engineBusy || busy}>PDF</button>
                       </div>
                     </div>
                   );
@@ -216,7 +237,9 @@ export default function ExportDialog({
                 <span className="export-choice-label">Formato</span>
                 <div className="segmented">
                   <button type="button" className={format === "stl" ? "on" : ""} onClick={() => setFormat("stl")}>STL</button>
+                  <button type="button" className={format === "obj" ? "on" : ""} onClick={() => setFormat("obj")}>OBJ</button>
                   <button type="button" className={format === "3mf" ? "on" : ""} onClick={() => setFormat("3mf")}>3MF</button>
+                  <button type="button" className={format === "pdf" ? "on" : ""} onClick={() => setFormat("pdf")}>PDF</button>
                   <button type="button" className={format === "3mf-set" ? "on" : ""} onClick={() => setFormat("3mf-set")}>3MF conjunto</button>
                 </div>
               </div>

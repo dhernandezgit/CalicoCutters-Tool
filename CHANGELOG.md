@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0 — 2026-10-26
+
+Paridad local: exportación PDF/OBJ, modo oscuro, buscador de ajustes y perfiles con
+tamaño final y escena.
+
+### Exportación
+
+- PDF de contorno imprimible en A4, a escala 1:1 cuando cabe, con cotas y detalles.
+- OBJ agrupado por piezas, conservando los desplazamientos de la vista previa.
+- Selector de formato STL / OBJ / 3MF / PDF / 3MF conjunto y botones por diseño.
+
+### Editor y perfiles
+
+- Modo oscuro manual y siguiendo la preferencia del sistema.
+- Buscador de ajustes por título y contenido de cada sección.
+- Perfiles con opción de incluir el tamaño final y guardar la escena de vista previa.
+- Textos de ayuda y descargas actualizados.
+
+### Calidad
+
+- 52 tests, comprobación de tipos y build de producción.
+
 ## 0.2.0 — 2026-10-26
 
 Nueva visualización 3D de escena, superficies y materiales, multicortador de placa
