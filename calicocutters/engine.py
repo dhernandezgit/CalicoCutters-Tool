@@ -732,7 +732,7 @@ def _checks(
     if mode == "multicutter" and settings["multiSpacing"] < 2:
         out.append(_check("warn", f"Separación del multicortador de {settings['multiSpacing']:.1f} mm", "Deja al menos 2–4 mm entre copias; si no, se fusionan al imprimir.", "multi_spacing"))
 
-    if stamp_like:
+    if stamp_like and settings["mode"] == "cutter-stamp":
         clearance = settings["stampClearance"]
         out.append(_check(
             "ok" if clearance >= line * 1.5 else "warn",
@@ -901,7 +901,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
         )
     if settings["mode"] in cutter_modes and settings["tipWidth"] < settings["lineWidth"] * 0.75:
         warnings.append("La punta es más fina que una línea de impresión.")
-    if settings["mode"] in stamp_modes and settings["stampClearance"] < settings["lineWidth"] * 1.5:
+    if settings["mode"] == "cutter-stamp" and settings["stampClearance"] < settings["lineWidth"] * 1.5:
         warnings.append("La holgura del sello es muy justa para imprimir.")
 
     if settings["mode"] in stamp_modes and settings.get("stampRemoveOuterEdge") and details:
@@ -951,7 +951,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 details,
                 back_height=settings["stampBack"],
                 relief=settings["stampRelief"],
-                clearance=settings["stampClearance"],
+                clearance=settings["stampClearance"] if settings["mode"] == "cutter-stamp" else 0.0,
                 border=bool(settings.get("stampBorder", True)),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
                 alignment=stamp_alignment,
@@ -1158,7 +1158,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 mirrored_details,
                 back_height=settings["stampBack"],
                 relief=settings["stampRelief"],
-                clearance=settings["stampClearance"],
+                clearance=settings["stampClearance"] if settings["mode"] == "cutter-stamp" else 0.0,
                 border=bool(settings.get("stampBorder", True)),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
                 alignment=mirror_stamp_align,

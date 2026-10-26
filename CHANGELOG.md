@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.1 — 2026-10-26
+
+Corrección de geometría con ilustraciones multiparte y ajuste del dibujo por tipo.
+
+### Correcciones
+
+- Corregido el error `'MultiPolygon' object has no attribute 'exterior'` en el sellado del cortador de sándwich y en extrusión de geometrías multiparte.
+- Los sellos individuales usan el tamaño completo del diseño; la holgura del cortador solo se aplica a Stamper + cortador.
+- El rodillo conserva los detalles interiores del dibujo además de la silueta.
+
+### Calidad
+
+- 57 tests, typecheck y build.
+
 ## 0.5.0 — 2026-10-26
 
 Aplicación pulida: mockups de catálogo, SVG, flujo de revisión y ayuda de preparación.

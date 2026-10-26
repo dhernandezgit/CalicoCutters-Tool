@@ -235,10 +235,18 @@ def _jitter_polygon(poly: Polygon) -> Polygon:
     return Polygon(ext, holes)
 
 
-def extrude_polygon(poly: Polygon, z0: float, height: float) -> Mesh:
+def extrude_polygon(poly: Polygon | MultiPolygon, z0: float, height: float) -> Mesh:
     """Watertight extrusion of a polygon with holes."""
-    if poly.is_empty or height <= 0:
+    if poly is None or poly.is_empty or height <= 0:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
+    if isinstance(poly, MultiPolygon):
+        pieces = [p for p in poly.geoms if not p.is_empty and p.area > 1e-8]
+        if not pieces:
+            return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
+        out = extrude_polygon(pieces[0], z0, height)
+        for piece in pieces[1:]:
+            out = out.append(extrude_polygon(piece, z0, height))
+        return out
     poly = _jitter_polygon(poly)
     verts2d, faces = triangulate_polygon(poly)
     if len(faces) == 0:
@@ -940,9 +948,13 @@ def build_sandwich(
     for p in _ring_parts(seal_ring):
         if p.area > 0.01:
             parts.append(extrude_polygon(p, 0.0, seal_height))
-    # Crimping bumps around the seal ring.
-    path = seal_inner.buffer(max(0.1, seal_width * 0.5), join_style=1).exterior
-    if not path.is_empty:
+    # Crimping bumps around the seal ring.  Buffer results can be multipart on
+    # narrow or detailed artwork, so walk every component instead of assuming
+    # a single Polygon.
+    for seal_path_poly in _ring_parts(seal_inner.buffer(max(0.1, seal_width * 0.5), join_style=1)):
+        if seal_path_poly.is_empty:
+            continue
+        path = seal_path_poly.exterior
         per = max(0.5, dent_spacing)
         n = max(4, int(path.length / per))
         for i in range(n):
@@ -1008,6 +1020,15 @@ def build_roller(
     tile_h = tile.bounds[3] - tile.bounds[1]
     patch_w = max(usable_w * 0.82, tile_w)
     patch_h = max(usable_h * 0.82, tile_h)
+    tile_details: list[Polygon] = []
+    if not invert and not remove_edge and details:
+        for detail in details:
+            transformed = affinity.scale(detail, fit, fit, origin="center")
+            transformed = affinity.translate(transformed, -tile.centroid.x, -tile.centroid.y)
+            clipped_detail = transformed.intersection(tile)
+            for p in _ring_parts(clipped_detail):
+                if p.area > 0.02:
+                    tile_details.append(p)
 
     def mapped(mesh: Mesh, theta0: float, axial0: float, mirror: bool) -> Mesh:
         verts = mesh.vertices.copy()
@@ -1039,6 +1060,12 @@ def build_roller(
                     tile, back, max(0.3, relief) + 0.25, depth_curve
                 ):
                     layer = extrude_polygon(layer_poly, z0, height)
+                    parts.append(mapped(layer, theta0, axial0, mirror))
+                for detail in tile_details:
+                    detail_height = max(0.35, min(0.9, relief * 0.4))
+                    layer = extrude_polygon(
+                        detail, back + max(0.3, relief) - 0.05, detail_height
+                    )
                     parts.append(mapped(layer, theta0, axial0, mirror))
     # End rims.
     if rim > 0:

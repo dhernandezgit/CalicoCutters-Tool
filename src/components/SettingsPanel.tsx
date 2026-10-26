@@ -852,19 +852,28 @@ export default function SettingsPanel({
             <Stamp size={13} />
             <span>El perfil suaviza las cimas del relieve para desmoldar mejor. Engrosar líneas ayuda con dibujos de trazo fino, sin cambiar el contorno del sello.</span>
           </div>
-          <NumberField
-            label="Holgura del sello"
-            value={settings.stampClearance}
-            min={0.2}
-            max={3}
-            step={0.1}
-            hint={`${(settings.stampClearance / line).toFixed(1)} líneas`}
-            onChange={(v) => onChange({ stampClearance: v })}
-          />
-          <div className="inline-hint">
-            <CircleHelp size={13} />
-            <span>El sello se genera un poco más pequeño para entrar dentro del cortador.</span>
-          </div>
+          {settings.mode === "cutter-stamp" ? (
+            <>
+              <NumberField
+                label="Holgura del sello"
+                value={settings.stampClearance}
+                min={0.2}
+                max={3}
+                step={0.1}
+                hint={`${(settings.stampClearance / line).toFixed(1)} líneas`}
+                onChange={(v) => onChange({ stampClearance: v })}
+              />
+              <div className="inline-hint">
+                <CircleHelp size={13} />
+                <span>El sello se genera un poco más pequeño para entrar dentro del cortador.</span>
+              </div>
+            </>
+          ) : (
+            <div className="inline-hint">
+              <CircleHelp size={13} />
+              <span>En Sello solo se usa el tamaño completo del diseño; la holgura del cortador no se aplica.</span>
+            </div>
+          )}
           <Toggle
             label="Borde perimetral del sello"
             hint="Deja un marco elevado a la misma altura que el dibujo. Desactívalo para que el borde quede a la altura de la base plana."

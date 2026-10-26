@@ -155,6 +155,17 @@ def test_cake_pop_tray_is_watertight_and_has_a_stick_passage():
     assert tray.volume > 0
 
 
+def test_texture_roller_keeps_interior_details():
+    with_details = _shape().to_dict()
+    without_details = _shape().to_dict()
+    without_details["details"] = []
+    base = {**DEFAULT_SETTINGS, "mode": "roller", "rollerRepeatsAround": 2, "rollerRepeatsAlong": 1}
+    detailed = build({"shape": with_details, "settings": base})
+    plain = build({"shape": without_details, "settings": base})
+    assert detailed["parts"][0]["volume"] > plain["parts"][0]["volume"] + 100
+    assert _mesh(detailed["parts"][0]).is_watertight
+
+
 def test_texture_roller_layouts_and_inversion_stay_watertight():
     for pattern in ("grid", "brick", "mirror"):
         for invert in (False, True):
@@ -388,6 +399,32 @@ def test_alignment_marks_are_shallow_and_on_the_non_marking_face():
     z = tri[inside, 0, 2] + u[inside] * (tri[inside, 1, 2] - tri[inside, 0, 2]) + v[inside] * (tri[inside, 2, 2] - tri[inside, 0, 2])
     assert z.size > 0
     assert float(z.max()) == pytest.approx(DEFAULT_SETTINGS["stampBack"], abs=0.15)
+
+
+def test_extrude_polygon_accepts_multipart_geometry():
+    from shapely.geometry import MultiPolygon, box
+    from calicocutters.mesh import extrude_polygon
+
+    mesh = extrude_polygon(MultiPolygon([
+        box(-20, -5, -2, 5),
+        box(2, -5, 20, 5),
+    ]), 0.0, 2.0)
+    assert len(mesh.faces) > 0
+    assert trimesh.Trimesh(vertices=mesh.vertices, faces=mesh.faces).is_watertight
+
+
+def test_stamp_only_ignores_cutter_clearance():
+    def stamp_with(clearance):
+        return build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "stamp",
+            "stampClearance": clearance,
+        }})
+
+    full = stamp_with(0.2)
+    tight = stamp_with(2.5)
+    assert full["parts"][0]["volume"] == pytest.approx(tight["parts"][0]["volume"], rel=0.001)
+    assert full["parts"][0]["bounds"] == tight["parts"][0]["bounds"]
 
 
 def test_stamp_border_is_flush_with_relief_by_default():
