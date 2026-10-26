@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.1 — 2026-10-26
+
+Barra de vista central reorganizada y jerarquía visual del botón Vista.
+
+### Interfaz
+
+- Barra en tres zonas: cámara a la izquierda, **Vista** destacada en el centro y
+  selección/aislamiento a la derecha.
+- Botón Vista con color vino, mayor tamaño, sombra y apertura centrada del panel.
+- Retirados los atajos duplicados de aristas/malla/centro; siguen disponibles en Vista.
+- Comportamiento responsive: una fila en escritorio ancho y dos filas ordenadas en
+  ventanas estrechas.
+
+### Calidad
+
+- 57 tests, typecheck y build.
+
 ## 0.6.0 — 2026-10-26
 
 Curaduría del menú de creación y aclaración de cada tipo de herramienta.

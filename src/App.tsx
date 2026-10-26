@@ -3,11 +3,8 @@ import {
   Camera,
   Cookie,
   Crosshair,
-  Eye,
-  EyeOff,
   Expand,
   Focus,
-  Grid2X2,
   HelpCircle,
   Layers,
   Maximize2,
@@ -727,31 +724,29 @@ export default function App() {
 
         <section className="viewer-wrap">
           <div className="viewer-toolbar">
+            <div className="viewer-toolbar-left">
             <div className="segmented view-tabs">
               <button type="button" className={tab === "3d" ? "on" : ""} onClick={() => setTab("3d")}><Rotate3D size={14} /> 3D</button>
               <button type="button" className={tab === "2d" ? "on" : ""} onClick={() => setTab("2d")}><MousePointer2 size={14} /> 2D</button>
             </div>
             <div className="toolbar-group">
               <button type="button" title="Vista isométrica" onClick={() => { setTab("3d"); viewportRef.current?.view("iso"); }}><Focus size={16} /></button>
-              <button type="button" onClick={() => { setTab("3d"); viewportRef.current?.view("top"); }}>Top</button>
-              <button type="button" onClick={() => { setTab("3d"); viewportRef.current?.view("front"); }}>Front</button>
+              <button type="button" title="Vista superior" onClick={() => { setTab("3d"); viewportRef.current?.view("top"); }}>Top</button>
+              <button type="button" title="Vista frontal" onClick={() => { setTab("3d"); viewportRef.current?.view("front"); }}>Front</button>
               <button type="button" title="Ajustar vista" onClick={() => { setTab("3d"); viewportRef.current?.fit(); }}><Maximize2 size={16} /></button>
             </div>
-            <div className="toolbar-group">
-              <button type="button" className={showEdges ? "on" : ""} onClick={() => setShowEdges((v) => !v)}>{showEdges ? <Eye size={15} /> : <EyeOff size={15} />}</button>
-              <button type="button" className={wireframe ? "on" : ""} onClick={() => setWireframe((v) => !v)}><Grid2X2 size={15} /></button>
+            </div>
+            <div className="viewer-toolbar-center">
+            <div className="view-options-wrap">
               <button
                 type="button"
-                className={centerPick ? "on" : ""}
-                title="Mover el centro de giro: haz clic en la pieza"
-                onClick={() => { setTab("3d"); setCenterPick((v) => !v); }}
+                className={`view-options-button view-main${viewOptionsOpen ? " on" : ""}`}
+                title="Abrir escena, materiales, medidas y cámara"
+                aria-haspopup="dialog"
+                aria-expanded={viewOptionsOpen}
+                onClick={() => setViewOptionsOpen((v) => !v)}
               >
-                <Crosshair size={15} />
-              </button>
-            </div>
-            <div className="view-options-wrap">
-              <button type="button" className={`view-options-button${viewOptionsOpen ? " on" : ""}`} onClick={() => setViewOptionsOpen((v) => !v)}>
-                <SlidersHorizontal size={14} /> Vista
+                <SlidersHorizontal size={16} /> Vista
               </button>
               {viewOptionsOpen && (
                 <div className="view-options-popover">
@@ -909,6 +904,8 @@ export default function App() {
                 </div>
               )}
             </div>
+            </div>
+            <div className="viewer-toolbar-right">
             <div className="segmented view-scope">
               <button type="button" className={viewScope === "all" ? "on" : ""} onClick={() => { setViewScope("all"); setFitKey(`all-${Date.now()}`); }}>Todos</button>
               <button type="button" className={viewScope === "selected" ? "on" : ""} onClick={() => { setViewScope("selected"); setFitKey(`sel-${Date.now()}`); }}>Selección</button>
@@ -920,6 +917,7 @@ export default function App() {
                 {hasStampPart && <button type="button" className={isolate === "stamp" ? "on" : ""} onClick={() => setIsolate("stamp")}><Stamp size={14} /> Sello</button>}
               </div>
             )}
+            </div>
           </div>
 
           <div className="viewer" ref={viewerBoxRef}>
