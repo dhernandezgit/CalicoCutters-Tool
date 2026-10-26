@@ -970,10 +970,42 @@ export default function SettingsPanel({
             <NumberField label="Eje" value={settings.rollerBore} min={0} max={30} step={0.5} onChange={(v) => onChange({ rollerBore: v })} />
           </div>
           <div className="two-fields">
-            <NumberField label="Repeticiones alrededor" value={settings.rollerRepeatsAround} min={1} max={16} step={1} unit="" onChange={(v) => onChange({ rollerRepeatsAround: Math.round(v) })} />
-            <NumberField label="A lo largo" value={settings.rollerRepeatsAlong} min={1} max={16} step={1} unit="" onChange={(v) => onChange({ rollerRepeatsAlong: Math.round(v) })} />
+            <NumberField label="Repeticiones alrededor" value={settings.rollerRepeatsAround} min={1} max={32} step={1} unit="" onChange={(v) => onChange({ rollerRepeatsAround: Math.round(v) })} />
+            <NumberField label="A lo largo" value={settings.rollerRepeatsAlong} min={1} max={32} step={1} unit="" onChange={(v) => onChange({ rollerRepeatsAlong: Math.round(v) })} />
           </div>
-          <NumberField label="Borde de extremo" value={settings.rollerRim} min={0} max={8} step={0.5} onChange={(v) => onChange({ rollerRim: v })} />
+          <div className="two-fields">
+            <label className="field-row">
+              <span className="field-label">Patrón</span>
+              <span className="field-input">
+                <select value={settings.rollerPattern} onChange={(e) => onChange({ rollerPattern: e.target.value as DesignSettings["rollerPattern"] })}>
+                  <option value="grid">Repetido</option>
+                  <option value="brick">Ladrillo</option>
+                  <option value="mirror">Reflejado</option>
+                </select>
+              </span>
+            </label>
+            <NumberField label="Margen vacío" value={settings.rollerMargin} min={0} max={20} step={0.5} onChange={(v) => onChange({ rollerMargin: v })} />
+          </div>
+          <div className="two-fields">
+            <NumberField label="Grosor posterior" value={settings.rollerBack} min={0} max={6} step={0.5} onChange={(v) => onChange({ rollerBack: v })} />
+            <NumberField label="Borde de extremo" value={settings.rollerRim} min={0} max={8} step={0.5} onChange={(v) => onChange({ rollerRim: v })} />
+          </div>
+          <div className="view-options-grid">
+            <Toggle label="Girar origen 90°" checked={settings.rollerRotate} onChange={(v) => onChange({ rollerRotate: v })} />
+            <Toggle label="Invertir patrón" checked={settings.rollerInvert} onChange={(v) => onChange({ rollerInvert: v })} />
+            <Toggle label="Quitar borde exterior" checked={settings.rollerRemoveEdge} onChange={(v) => onChange({ rollerRemoveEdge: v })} />
+            <label className="field-row">
+              <span className="field-label">Curva de profundidad</span>
+              <span className="field-input">
+                <select value={settings.rollerDepthCurve} onChange={(e) => onChange({ rollerDepthCurve: e.target.value as DesignSettings["rollerDepthCurve"] })}>
+                  <option value="none">Recta</option>
+                  <option value="chamfer">Chaflán</option>
+                  <option value="round">Redondeada</option>
+                </select>
+              </span>
+            </label>
+          </div>
+          <div className="inline-hint"><PaintRoller size={13} /><span>El patrón se envuelve alrededor del cilindro. El margen separa copias; el grosor posterior añade una capa sólida bajo el relieve. La curva suaviza las cimas del patrón positivo.</span></div>
         </Section>
       )}
 
@@ -1120,7 +1152,29 @@ export default function SettingsPanel({
             <NumberField label="Respaldo del prensador" value={settings.cakePopPlungerBack} min={1} max={8} step={0.5} onChange={(v) => onChange({ cakePopPlungerBack: v })} />
             <NumberField label="Relieve del prensador" value={settings.cakePopRelief} min={0.2} max={6} step={0.2} onChange={(v) => onChange({ cakePopRelief: v })} />
           </div>
-          <div className="inline-hint"><CircleHelp size={13} /><span>Incluye molde y prensador. El palito se inserta por el agujero central; imprime con la cara plana sobre la cama.</span></div>
+          <Toggle
+            label="Generar bandeja de soporte"
+            hint="Sostiene la pieza mientras insertas el palito."
+            checked={settings.cakePopTray}
+            onChange={(v) => onChange({ cakePopTray: v })}
+          />
+          {settings.cakePopTray && (
+            <>
+              <div className="two-fields">
+                <NumberField label="Rotación del hueco" value={settings.cakePopTrayRotation} min={0} max={359} step={5} unit="°" onChange={(v) => onChange({ cakePopTrayRotation: v })} />
+                <NumberField label="Profundidad del hueco" value={settings.cakePopTrayDepth} min={10} max={90} step={5} unit="%" onChange={(v) => onChange({ cakePopTrayDepth: v })} />
+              </div>
+              <div className="two-fields">
+                <NumberField label="Holgura de bandeja" value={settings.cakePopTrayClearance} min={0.2} max={5} step={0.1} onChange={(v) => onChange({ cakePopTrayClearance: v })} />
+                <NumberField label="Margen de la bandeja" value={settings.cakePopTrayMargin} min={1} max={20} step={0.5} onChange={(v) => onChange({ cakePopTrayMargin: v })} />
+              </div>
+              <div className="two-fields">
+                <NumberField label="Longitud de apoyo" value={settings.cakePopTrayLength} min={0} max={80} step={1} onChange={(v) => onChange({ cakePopTrayLength: v })} />
+                <NumberField label="Altura de bandeja" value={settings.cakePopTrayHeight} min={4} max={30} step={0.5} onChange={(v) => onChange({ cakePopTrayHeight: v })} />
+              </div>
+            </>
+          )}
+          <div className="inline-hint"><CircleHelp size={13} /><span>Incluye molde, prensador y bandeja opcional. El palito se inserta por el agujero central; imprime con la cara plana sobre la cama.</span></div>
         </Section>
       )}
 

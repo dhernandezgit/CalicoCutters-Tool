@@ -18,6 +18,7 @@ from .mesh import (
     Mesh,
     build_bookmark,
     build_cake_pop,
+    build_cake_pop_tray,
     build_cutter,
     build_imprint,
     build_multicutter,
@@ -97,6 +98,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "rollerRepeatsAround": 2,
     "rollerRepeatsAlong": 1,
     "rollerRim": 2.0,
+    "rollerPattern": "grid",
+    "rollerMargin": 0.0,
+    "rollerRotate": False,
+    "rollerInvert": False,
+    "rollerBack": 0.0,
+    "rollerRemoveEdge": False,
+    "rollerDepthCurve": "none",
     "stencilWidth": 100.0,
     "stencilHeight": 100.0,
     "stencilRows": 3,
@@ -141,6 +149,13 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "cakePopPlungerClearance": 0.6,
     "cakePopPlungerBack": 2.5,
     "cakePopRelief": 2.0,
+    "cakePopTray": False,
+    "cakePopTrayRotation": 180.0,
+    "cakePopTrayDepth": 50.0,
+    "cakePopTrayClearance": 1.0,
+    "cakePopTrayMargin": 5.0,
+    "cakePopTrayLength": 25.0,
+    "cakePopTrayHeight": 12.0,
     "setCount": 3,
     "setStep": 0.18,
     "setSpacing": 10.0,
@@ -209,6 +224,8 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "rollerRelief": (0.2, 6.0),
     "rollerBore": (0.0, 40.0),
     "rollerRim": (0.0, 10.0),
+    "rollerMargin": (0.0, 20.0),
+    "rollerBack": (0.0, 8.0),
     "stencilWidth": (30.0, 250.0),
     "stencilHeight": (30.0, 250.0),
     "stencilSpacing": (0.5, 20.0),
@@ -246,6 +263,12 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "cakePopPlungerClearance": (0.2, 2.5),
     "cakePopPlungerBack": (1.0, 8.0),
     "cakePopRelief": (0.2, 8.0),
+    "cakePopTrayRotation": (0.0, 359.0),
+    "cakePopTrayDepth": (10.0, 90.0),
+    "cakePopTrayClearance": (0.2, 5.0),
+    "cakePopTrayMargin": (1.0, 20.0),
+    "cakePopTrayLength": (0.0, 80.0),
+    "cakePopTrayHeight": (4.0, 30.0),
     "setStep": (0.05, 0.45),
     "setSpacing": (2.0, 40.0),
     "preprocessAmount": (0.0, 1.5),
@@ -257,8 +280,8 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
 _INTEGER_RANGES: dict[str, tuple[int, int]] = {
     "multiRows": (1, 6),
     "multiCols": (1, 6),
-    "rollerRepeatsAround": (1, 16),
-    "rollerRepeatsAlong": (1, 16),
+    "rollerRepeatsAround": (1, 32),
+    "rollerRepeatsAlong": (1, 32),
     "stencilRows": (1, 10),
     "stencilCols": (1, 10),
     "setCount": (2, 6),
@@ -268,6 +291,8 @@ _BOOLEAN_KEYS = {
     "lockAspect", "autoPrintable", "sharpEdge", "extraBlade",
     "addPressHandle", "pressHandlesBothEnds", "addBar", "stampRemoveOuterEdge", "stampBorder",
     "mirror", "mirrorPair", "stencilBridges", "topperInvert", "stampRecessed",
+    "rollerRotate", "rollerInvert", "rollerRemoveEdge",
+    "cakePopTray",
     "bookmarkHole",
     "preprocessSmooth", "preprocessPreserveCorners", "preprocessSmoothDetails", "preprocessRemoveTiny",
     "alignmentHole",
@@ -323,6 +348,8 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
         else "none"
     )
     out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "random" if str(out.get("stencilPattern")) == "random" else "grid"
+    out["rollerPattern"] = str(out.get("rollerPattern")) if str(out.get("rollerPattern")) in {"brick", "mirror"} else "grid"
+    out["rollerDepthCurve"] = str(out.get("rollerDepthCurve")) if str(out.get("rollerDepthCurve")) in {"chamfer", "round"} else "none"
     out["bookmarkDesignStyle"] = str(out.get("bookmarkDesignStyle")) if str(out.get("bookmarkDesignStyle")) in {"line", "relief", "none"} else "line"
     out["bedModel"] = str(out.get("bedModel") or "bambu-p2s")[:40]
     for key in _BOOLEAN_KEYS:
@@ -1005,6 +1032,14 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 repeats_around=int(settings["rollerRepeatsAround"]),
                 repeats_along=int(settings["rollerRepeatsAlong"]),
                 rim=settings["rollerRim"],
+                pattern=str(settings.get("rollerPattern", "grid")),
+                margin=settings.get("rollerMargin", 0.0),
+                rotate=bool(settings.get("rollerRotate")),
+                invert=bool(settings.get("rollerInvert")),
+                back=settings.get("rollerBack", 0.0),
+                remove_edge=bool(settings.get("rollerRemoveEdge")),
+                depth_curve=str(settings.get("rollerDepthCurve", "none")),
+                details=details,
             )
             parts.append(("Rodillo", roller, "#f39ab1"))
         if settings["mode"] == "stencil":
@@ -1081,6 +1116,18 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             )
             parts.append(("Molde cake pop", tray, "#f39ab1"))
             parts.append(("Prensador", plunger, "#b7a4e8"))
+            if settings.get("cakePopTray"):
+                support = build_cake_pop_tray(
+                    main,
+                    length=settings["cakePopTrayLength"],
+                    height=settings["cakePopTrayHeight"],
+                    depth_percent=settings["cakePopTrayDepth"],
+                    clearance=settings["cakePopTrayClearance"],
+                    margin=settings["cakePopTrayMargin"],
+                    rotation=settings["cakePopTrayRotation"],
+                    stick_hole=settings["cakePopStickHole"] + settings["cakePopHoleClearance"] * 2.0,
+                )
+                parts.append(("Bandeja cake pop", support, "#8ed1c3"))
     except Exception as exc:
         raise ValueError(f"No se pudo generar la geometría: {exc}") from exc
     if settings.get("mirrorPair") and settings["mode"] in {"cutter", "cutter-stamp", "stamp"}:

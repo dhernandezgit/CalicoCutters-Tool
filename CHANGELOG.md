@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0 — 2026-10-26
+
+Rodillo de textura avanzado, bandeja de cake pop y base para nuevas fases de paridad.
+
+### Rodillo
+
+- Patrones repetido, ladrillo y reflejado.
+- Giro del origen 90°, margen vacío, inversión del patrón, grosor posterior y eliminación del borde exterior.
+- Curvas de profundidad recta, chaflán y redondeada.
+- Hasta 32 repeticiones por eje.
+
+### Cake pop
+
+- Bandeja de soporte opcional con rotación, profundidad, holgura, margen, longitud de apoyo y altura.
+- Paso de palito independiente y geometría watertight.
+
+### Calidad
+
+- 54 tests, typecheck y build de producción.
+
 ## 0.3.0 — 2026-10-26
 
 Paridad local: exportación PDF/OBJ, modo oscuro, buscador de ajustes y perfiles con

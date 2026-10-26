@@ -91,6 +91,13 @@ export interface DesignSettings {
   rollerRepeatsAround: number;
   rollerRepeatsAlong: number;
   rollerRim: number;
+  rollerPattern: "grid" | "brick" | "mirror";
+  rollerMargin: number;
+  rollerRotate: boolean;
+  rollerInvert: boolean;
+  rollerBack: number;
+  rollerRemoveEdge: boolean;
+  rollerDepthCurve: "none" | "chamfer" | "round";
 
   stencilWidth: number;
   stencilHeight: number;
@@ -140,6 +147,13 @@ export interface DesignSettings {
   cakePopPlungerClearance: number;
   cakePopPlungerBack: number;
   cakePopRelief: number;
+  cakePopTray: boolean;
+  cakePopTrayRotation: number;
+  cakePopTrayDepth: number;
+  cakePopTrayClearance: number;
+  cakePopTrayMargin: number;
+  cakePopTrayLength: number;
+  cakePopTrayHeight: number;
 
   setCount: number;
   setStep: number;
@@ -305,6 +319,13 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   rollerRepeatsAround: 2,
   rollerRepeatsAlong: 1,
   rollerRim: 2,
+  rollerPattern: "grid",
+  rollerMargin: 0,
+  rollerRotate: false,
+  rollerInvert: false,
+  rollerBack: 0,
+  rollerRemoveEdge: false,
+  rollerDepthCurve: "none",
 
   stencilWidth: 100,
   stencilHeight: 100,
@@ -354,6 +375,13 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   cakePopPlungerClearance: 0.6,
   cakePopPlungerBack: 2.5,
   cakePopRelief: 2,
+  cakePopTray: false,
+  cakePopTrayRotation: 180,
+  cakePopTrayDepth: 50,
+  cakePopTrayClearance: 1,
+  cakePopTrayMargin: 5,
+  cakePopTrayLength: 25,
+  cakePopTrayHeight: 12,
 
   setCount: 3,
   setStep: 0.18,

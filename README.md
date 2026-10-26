@@ -1,6 +1,6 @@
 # CalicoCutters
 
-**Versión 0.3.0** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.4.0** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
@@ -28,6 +28,8 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - **Modo oscuro** manual y según la preferencia del sistema.
 - **Buscador de ajustes** por nombre y contenido de cada sección.
 - **Multicortador** de una sola pieza: varias copias comparten una placa de presión y se cortan de una vez.
+- **Rodillo de textura avanzado**: patrones repetido, ladrillo y reflejado; giro del origen, margen, inversión, grosor posterior, borde exterior y curvas de profundidad.
+- **Bandeja de cake pop** opcional: hueco girado y dimensionable, holgura, margen, longitud de apoyo y altura.
 - Perfiles guardables de fabricación y preprocesado; opción de incluir el tamaño final y la escena de la vista previa.
 - Vista previa 3D real, vista 2D, selección múltiple y vista de un solo archivo.
 - Ajustes básicos rápidos y modo avanzado con impresión, base, barras, color, nombres y coste.
@@ -93,7 +95,7 @@ Los tests comprueban:
 - Punto de alineación superficial de 1,8 mm en la cara inferior del cortador y del sello (activo por defecto); no atraviesa la pieza.
 - Pinza de página: dos placas planas de 50 × 150 × 2,4 mm con tres bisagras vivas de 0,6 mm y pestaña de apertura. Se imprime tumbada, sin soportes; usa PETG o TPU para muchas aperturas.
 - Stencil: 1,5 mm de lámina y puentes de unión para islas interiores.
-- Cake pop: molde con agujero de palito y prensador a juego.
+- Cake pop: molde con agujero de palito, prensador a juego y bandeja de soporte opcional.
 - Cama: 256 × 256 mm.
 - Sin soportes; base plana sobre la cama.
 

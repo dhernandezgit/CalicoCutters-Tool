@@ -139,6 +139,42 @@ def test_multicutter_uses_one_shared_press_plate():
     assert result["parts"][0]["volume"] > single["parts"][0]["volume"] * 3
 
 
+def test_cake_pop_tray_is_watertight_and_has_a_stick_passage():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cakepop",
+        "cakePopTray": True,
+        "cakePopTrayRotation": 180,
+        "cakePopTrayDepth": 55,
+        "cakePopTrayClearance": 1.2,
+    }})
+    names = [part["name"] for part in result["parts"]]
+    assert "Bandeja cake pop" in names
+    tray = _mesh(next(part for part in result["parts"] if part["name"] == "Bandeja cake pop"))
+    assert tray.is_watertight
+    assert tray.volume > 0
+
+
+def test_texture_roller_layouts_and_inversion_stay_watertight():
+    for pattern in ("grid", "brick", "mirror"):
+        for invert in (False, True):
+            result = build({"shape": _shape().to_dict(), "settings": {
+                **DEFAULT_SETTINGS,
+                "mode": "roller",
+                "rollerRepeatsAround": 3,
+                "rollerRepeatsAlong": 2,
+                "rollerPattern": pattern,
+                "rollerMargin": 1.5,
+                "rollerRotate": True,
+                "rollerInvert": invert,
+                "rollerBack": 1.2,
+                "rollerDepthCurve": "round",
+            }})
+            mesh = _mesh(result["parts"][0])
+            assert mesh.is_watertight, (pattern, invert)
+            assert result["parts"][0]["volume"] > 0
+
+
 def test_sandwich_has_cutter_and_seal():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,

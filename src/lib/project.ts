@@ -41,6 +41,8 @@ function normalizeSettings(raw: Partial<DesignSettings> | null | undefined): Des
   out.pressHandleShape = ["rect", "round", "rounded"].includes(String(out.pressHandleShape)) ? out.pressHandleShape : "rounded";
   out.stampEdgeMethod = out.stampEdgeMethod === "offset" ? "offset" : "preserve";
   out.stampDetailCurve = ["chamfer", "round"].includes(String(out.stampDetailCurve)) ? out.stampDetailCurve : "none";
+  out.rollerPattern = ["brick", "mirror"].includes(String(out.rollerPattern)) ? out.rollerPattern : "grid";
+  out.rollerDepthCurve = ["chamfer", "round"].includes(String(out.rollerDepthCurve)) ? out.rollerDepthCurve : "none";
   out.stencilPattern = ["diagonal", "random"].includes(String(out.stencilPattern)) ? out.stencilPattern : "grid";
   if (typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color)) out.color = input.color;
   return out as unknown as DesignSettings;

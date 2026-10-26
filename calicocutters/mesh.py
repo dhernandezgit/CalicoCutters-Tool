@@ -957,6 +957,7 @@ def build_sandwich(
 
 def build_roller(
     main: Polygon,
+    details: list[Polygon] | None = None,
     *,
     diameter: float,
     length: float,
@@ -965,44 +966,86 @@ def build_roller(
     repeats_around: int,
     repeats_along: int,
     rim: float,
+    pattern: str = "grid",
+    margin: float = 0.0,
+    rotate: bool = False,
+    invert: bool = False,
+    back: float = 0.0,
+    remove_edge: bool = False,
+    depth_curve: str = "none",
 ) -> Mesh:
-    """Hollow texture roller with the design motif wrapped around the surface."""
+    """Hollow texture roller with wrapped, repeated and curved pattern tiles."""
     radius = max(4.0, diameter / 2)
+    back = max(0.0, min(8.0, float(back)))
+    outer_radius = radius + back
     inner = max(0.4, min(radius - 1.0, bore / 2))
-    tube = Point(0, 0).buffer(radius, quad_segs=64).difference(
+    tube = Point(0, 0).buffer(outer_radius, quad_segs=64).difference(
         Point(0, 0).buffer(inner, quad_segs=48)
     )
     parts = [extrude_polygon(tube, -length / 2, length)]
-    # Wrap a scaled copy of the motif around the cylinder.  Each copy is a
-    # flat extrusion whose vertices are mapped to the cylinder surface.
-    b = main.bounds
-    bw = max(1e-6, b[2] - b[0])
-    bh = max(1e-6, b[3] - b[1])
     around = max(1, int(repeats_around))
     along = max(1, int(repeats_along))
-    tile_w = (2 * math.pi * radius / around) * 0.72
-    tile_h = (length / along) * 0.72
-    scale = min(tile_w / bw, tile_h / bh)
-    tile = affinity.scale(main, scale, scale, origin="center")
+    cell_w = 2 * math.pi * radius / around
+    cell_h = length / along
+    margin = max(0.0, min(float(margin), min(cell_w, cell_h) * 0.3))
+    usable_w = max(1.0, cell_w - margin * 2.0)
+    usable_h = max(1.0, cell_h - margin * 2.0)
+
+    source = main
+    if remove_edge and details:
+        merged = unary_union([d for d in details if not d.is_empty])
+        if not merged.is_empty:
+            source = merged
+    if rotate:
+        source = affinity.rotate(source, 90, origin="center")
+    b = source.bounds
+    bw = max(1e-6, b[2] - b[0])
+    bh = max(1e-6, b[3] - b[1])
+    fit = min(usable_w / bw, usable_h / bh) * 0.82
+    tile = affinity.scale(source, fit, fit, origin="center")
     tile = affinity.translate(tile, -tile.centroid.x, -tile.centroid.y)
-    tile_mesh = extrude_polygon(tile, 0.0, max(0.3, relief) + 0.25)
+    tile_w = tile.bounds[2] - tile.bounds[0]
+    tile_h = tile.bounds[3] - tile.bounds[1]
+    patch_w = max(usable_w * 0.82, tile_w)
+    patch_h = max(usable_h * 0.82, tile_h)
+
+    def mapped(mesh: Mesh, theta0: float, axial0: float, mirror: bool) -> Mesh:
+        verts = mesh.vertices.copy()
+        if mirror:
+            verts[:, 0] *= -1.0
+        out = np.zeros_like(verts)
+        for i, (x, y, z) in enumerate(verts):
+            angle = theta0 + x / max(radius, 1e-6)
+            rad = radius + z - 0.2
+            out[i] = (rad * math.cos(angle), rad * math.sin(angle), axial0 + y)
+        return Mesh(out, mesh.faces.copy())
+
     for ia in range(around):
-        theta0 = (2 * math.pi * ia) / around
         for il in range(along):
-            axial0 = -length / 2 + (il + 0.5) * (length / along)
-            verts = tile_mesh.vertices.copy()
-            out = np.zeros_like(verts)
-            for i, (x, y, z) in enumerate(verts):
-                angle = theta0 + x / max(radius, 1e-6)
-                rad = radius + z - 0.2
-                out[i] = (rad * math.cos(angle), rad * math.sin(angle), axial0 + y)
-            parts.append(Mesh(out, tile_mesh.faces.copy()))
+            theta0 = (2 * math.pi * ia) / around
+            axial0 = -length / 2 + (il + 0.5) * cell_h
+            if pattern == "brick" and il % 2 == 1:
+                theta0 += math.pi / around
+            mirror = pattern == "mirror" and (ia + il) % 2 == 1
+            if invert:
+                patch = box(-patch_w / 2, -patch_h / 2, patch_w / 2, patch_h / 2)
+                inverse = patch.difference(tile)
+                for p in _ring_parts(inverse):
+                    if p.area > 0.02:
+                        layer = extrude_polygon(p, back, max(0.3, relief) + 0.25)
+                        parts.append(mapped(layer, theta0, axial0, mirror))
+            else:
+                for layer_poly, z0, height in _curved_relief_layers(
+                    tile, back, max(0.3, relief) + 0.25, depth_curve
+                ):
+                    layer = extrude_polygon(layer_poly, z0, height)
+                    parts.append(mapped(layer, theta0, axial0, mirror))
     # End rims.
     if rim > 0:
         rim_width = max(0.5, rim)
         for z0 in (-length / 2, length / 2 - rim_width):
-            r_out = Point(0, 0).buffer(radius + 1.2, quad_segs=64)
-            r_in = Point(0, 0).buffer(radius, quad_segs=64)
+            r_out = Point(0, 0).buffer(outer_radius + 1.2, quad_segs=64)
+            r_in = Point(0, 0).buffer(outer_radius, quad_segs=64)
             ring = r_out.difference(r_in)
             parts.append(extrude_polygon(ring, z0, rim_width))
     out = parts[0]
@@ -1154,6 +1197,50 @@ def build_topper(
         return parts[0] if len(parts) == 1 else _append_all(parts)
     parts.append(extrude_polygon(pin, 0.0, max(1.0, thickness)))
     return _append_all(parts)
+
+
+def build_cake_pop_tray(
+    main: Polygon,
+    *,
+    length: float,
+    height: float,
+    depth_percent: float,
+    clearance: float,
+    margin: float,
+    rotation: float,
+    stick_hole: float,
+) -> Mesh:
+    """Support tray with a shaped pocket and a stick passage through the base."""
+    rotated = affinity.rotate(main, rotation, origin="center")
+    b = rotated.bounds
+    shape_w = max(2.0, b[2] - b[0])
+    shape_h = max(2.0, b[3] - b[1])
+    cx = (b[0] + b[2]) / 2.0
+    cy = (b[1] + b[3]) / 2.0
+    hole = rotated.buffer(max(0.2, clearance), join_style=1, quad_segs=8)
+    hole = affinity.translate(hole, -cx, -cy + length / 2.0)
+    tray_w = shape_w + margin * 2.0
+    footprint_h = shape_h + margin * 2.0 + max(0.0, length)
+    outer = rounded_rect(tray_w, footprint_h, min(8.0, min(tray_w, footprint_h) * 0.18))
+    tray_height = max(4.0, float(height))
+    pocket = min(max(0.8, tray_height - 0.8), tray_height * max(0.1, min(0.9, depth_percent / 100.0)))
+    bottom_h = max(0.6, tray_height - pocket)
+    parts: list[Mesh] = []
+    stick = Point(0.0, length / 2.0).buffer(max(0.0, stick_hole) / 2.0, quad_segs=32)
+    bottom_poly = outer.difference(stick) if stick_hole > 0.1 else outer
+    for p in _ring_parts(bottom_poly):
+        if p.area > 0.02:
+            parts.append(extrude_polygon(p, 0.0, bottom_h))
+    top_poly = outer.difference(hole)
+    for p in _ring_parts(top_poly):
+        if p.area > 0.02:
+            parts.append(extrude_polygon(p, bottom_h - 0.01, pocket + 0.01))
+    if not parts:
+        return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
+    out = parts[0]
+    for part in parts[1:]:
+        out = out.append(part)
+    return out.oriented()
 
 
 def build_cake_pop(
