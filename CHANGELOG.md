@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.1 — 2026-10-27
+
+Corrección del despliegue automático.
+
+### Calidad
+
+- Añadida `networkx` a las dependencias de test; `trimesh.split()` la necesita para
+  comprobar las mallas multiparte en GitHub Actions.
+- Tests, typecheck y build pasan en CI; Pages vuelve a desplegar.
+
 ## 0.7.0 — 2026-10-27
 
 Ampliación de modos, relieves y previsualización; corrección del cortador + sello
