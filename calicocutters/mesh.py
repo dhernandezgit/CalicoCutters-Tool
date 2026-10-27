@@ -791,6 +791,7 @@ def build_stamp(
     clearance: float,
     border: bool = True,
     border_width: float = 1.6,
+    border_height: float = 0.0,
     alignment: tuple[float, float, float] | None = None,
     recessed: bool = False,
     detail_curve: str = "none",
@@ -909,10 +910,15 @@ def build_stamp(
                     -max(0.1, min(0.4, border_width / 2)), join_style=1, quad_segs=8
                 )
             strip = stamp_component.difference(inner_plate) if not inner_plate.is_empty else stamp_component
+            border_rise = (
+                max(0.3, float(border_height))
+                if border_height > 0.01
+                else max(0.3, relief) + 0.25
+            )
             for p in _ring_parts(strip):
                 if p.area > 0.01:
                     parts.append(extrude_polygon(
-                        p, back_height - 0.25, max(0.3, relief) + 0.25
+                        p, back_height - min(0.25, border_rise * 0.5), border_rise
                     ))
         for p in kept_details:
             for layer, z0, height in _curved_relief_layers(

@@ -802,3 +802,49 @@ def test_roller_source_scale_and_rim_height_stay_watertight():
             "rollerRimHeight": 3,
         }})
         assert _mesh(result["parts"][0]).is_watertight, scale
+
+
+def test_cutter_stamp_border_is_low_and_options_work():
+    base = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter-stamp",
+    }})
+    without = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter-stamp",
+        "stampBorder": False,
+    }})
+    base_stamp = next(p for p in base["parts"] if p["name"] == "Sello")
+    without_stamp = next(p for p in without["parts"] if p["name"] == "Sello")
+    assert base_stamp["volume"] > without_stamp["volume"]
+    # The low border must stay below the raised artwork tip.
+    mesh = _mesh(base_stamp)
+    assert float(mesh.vertices[:, 2].max()) <= 8.6
+
+    changed = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cutter-stamp",
+        "stampBacking": "rect",
+        "stampGrip": True,
+        "stampBackingPadding": 5,
+    }})
+    for part in changed["parts"]:
+        assert _all_shells_watertight(_mesh(part)), part["name"]
+    # A larger rectangular backing no longer fits inside the cutter, so the
+    # stamp is placed beside it instead of overlapping.
+    stamp = next(p for p in changed["parts"] if p["name"] == "Sello")
+    assert stamp["preview_offset"][0] != 0
+
+
+def test_standalone_stamp_still_uses_the_border_option():
+    with_border = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "stampBorder": True,
+    }})
+    without_border = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "stampBorder": False,
+    }})
+    assert with_border["parts"][0]["volume"] > without_border["parts"][0]["volume"]

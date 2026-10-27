@@ -739,9 +739,35 @@ def _part(name: str, mesh: Mesh, color: str) -> dict[str, Any]:
     }
 
 
+def _bounds_dict(obj: Any) -> dict | None:
+    try:
+        return obj["bounds"] if isinstance(obj, dict) else obj.bounds
+    except Exception:
+        return None
+
+
+def _fits_nested(cutter: Any, stamp: Any) -> bool:
+    try:
+        cb = _bounds_dict(cutter)
+        sb = _bounds_dict(stamp)
+        if not cb or not sb:
+            return True
+        cw = cb["max"][0] - cb["min"][0]
+        ch = cb["max"][1] - cb["min"][1]
+        sw = sb["max"][0] - sb["min"][0]
+        sh = sb["max"][1] - sb["min"][1]
+        return sw <= cw - 3.0 and sh <= ch - 3.0
+    except Exception:
+        return True
+
+
 def _nested_pair(parts: list[dict[str, Any]]) -> bool:
     names = {p["name"] for p in parts}
-    return len(parts) == 2 and "Cortador" in names and "Sello" in names
+    if len(parts) != 2 or "Cortador" not in names or "Sello" not in names:
+        return False
+    cutter = next(p for p in parts if p["name"] == "Cortador")
+    stamp = next(p for p in parts if p["name"] == "Sello")
+    return _fits_nested(cutter, stamp)
 
 
 def _arrange(parts: list[dict[str, Any]], gap: float = 8.0) -> None:
@@ -1123,6 +1149,11 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 clearance=settings["stampClearance"] if settings["mode"] == "cutter-stamp" else 0.0,
                 border=bool(settings.get("stampBorder", True)),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
+                border_height=(
+                    max(0.3, min(0.8, settings["stampRelief"] * 0.3))
+                    if settings["mode"] == "cutter-stamp"
+                    else 0.0
+                ),
                 alignment=stamp_alignment,
                 recessed=bool(settings.get("stampRecessed")),
                 detail_curve=str(settings.get("stampDetailCurve", "round")),
@@ -1393,6 +1424,11 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 clearance=settings["stampClearance"] if settings["mode"] == "cutter-stamp" else 0.0,
                 border=bool(settings.get("stampBorder", True)),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
+                border_height=(
+                    max(0.3, min(0.8, settings["stampRelief"] * 0.3))
+                    if settings["mode"] == "cutter-stamp"
+                    else 0.0
+                ),
                 alignment=mirror_stamp_align,
                 recessed=bool(settings.get("stampRecessed")),
                 detail_curve=str(settings.get("stampDetailCurve", "round")),
@@ -1464,9 +1500,12 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
 def _place_parts(raw: list[tuple[str, Any, str]], gap: float = 8.0) -> list[tuple[str, Mesh, str, tuple[float, float, float]]]:
     names = {n for n, _m, _c in raw}
     if len(raw) == 2 and "Cortador" in names and "Sello" in names:
-        # Nest the stamp inside the cutter's opening.  Both stay on the bed;
-        # the clearance means they remain separate printable objects.
-        return [(n, m, c, (0.0, 0.0, 0.0)) for n, m, c in raw]
+        cutter = next(m for n, m, _c in raw if n == "Cortador")
+        stamp = next(m for n, m, _c in raw if n == "Sello")
+        if _fits_nested(cutter, stamp):
+            # Nest the stamp inside the cutter's opening.  Both stay on the
+            # bed; the clearance means they remain separate printable objects.
+            return [(n, m, c, (0.0, 0.0, 0.0)) for n, m, c in raw]
     widths = [mesh.bounds["max"][0] - mesh.bounds["min"][0] for _n, mesh, _c in raw]
     total = sum(widths) + gap * max(0, len(raw) - 1)
     cursor = -total / 2

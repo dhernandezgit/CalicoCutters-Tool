@@ -860,8 +860,10 @@ export default function SettingsPanel({
             </div>
           )}
           <Toggle
-            label="Borde perimetral del sello"
-            hint="Deja un marco elevado a la misma altura que el dibujo. Desactívalo para que el borde quede a la altura de la base plana."
+            label={settings.mode === "cutter-stamp" ? "Borde perimetral bajo" : "Borde perimetral del sello"}
+            hint={settings.mode === "cutter-stamp"
+              ? "En Cortador + sello el borde queda bajo para no crear un aro alto dentro del cortador."
+              : "Deja un marco elevado a la misma altura que el dibujo. Desactívalo para que el borde quede a la altura de la base plana."}
             checked={settings.stampBorder}
             onChange={(v) => onChange({ stampBorder: v })}
           />
@@ -875,6 +877,10 @@ export default function SettingsPanel({
               onChange={(v) => onChange({ stampBorderWidth: v })}
             />
           )}
+          <div className="inline-hint">
+            <CircleHelp size={13} />
+            <span>{settings.mode === "cutter-stamp" ? "El sello se anida dentro del cortador si cabe; si el respaldo rectangular o el grip lo hacen más grande, se coloca al lado. Sin aros altos." : "El sello se imprime como pieza independiente; el borde y el respaldo son opcionales."}</span>
+          </div>
           {advanced && (
             <Toggle
               label="Relieve negativo (hundido)"
