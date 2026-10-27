@@ -1,5 +1,41 @@
 # Changelog
 
+## 0.7.0 — 2026-10-27
+
+Ampliación de modos, relieves y previsualización; corrección del cortador + sello
+y rediseño de la pinza de página.
+
+### Creación y opciones
+
+- **Unidades** mm/pulgadas para el tamaño del diseño.
+- **Multicortador y set de cortadores** reactivados: barras, mango y cuchilla extra;
+  set por tamaños o por formas separadas.
+- **Impronta**: mango, barras, cuchilla extra, relieve elevado o hundido, solo bordes
+  y margen de base.
+- **Sello**: grip posterior, respaldo rectangular o contorneado, borde opcional y
+  control de altura; en Cortador + sello el borde es bajo para no dejar aros altos.
+- **Stencil**: modos cuadrícula, dimensiones y separación calculada; recorta el dibujo
+  interior completo y mantiene los puentes.
+- **Sándwich**: muescas redondas, triangulares o cuadradas, redondeo y banda hacia
+  dentro o hacia fuera.
+- **Cake pop**: prensador de una o dos piezas (cara + respaldo).
+- **Rodillo**: escala del origen, altura de borde, motivo de dibujo o silueta y
+  relieve redondeado por defecto.
+- **Pinza de página**: dos placas tipo cake pop, base con dibujo hundido y pivote,
+  prensa con dibujo en relieve, sin bisagra, bordes altos ni agujeros.
+- **Cámara**: perspectiva o isométrica ortográfica y botón Vista más grande.
+
+### Acabado y escena
+
+- Escena de masa y galleta con formas orgánicas, bisel y **color de masa/galleta
+  elegible**.
+- Mejoras de estanqueidad, costuras del rodillo, detalles interiores y colocación
+  de piezas que no caben anidadas.
+
+### Calidad
+
+- 75 tests, typecheck y build.
+
 ## 0.6.1 — 2026-10-26
 
 Barra de vista central reorganizada y jerarquía visual del botón Vista.
