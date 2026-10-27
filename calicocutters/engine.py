@@ -60,7 +60,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "extraBladeThickness": 0.4,
     "baseHeight": 3.5,
     "baseWidth": 4.0,
-    "baseShape": "chamfer",
+    "baseShape": "rect",
     "addPressHandle": False,
     "pressHandleLength": 26.0,
     "pressHandleWidth": 10.0,
@@ -84,7 +84,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampGrip": False,
     "stampGripDiameter": 20.0,
     "stampGripDepth": 2.0,
-    "stampDetailCurve": "round",
+    "stampDetailCurve": "none",
     "stampDetailGrow": 0.0,
     "mirror": False,
     "mirrorPair": False,
@@ -369,7 +369,7 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     out["mode"] = mode
     out["sizeMode"] = "wh" if str(out.get("sizeMode")) == "wh" else "longest"
     out["printer"] = str(out.get("printer")) if str(out.get("printer")) in PRINTERS else "fdm04"
-    out["baseShape"] = str(out.get("baseShape")) if str(out.get("baseShape")) in {"rect", "chamfer", "round"} else "chamfer"
+    out["baseShape"] = str(out.get("baseShape")) if str(out.get("baseShape")) in {"rect", "chamfer", "round"} else "rect"
     out["pressHandleShape"] = (
         str(out.get("pressHandleShape"))
         if str(out.get("pressHandleShape")) in {"round", "rect", "rounded"}
@@ -672,7 +672,7 @@ def _build_cutter_set_shapes(components: list[Polygon], settings: dict[str, Any]
             extra_blade=bool(settings.get("extraBlade")),
             extra_blade_depth=settings.get("extraBladeDepth", 0),
             extra_blade_thickness=settings.get("extraBladeThickness", 0),
-            base_shape=str(settings.get("baseShape", "round")),
+            base_shape=str(settings.get("baseShape", "rect")),
             alignment=align,
         )
         parts.append(mesh.translated([cursor + width / 2.0, 0.0, 0.0]))
@@ -1129,7 +1129,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade=bool(settings.get("extraBlade")),
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
-                base_shape=str(settings.get("baseShape", "round")),
+                base_shape=str(settings.get("baseShape", "rect")),
                 alignment=cutter_alignment,
             )
             cutter = _add_cutter_extras(cutter, main, settings)
@@ -1156,7 +1156,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 ),
                 alignment=stamp_alignment,
                 recessed=bool(settings.get("stampRecessed")),
-                detail_curve=str(settings.get("stampDetailCurve", "round")),
+                detail_curve=str(settings.get("stampDetailCurve", "none")),
                 detail_grow=float(settings.get("stampDetailGrow", 0.0)),
                 backing=str(settings.get("stampBacking", "outline")),
                 backing_padding=float(settings.get("stampBackingPadding", 2.0)),
@@ -1176,10 +1176,10 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 base_height=settings["baseHeight"],
                 base_width=settings["baseWidth"],
                 imprint_depth=settings["imprintDepth"],
-                base_shape=str(settings.get("baseShape", "round")),
+                base_shape=str(settings.get("baseShape", "rect")),
                 sharp_edge=bool(settings["sharpEdge"]),
                 alignment=cutter_alignment,
-                detail_curve=str(settings.get("stampDetailCurve", "round")),
+                detail_curve=str(settings.get("stampDetailCurve", "none")),
                 detail_grow=float(settings.get("stampDetailGrow", 0.0)),
                 extra_blade=bool(settings.get("extraBlade")),
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
@@ -1207,7 +1207,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade=bool(settings.get("extraBlade")),
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
-                base_shape=str(settings.get("baseShape", "round")),
+                base_shape=str(settings.get("baseShape", "rect")),
                 add_press_handle=bool(settings.get("addPressHandle")),
                 press_handle_length=settings.get("pressHandleLength", 30),
                 press_handle_width=settings.get("pressHandleWidth", 12),
@@ -1239,7 +1239,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     dent_size=settings["sandwichDentSize"],
                     dent_spacing=settings["sandwichDentSpacing"],
                     dent_depth=settings["sandwichDentDepth"],
-                    base_shape=str(settings.get("baseShape", "round")),
+                    base_shape=str(settings.get("baseShape", "rect")),
                     sharp_edge=bool(settings["sharpEdge"]),
                     alignment=cutter_alignment,
                 )
@@ -1255,7 +1255,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     border_width=float(settings.get("stampBorderWidth", 1.6)),
                     alignment=stamp_alignment,
                     recessed=bool(settings.get("stampRecessed")),
-                    detail_curve=str(settings.get("stampDetailCurve", "round")),
+                    detail_curve=str(settings.get("stampDetailCurve", "none")),
                     detail_grow=float(settings.get("stampDetailGrow", 0.0)),
                 )
                 parts.append(("Sello sándwich", sandwich_stamp, "#b7a4e8"))
@@ -1410,7 +1410,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade=bool(settings.get("extraBlade")),
                 extra_blade_depth=settings.get("extraBladeDepth", 0),
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
-                base_shape=str(settings.get("baseShape", "round")),
+                base_shape=str(settings.get("baseShape", "rect")),
                 alignment=mirror_cut_align,
             )
             mirror_cutter = _add_cutter_extras(mirror_cutter, mirrored_main, settings)
@@ -1431,7 +1431,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 ),
                 alignment=mirror_stamp_align,
                 recessed=bool(settings.get("stampRecessed")),
-                detail_curve=str(settings.get("stampDetailCurve", "round")),
+                detail_curve=str(settings.get("stampDetailCurve", "none")),
                 detail_grow=float(settings.get("stampDetailGrow", 0.0)),
                 backing=str(settings.get("stampBacking", "outline")),
                 backing_padding=float(settings.get("stampBackingPadding", 2.0)),

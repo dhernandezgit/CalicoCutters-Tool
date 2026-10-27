@@ -746,6 +746,7 @@ export default function SettingsPanel({
               </select>
             </span>
           </label>
+          <div className="inline-hint"><Box size={13} /><span>Rectangular por defecto; chaflán y redondeado suavizan las esquinas. El chaflán recto limita los picos en formas agudas.</span></div>
           {supportsExtras && (
             <>
               <Toggle
@@ -811,7 +812,7 @@ export default function SettingsPanel({
           </div>
           <div className="inline-hint">
             <Stamp size={13} />
-            <span>El perfil suaviza las cimas del relieve para desmoldar mejor. Engrosar líneas ayuda con dibujos de trazo fino, sin cambiar el contorno del sello.</span>
+            <span>Recto por defecto. Redondeado y chaflán solo se aplican si el detalle es lo bastante ancho; en líneas finas se mantiene recto y a altura completa para evitar picos. Engrosar líneas ayuda con trazos finos.</span>
           </div>
           {settings.mode === "cutter-stamp" ? (
             <>
@@ -937,6 +938,7 @@ export default function SettingsPanel({
             </label>
             <NumberField label="Engrosar líneas" value={settings.stampDetailGrow} min={0} max={1.5} step={0.1} onChange={(v) => onChange({ stampDetailGrow: v })} />
           </div>
+          <div className="inline-hint"><Layers size={13} /><span>Recto por defecto: evita picos en líneas finas. Las curvas solo se aplican cuando el relieve tiene anchura suficiente.</span></div>
           <div className="two-fields">
             <NumberField label="Margen de la base" value={settings.imprintBaseWidth} min={0.3} max={8} step={0.1} onChange={(v) => onChange({ imprintBaseWidth: v })} />
             <NumberField label="Grosor de bordes" value={settings.imprintEdgeWidth} min={0.4} max={4} step={0.1} onChange={(v) => onChange({ imprintEdgeWidth: v })} />

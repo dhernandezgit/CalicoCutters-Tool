@@ -435,7 +435,8 @@ def cutter_rings(
 ):
     """Return base, blade and tip ring polygons for an outline."""
     if base_shape == "rect":
-        join_style, miter, segs = 2, 2.0, 1
+        # A tighter mitre limit avoids long spikes at acute corners.
+        join_style, miter, segs = 2, 1.5, 1
     elif base_shape == "chamfer":
         join_style, miter, segs = 3, 2.0, 1
     else:
@@ -460,20 +461,26 @@ def _curved_relief_layers(
         return [(poly, z0, height)]
     amount = min(0.9, max(0.25, height * 0.3))
     if curve == "chamfer":
-        low = max(0.15, height - amount)
         top = poly.buffer(-amount, join_style=1, quad_segs=8)
-        layers = [(poly, z0, low)]
-        if not top.is_empty:
-            layers.append((top, z0 + low - 0.01, min(amount, height - low) + 0.01))
-        return layers
+        # A thin line cannot be inset: keep it flat and at full height instead
+        # of leaving a shortened or spiky half-profile.
+        if top.is_empty or top.area < max(0.05, poly.area * 0.12):
+            return [(poly, z0, height)]
+        low = max(0.15, height - amount)
+        return [
+            (poly, z0, low),
+            (top, z0 + low - 0.01, min(amount, height - low) + 0.01),
+        ]
     # A two-stage loft reads as a rounded relief at normal print scale while
     # keeping a single, clean interface between the two shells.
-    low = max(0.2, height * 0.65)
     top = poly.buffer(-amount * 0.55, join_style=1, quad_segs=8)
-    layers = [(poly, z0, low)]
-    if not top.is_empty:
-        layers.append((top, z0 + low - 0.01, max(0.1, height - low) + 0.01))
-    return layers
+    if top.is_empty or top.area < max(0.05, poly.area * 0.12):
+        return [(poly, z0, height)]
+    low = max(0.2, height * 0.65)
+    return [
+        (poly, z0, low),
+        (top, z0 + low - 0.01, max(0.1, height - low) + 0.01),
+    ]
 
 
 def _ring_parts(geom) -> list[Polygon]:

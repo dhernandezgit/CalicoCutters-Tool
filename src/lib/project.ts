@@ -38,7 +38,7 @@ function normalizeSettings(raw: Partial<DesignSettings> | null | undefined): Des
   out.sizeMode = out.sizeMode === "wh" ? "wh" : "longest";
   out.units = out.units === "in" ? "in" : "mm";
   out.printer = ["fdm04", "fdm06", "resin"].includes(String(out.printer)) ? out.printer : "fdm04";
-  out.baseShape = ["rect", "chamfer", "round"].includes(String(out.baseShape)) ? out.baseShape : "chamfer";
+  out.baseShape = ["rect", "chamfer", "round"].includes(String(out.baseShape)) ? out.baseShape : "rect";
   out.pressHandleShape = ["rect", "round", "rounded"].includes(String(out.pressHandleShape)) ? out.pressHandleShape : "rounded";
   out.stampEdgeMethod = out.stampEdgeMethod === "offset" ? "offset" : "preserve";
   out.stampDetailCurve = ["chamfer", "round"].includes(String(out.stampDetailCurve)) ? out.stampDetailCurve : "none";

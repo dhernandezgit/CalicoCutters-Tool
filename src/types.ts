@@ -298,7 +298,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
 
   baseHeight: 3.5,
   baseWidth: 4,
-  baseShape: "chamfer",
+  baseShape: "rect",
 
   addPressHandle: false,
   pressHandleLength: 26,
@@ -325,7 +325,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampGrip: false,
   stampGripDiameter: 20,
   stampGripDepth: 2,
-  stampDetailCurve: "round",
+  stampDetailCurve: "none",
   stampDetailGrow: 0,
   mirror: false,
   mirrorPair: false,

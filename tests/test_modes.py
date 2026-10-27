@@ -40,9 +40,10 @@ def test_default_dimensions_and_nested_parts():
     # The stamp is nested inside the cutter, not shifted sideways.
     assert stamp["preview_offset"] == [0.0, 0.0, 0.0]
     assert cutter["preview_offset"] == [0.0, 0.0, 0.0]
-    # Final outline with base is about 80 mm + 2 * 4 mm.
+    # Rectangular base by default; the mitred exterior is a little wider than
+    # the old chamfered default.
     assert result["dimensions"]["width"] == pytest.approx(86.8, abs=1.2)
-    assert result["dimensions"]["height"] == pytest.approx(86.7, abs=1.2)
+    assert result["dimensions"]["height"] == pytest.approx(90.0, abs=1.8)
     for part in result["parts"]:
         mesh = _mesh(part)
         assert mesh.is_watertight
@@ -848,3 +849,26 @@ def test_standalone_stamp_still_uses_the_border_option():
         "stampBorder": False,
     }})
     assert with_border["parts"][0]["volume"] > without_border["parts"][0]["volume"]
+
+
+def test_default_profiles_are_flat_and_rectangular():
+    assert DEFAULT_SETTINGS["baseShape"] == "rect"
+    assert DEFAULT_SETTINGS["stampDetailCurve"] == "none"
+
+
+def test_thin_detail_profiles_do_not_create_short_or_spiky_tops():
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <rect x="10" y="10" width="80" height="80" fill="#111"/>
+    <rect x="20" y="48" width="60" height="2" fill="#111"/>
+    </svg>"""
+    shape = parse_svg(svg, "thin-detail.svg", 80)
+    for curve in ("none", "chamfer", "round"):
+        result = build({"shape": shape.to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "stamp",
+            "stampBorder": False,
+            "stampDetailCurve": curve,
+        }})
+        mesh = _mesh(result["parts"][0])
+        assert mesh.is_watertight, curve
+        assert float(mesh.vertices[:, 2].max()) == pytest.approx(8.5, abs=0.15)

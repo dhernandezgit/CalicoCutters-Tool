@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.2 — 2026-10-27
+
+Perfiles por defecto y detalles finos.
+
+### Ajustes
+
+- **Base rectangular por defecto**; el chaflán y el redondeado siguen disponibles.
+- **Perfil del relieve recto por defecto** en sellos e improntas.
+- Los perfiles redondeado/chaflán se aplican solo cuando el detalle tiene anchura
+  suficiente; en líneas finas se mantiene el perfil recto y la altura completa para
+  evitar picos y rebajes extraños.
+- El perfil rectangular limita la mitra para no generar puntas en esquinas agudas.
+
+### Calidad
+
+- 77 tests, typecheck y build.
+
 ## 0.7.1 — 2026-10-27
 
 Corrección del despliegue automático.
