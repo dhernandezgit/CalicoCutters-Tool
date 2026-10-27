@@ -86,6 +86,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "multiRows": 2,
     "multiCols": 2,
     "multiSpacing": 4.0,
+    "sandwichPart": "both",
     "sandwichSealWidth": 4.0,
     "sandwichGap": 0.5,
     "sandwichDentSize": 3.0,
@@ -99,23 +100,25 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "rollerRepeatsAlong": 1,
     "rollerRim": 2.0,
     "rollerPattern": "grid",
+    "rollerPatternMode": "drawing",
     "rollerMargin": 0.0,
     "rollerRotate": False,
     "rollerInvert": False,
     "rollerBack": 0.0,
     "rollerRemoveEdge": False,
-    "rollerDepthCurve": "none",
+    "rollerDepthCurve": "round",
     "stencilWidth": 100.0,
     "stencilHeight": 100.0,
-    "stencilRows": 3,
-    "stencilCols": 3,
+    "stencilRows": 1,
+    "stencilCols": 1,
     "stencilSpacing": 3.0,
     "stencilMargin": 3.0,
-    "stencilShapeSize": 15.0,
+    "stencilShapeSize": 0.0,
     "stencilPattern": "grid",
     "stencilBridges": True,
     "stencilBridgeWidth": 1.2,
     "stencilThickness": 1.5,
+    "stencilLineWidth": 1.2,
     "topperThickness": 5.0,
     "topperRelief": 2.0,
     "topperBacking": 2.0,
@@ -123,6 +126,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "topperPinWidth": 6.0,
     "topperPinPosition": 0.0,
     "topperInvert": False,
+    "topperDepthCurve": "none",
     "practiceThickness": 3.0,
     "practiceWallHeight": 8.0,
     "practiceWallWidth": 1.4,
@@ -135,11 +139,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "bookmarkHoleDiameter": 6.0,
     "bookmarkHoleMargin": 10.0,
     "bookmarkRelief": 0.8,
-    "bookmarkDesignStyle": "line",
+    "bookmarkDesignStyle": "relief",
     "pageClipGap": 1.0,
     "pageClipBridge": 14.0,
     "pageClipFlare": 6.0,
-    "pageClipLip": 8.0,
+    "pageClipLip": 4.0,
     "pageClipHingeThickness": 0.6,
     "cakePopMoldHeight": 18.0,
     "cakePopMoldWall": 2.4,
@@ -149,6 +153,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "cakePopPlungerClearance": 0.6,
     "cakePopPlungerBack": 2.5,
     "cakePopRelief": 2.0,
+    "cakePopPlungerFace": "imprint",
     "cakePopTray": False,
     "cakePopTrayRotation": 180.0,
     "cakePopTrayDepth": 50.0,
@@ -233,6 +238,7 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "stencilShapeSize": (0.0, 80.0),
     "stencilBridgeWidth": (0.6, 5.0),
     "stencilThickness": (0.6, 5.0),
+    "stencilLineWidth": (0.4, 3.0),
     "topperThickness": (1.0, 15.0),
     "topperRelief": (0.2, 10.0),
     "topperBacking": (0.0, 15.0),
@@ -253,7 +259,7 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "pageClipGap": (0.3, 3.0),
     "pageClipBridge": (4.0, 80.0),
     "pageClipFlare": (0.0, 12.0),
-    "pageClipLip": (3.0, 20.0),
+    "pageClipLip": (2.0, 8.0),
     "pageClipHingeThickness": (0.3, 1.2),
     "cakePopMoldHeight": (6.0, 40.0),
     "cakePopMoldWall": (1.2, 8.0),
@@ -347,10 +353,14 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
         if str(out.get("stampDetailCurve")) in {"chamfer", "round"}
         else "none"
     )
+    out["sandwichPart"] = str(out.get("sandwichPart")) if str(out.get("sandwichPart")) in {"both", "cutter", "seal"} else "both"
     out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "random" if str(out.get("stencilPattern")) == "random" else "grid"
     out["rollerPattern"] = str(out.get("rollerPattern")) if str(out.get("rollerPattern")) in {"brick", "mirror"} else "grid"
-    out["rollerDepthCurve"] = str(out.get("rollerDepthCurve")) if str(out.get("rollerDepthCurve")) in {"chamfer", "round"} else "none"
-    out["bookmarkDesignStyle"] = str(out.get("bookmarkDesignStyle")) if str(out.get("bookmarkDesignStyle")) in {"line", "relief", "none"} else "line"
+    out["rollerPatternMode"] = str(out.get("rollerPatternMode")) if str(out.get("rollerPatternMode")) in {"drawing", "silhouette"} else "drawing"
+    out["topperDepthCurve"] = str(out.get("topperDepthCurve")) if str(out.get("topperDepthCurve")) in {"chamfer", "round"} else "none"
+    out["cakePopPlungerFace"] = str(out.get("cakePopPlungerFace")) if str(out.get("cakePopPlungerFace")) in {"outline", "none"} else "imprint"
+    out["rollerDepthCurve"] = str(out.get("rollerDepthCurve")) if str(out.get("rollerDepthCurve")) in {"none", "chamfer", "round"} else "round"
+    out["bookmarkDesignStyle"] = str(out.get("bookmarkDesignStyle")) if str(out.get("bookmarkDesignStyle")) in {"line", "relief", "none"} else "relief"
     out["bedModel"] = str(out.get("bedModel") or "bambu-p2s")[:40]
     for key in _BOOLEAN_KEYS:
         out[key] = _as_bool(out.get(key))
@@ -662,8 +672,12 @@ def _checks(
 ) -> list[dict[str, str]]:
     line = settings["lineWidth"]
     mode = settings["mode"]
-    cutter_like = mode in {"cutter", "cutter-stamp", "imprint", "multicutter", "sandwich", "cutter-set"}
-    stamp_like = mode in {"stamp", "cutter-stamp"}
+    cutter_like = mode in {"cutter", "cutter-stamp", "imprint", "multicutter", "cutter-set"} or (
+        mode == "sandwich" and settings.get("sandwichPart", "both") != "seal"
+    )
+    stamp_like = mode in {"stamp", "cutter-stamp"} or (
+        mode == "sandwich" and settings.get("sandwichPart", "both") != "cutter"
+    )
     out: list[dict[str, str]] = []
 
     if cutter_like:
@@ -732,14 +746,15 @@ def _checks(
     if mode == "multicutter" and settings["multiSpacing"] < 2:
         out.append(_check("warn", f"Separación del multicortador de {settings['multiSpacing']:.1f} mm", "Deja al menos 2–4 mm entre copias; si no, se fusionan al imprimir.", "multi_spacing"))
 
-    if stamp_like and settings["mode"] == "cutter-stamp":
-        clearance = settings["stampClearance"]
-        out.append(_check(
-            "ok" if clearance >= line * 1.5 else "warn",
-            f"Holgura del sello de {clearance:.2f} mm",
-            f"{clearance / line:.1f} líneas. Recomendado: 2 líneas ({line * 2:.1f} mm).",
-            "clearance",
-        ))
+    if stamp_like:
+        if settings["mode"] == "cutter-stamp":
+            clearance = settings["stampClearance"]
+            out.append(_check(
+                "ok" if clearance >= line * 1.5 else "warn",
+                f"Holgura del sello de {clearance:.2f} mm",
+                f"{clearance / line:.1f} líneas. Recomendado: 2 líneas ({line * 2:.1f} mm).",
+                "clearance",
+            ))
         out.append(_check(
             "ok" if settings["stampBack"] >= 4 else "warn",
             f"Respaldo del sello de {settings['stampBack']:.1f} mm",
@@ -760,7 +775,7 @@ def _checks(
                     "small_details",
                 ))
 
-    if mode == "sandwich":
+    if mode == "sandwich" and settings.get("sandwichPart", "both") != "seal":
         if settings["sandwichSealWidth"] < line * 2:
             out.append(_check("warn", f"Sellado de {settings['sandwichSealWidth']:.1f} mm", "Un sellado de menos de 2 líneas puede romperse al cerrar el sándwich.", "sandwich_seal"))
         if settings["sandwichDentDepth"] > settings["sandwichSealWidth"]:
@@ -776,6 +791,19 @@ def _checks(
         ))
         if settings["rollerRelief"] > settings["rollerDiameter"] * 0.25:
             out.append(_check("warn", "Relieve del rodillo muy alto", "Un relieve alto puede engancharse o romperse. Prueba 1–2 mm.", "roller_relief"))
+        around = max(1, int(settings["rollerRepeatsAround"]))
+        along = max(1, int(settings["rollerRepeatsAlong"]))
+        cell_min = min(
+            2 * math.pi * (settings["rollerDiameter"] / 2) / around,
+            settings["rollerLength"] / along,
+        ) - settings["rollerMargin"] * 2
+        if cell_min < 8:
+            out.append(_check(
+                "warn",
+                f"Repeticiones de ~{max(0.0, cell_min):.0f} mm",
+                "Demasiadas repeticiones para este diámetro o longitud; el dibujo quedaría diminuto. Reduce las repeticiones o aumenta el rodillo.",
+                "roller_repeats",
+            ))
 
     if mode == "stencil":
         if settings["stencilThickness"] < max(0.8, line * 2):
@@ -787,8 +815,29 @@ def _checks(
             ))
         if settings["stencilMargin"] < 1:
             out.append(_check("warn", "Margen del stencil muy justo", "Deja al menos 2–3 mm de material alrededor del patrón para que no se rompa.", "stencil_margin"))
+        if settings["stencilLineWidth"] < max(0.6, line * 1.5):
+            out.append(_check(
+                "warn",
+                f"Línea de stencil de {settings['stencilLineWidth']:.1f} mm",
+                "Las líneas y el contorno pueden romperse al limpiar la plantilla. Usa al menos 1,2 mm.",
+                "stencil_line",
+            ))
         if 0 < settings["stencilShapeSize"] < 8:
             out.append(_check("warn", f"Forma de {settings['stencilShapeSize']:.0f} mm", "Las aberturas de menos de 8 mm son difíciles de limpiar y pueden romperse.", "stencil_small"))
+        cols = max(1, int(settings["stencilCols"]))
+        rows = max(1, int(settings["stencilRows"]))
+        if cols * rows > 1 and settings["stencilShapeSize"] <= 0:
+            cell = min(
+                (settings["stencilWidth"] - settings["stencilMargin"] * 2) / cols,
+                (settings["stencilHeight"] - settings["stencilMargin"] * 2) / rows,
+            ) - settings["stencilSpacing"]
+            if cell < 8:
+                out.append(_check(
+                    "warn",
+                    f"Repeticiones de ~{max(0, cell):.0f} mm",
+                    "Hay demasiadas filas o columnas para el tamaño de la lámina; la forma quedaría muy pequeña. Reduce las repeticiones o aumenta la lámina.",
+                    "stencil_repeats",
+                ))
         if not settings["stencilBridges"] and main is not None and main.interiors:
             out.append(_check("warn", "Islas interiores sin puentes", "El dibujo tiene zonas interiores que quedarán sueltas. Activa los puentes del stencil.", "stencil_islands"))
 
@@ -806,6 +855,8 @@ def _checks(
             out.append(_check("warn", f"Pin de {settings['topperPinLength']:.0f} mm", "Un pin corto no sujeta el topper. Usa al menos 30–50 mm.", "topper_pin_length"))
         if settings["topperBacking"] < 1:
             out.append(_check("warn", "Topper sin respaldo perimetral", "Añade 2–5 mm de respaldo para que los detalles finos no queden sueltos.", "topper_backing"))
+        if settings["topperRelief"] > settings["topperThickness"]:
+            out.append(_check("warn", f"Relieve de {settings['topperRelief']:.1f} mm", "Un relieve más alto que la base puede ser frágil; usa 2–4 mm o aumenta el grosor de la base.", "topper_relief"))
 
     if mode == "practice":
         if settings["practiceWallWidth"] < max(0.8, line * 2):
@@ -820,16 +871,13 @@ def _checks(
 
     if mode == "bookmark":
         if settings["bookmarkThickness"] < max(1.6, line * 3):
-            out.append(_check("warn", f"Marcapáginas de {settings['bookmarkThickness']:.1f} mm", "Una lámina de menos de 2 mm se dobla. Usa 2–3 mm.", "bookmark_thin"))
+            out.append(_check("warn", f"Pinza de {settings['bookmarkThickness']:.1f} mm", "Una lámina de menos de 2 mm se dobla. Usa 2–3 mm.", "bookmark_thin"))
         if settings["bookmarkHeight"] < 80:
-            out.append(_check("warn", f"Marcapáginas de {settings['bookmarkHeight']:.0f} mm", "Para una página de libro suele necesitarse al menos 100 mm.", "bookmark_short"))
-        if settings.get("bookmarkHole"):
-            if settings["bookmarkHoleDiameter"] < line * 2:
-                out.append(_check("warn", "Agujero de cinta demasiado pequeño", "Usa al menos 4–6 mm para pasar una cinta o lana.", "bookmark_hole"))
-            if settings["bookmarkHoleDiameter"] > settings["bookmarkWidth"] * 0.4:
-                out.append(_check("warn", "Agujero de cinta demasiado grande", "Deja al menos 6 mm de material a cada lado.", "bookmark_hole_large"))
+            out.append(_check("warn", f"Tira de {settings['bookmarkHeight']:.0f} mm", "La tira se dobla por la mitad; usa al menos 100 mm para que la pinza cerrada mida 50 mm.", "bookmark_short"))
         if settings["bookmarkRelief"] > max(0.2, settings["bookmarkThickness"]):
-            out.append(_check("warn", "Relieve del marcapáginas muy alto", "Reduce el relieve o aumenta el grosor de la lámina.", "bookmark_relief"))
+            out.append(_check("warn", "Marcado de la pinza demasiado profundo", "Reduce la profundidad o aumenta el grosor de la lámina para no debilitar el cierre.", "bookmark_relief"))
+        if settings["pageClipHingeThickness"] > settings["bookmarkThickness"] - 0.4:
+            out.append(_check("warn", "Bisagra casi tan gruesa como la placa", "Una bisagra gruesa no dobla bien; usa un grosor de 0,4–0,8 mm con placas de 2–3 mm.", "bookmark_hinge"))
 
     if mode == "cakepop":
         if settings["cakePopMoldWall"] < max(1.2, line * 3):
@@ -884,8 +932,12 @@ def _checks(
 def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple[str, Any, str]], list[str], Polygon, list[Polygon]]:
     main, details, pre_warnings = _sized_geometry(shape, settings)
     warnings = list(shape.warnings) + pre_warnings
-    cutter_modes = {"cutter", "cutter-stamp", "imprint", "multicutter", "sandwich", "cutter-set"}
+    cutter_modes = {"cutter", "cutter-stamp", "imprint", "multicutter", "cutter-set"}
+    if settings["mode"] == "sandwich" and settings.get("sandwichPart", "both") != "seal":
+        cutter_modes.add("sandwich")
     stamp_modes = {"stamp", "cutter-stamp"}
+    if settings["mode"] == "sandwich" and settings.get("sandwichPart", "both") != "cutter":
+        stamp_modes.add("sandwich")
     cutter_alignment, stamp_alignment = _alignment_locations(main, settings)
     if settings.get("alignmentHole"):
         if settings["mode"] in cutter_modes and cutter_alignment is None:
@@ -903,6 +955,17 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
         warnings.append("La punta es más fina que una línea de impresión.")
     if settings["mode"] == "cutter-stamp" and settings["stampClearance"] < settings["lineWidth"] * 1.5:
         warnings.append("La holgura del sello es muy justa para imprimir.")
+    if settings["mode"] == "roller" and settings.get("rollerPattern") in {"brick", "mirror"}:
+        requested = int(settings["rollerRepeatsAround"])
+        if requested > 1 and requested % 2 == 1:
+            warnings.append(
+                f"Patrón {settings['rollerPattern']}: se usan {requested + 1} repeticiones "
+                "alrededor para cerrar la costura."
+            )
+    if settings["mode"] == "roller" and settings.get("rollerRemoveEdge") and not details:
+        warnings.append(
+            "Quitar borde exterior: el dibujo no tiene detalles interiores; se usa la silueta."
+        )
 
     if settings["mode"] in stamp_modes and settings.get("stampRemoveOuterEdge") and details:
         inner_zone = main.buffer(-max(0.8, settings["lineWidth"] * 2), join_style=1, quad_segs=8)
@@ -1004,24 +1067,41 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             )
             parts.append(("Multicortador", multi, "#f39ab1"))
         if settings["mode"] == "sandwich":
-            sandwich = build_sandwich(
-                main,
-                blade_thickness=settings["bladeThickness"],
-                blade_depth=settings["bladeDepth"],
-                tip_width=settings["tipWidth"],
-                chamfer_height=settings["chamferHeight"],
-                base_height=settings["baseHeight"],
-                base_width=settings["baseWidth"],
-                seal_width=settings["sandwichSealWidth"],
-                gap=settings["sandwichGap"],
-                dent_size=settings["sandwichDentSize"],
-                dent_spacing=settings["sandwichDentSpacing"],
-                dent_depth=settings["sandwichDentDepth"],
-                base_shape=str(settings.get("baseShape", "round")),
-                sharp_edge=bool(settings["sharpEdge"]),
-                alignment=cutter_alignment,
-            )
-            parts.append(("Cortador sándwich", sandwich, "#f39ab1"))
+            sandwich_part = str(settings["sandwichPart"])
+            if sandwich_part in {"both", "cutter"}:
+                sandwich = build_sandwich(
+                    main,
+                    blade_thickness=settings["bladeThickness"],
+                    blade_depth=settings["bladeDepth"],
+                    tip_width=settings["tipWidth"],
+                    chamfer_height=settings["chamferHeight"],
+                    base_height=settings["baseHeight"],
+                    base_width=settings["baseWidth"],
+                    seal_width=settings["sandwichSealWidth"],
+                    gap=settings["sandwichGap"],
+                    dent_size=settings["sandwichDentSize"],
+                    dent_spacing=settings["sandwichDentSpacing"],
+                    dent_depth=settings["sandwichDentDepth"],
+                    base_shape=str(settings.get("baseShape", "round")),
+                    sharp_edge=bool(settings["sharpEdge"]),
+                    alignment=cutter_alignment,
+                )
+                parts.append(("Cortador sándwich", sandwich, "#f39ab1"))
+            if sandwich_part in {"both", "seal"}:
+                sandwich_stamp = build_stamp(
+                    main,
+                    details,
+                    back_height=settings["stampBack"],
+                    relief=settings["stampRelief"],
+                    clearance=settings["stampClearance"],
+                    border=bool(settings.get("stampBorder", True)),
+                    border_width=float(settings.get("stampBorderWidth", 1.6)),
+                    alignment=stamp_alignment,
+                    recessed=bool(settings.get("stampRecessed")),
+                    detail_curve=str(settings.get("stampDetailCurve", "round")),
+                    detail_grow=float(settings.get("stampDetailGrow", 0.0)),
+                )
+                parts.append(("Sello sándwich", sandwich_stamp, "#b7a4e8"))
         if settings["mode"] == "roller":
             roller = build_roller(
                 main,
@@ -1033,18 +1113,20 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 repeats_along=int(settings["rollerRepeatsAlong"]),
                 rim=settings["rollerRim"],
                 pattern=str(settings.get("rollerPattern", "grid")),
+                pattern_mode=str(settings.get("rollerPatternMode", "drawing")),
                 margin=settings.get("rollerMargin", 0.0),
                 rotate=bool(settings.get("rollerRotate")),
                 invert=bool(settings.get("rollerInvert")),
                 back=settings.get("rollerBack", 0.0),
                 remove_edge=bool(settings.get("rollerRemoveEdge")),
-                depth_curve=str(settings.get("rollerDepthCurve", "none")),
+                depth_curve=str(settings.get("rollerDepthCurve", "round")),
                 details=details,
             )
             parts.append(("Rodillo", roller, "#f39ab1"))
         if settings["mode"] == "stencil":
             stencil = build_stencil(
                 main,
+                details,
                 width=settings["stencilWidth"],
                 height=settings["stencilHeight"],
                 rows=int(settings["stencilRows"]),
@@ -1056,6 +1138,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 pattern=str(settings["stencilPattern"]),
                 bridges=bool(settings["stencilBridges"]),
                 bridge_width=settings["stencilBridgeWidth"],
+                line_width=settings["stencilLineWidth"],
             )
             parts.append(("Stencil", stencil, "#f39ab1"))
         if settings["mode"] == "topper":
@@ -1069,6 +1152,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 backing=settings["topperBacking"],
                 pin_position=settings["topperPinPosition"],
                 invert=bool(settings["topperInvert"]),
+                detail_curve=str(settings.get("topperDepthCurve", "none")),
             )
             parts.append(("Topper", topper, "#f39ab1"))
         if settings["mode"] == "practice":
@@ -1113,6 +1197,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 plunger_clearance=settings["cakePopPlungerClearance"],
                 plunger_back=settings["cakePopPlungerBack"],
                 plunger_relief=settings["cakePopRelief"],
+                plunger_face=str(settings.get("cakePopPlungerFace", "imprint")),
             )
             parts.append(("Molde cake pop", tray, "#f39ab1"))
             parts.append(("Prensador", plunger, "#b7a4e8"))
@@ -1186,11 +1271,11 @@ def build(payload: dict[str, Any]) -> dict[str, Any]:
     checks = _checks(parts, settings, warnings, main, details)
     total_volume = sum(p["volume"] for p in parts)
     if settings["mode"] == "bookmark":
-        # The two plates are printed flat side by side; report the folded page
-        # marker size rather than the large print footprint.
+        # The strip folds in half; report the folded clip size rather than the
+        # full flat print footprint.
         width = settings["bookmarkWidth"]
-        height = settings["bookmarkHeight"]
-        depth = 2.0 * settings["bookmarkThickness"] + 0.55
+        height = settings["bookmarkHeight"] / 2.0
+        depth = 2.0 * settings["bookmarkThickness"] + 0.2
     else:
         width = max(p["bounds"]["max"][0] for p in parts) - min(p["bounds"]["min"][0] for p in parts)
         height = max(p["bounds"]["max"][1] for p in parts) - min(p["bounds"]["min"][1] for p in parts)

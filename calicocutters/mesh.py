@@ -223,15 +223,21 @@ def _jitter_polygon(poly: Polygon) -> Polygon:
     below print resolution and makes line-art relief triangulate reliably.
     """
     ext = _jitter_ring(list(poly.exterior.coords[:-1]), 0.0)
+    ext_poly = Polygon(ext)
     holes: list[list[tuple[float, float]]] = []
     for i, ring in enumerate(poly.interiors):
-        q = Polygon(ring).buffer(-0.08, join_style=2, mitre_limit=2.0)
-        if q.is_empty or q.area < 0.02:
-            continue
-        if q.geom_type == "Polygon" and Polygon(ext).buffer(0.05).contains(q):
-            holes.append(_jitter_ring(list(q.exterior.coords[:-1]), i + 1.0))
-        else:
-            holes.append(_jitter_ring(list(ring.coords[:-1]), i + 1.0))
+        hole_poly = Polygon(ring)
+        # Only inset holes that touch or nearly touch the outer ring.  Insetting
+        # every hole used to deform sharp interior cusps and could leave a
+        # tiny open edge at the cusp.
+        if ext_poly.distance(hole_poly) < 0.05:
+            q = hole_poly.buffer(-0.08, join_style=2, mitre_limit=2.0)
+            if q.is_empty or q.area < 0.02:
+                continue
+            if q.geom_type == "Polygon" and ext_poly.buffer(0.05).contains(q):
+                holes.append(_jitter_ring(list(q.exterior.coords[:-1]), i + 1.0))
+                continue
+        holes.append(_jitter_ring(list(ring.coords[:-1]), i + 1.0))
     return Polygon(ext, holes)
 
 
@@ -475,6 +481,37 @@ def _ring_parts(geom) -> list[Polygon]:
             out.extend(_ring_parts(g))
         return out
     return []
+
+
+def _subdivide_flat(mesh: Mesh, iterations: int) -> Mesh:
+    """Uniform 1-to-4 subdivision, used before wrapping onto a cylinder."""
+    if iterations <= 0 or len(mesh.faces) == 0:
+        return mesh
+    verts = [tuple(v) for v in mesh.vertices]
+    faces = [tuple(int(i) for i in f) for f in mesh.faces]
+    for _ in range(iterations):
+        cache: dict[tuple[int, int], int] = {}
+        new_faces: list[tuple[int, int, int]] = []
+
+        def midpoint(a: int, b: int) -> int:
+            key = (a, b) if a < b else (b, a)
+            cached = cache.get(key)
+            if cached is not None:
+                return cached
+            pa = verts[a]
+            pb = verts[b]
+            verts.append(((pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0, (pa[2] + pb[2]) / 2.0))
+            idx = len(verts) - 1
+            cache[key] = idx
+            return idx
+
+        for a, b, c in faces:
+            ab = midpoint(a, b)
+            bc = midpoint(b, c)
+            ca = midpoint(c, a)
+            new_faces.extend(((a, ab, ca), (ab, b, bc), (ca, bc, c), (ab, bc, ca)))
+        faces = new_faces
+    return Mesh(np.asarray(verts, dtype=float), np.asarray(faces, dtype=np.int64))
 
 
 def _polygon_only(geom) -> Polygon | None:
@@ -919,7 +956,13 @@ def build_sandwich(
     sharp_edge: bool = True,
     alignment: tuple[float, float, float] | None = None,
 ) -> Mesh:
-    """Cutter + inner sealing ring with crimping bumps."""
+    """Cutter with an integrated CookieCAD-style sealing band.
+
+    The outer blade cuts the sandwich and the lower inner band presses the
+    layers together.  A thin shelf at the bottom joins the band to the cutter
+    so the tool is one printable piece.  The optional centre stamp is a
+    separate part built by the engine.
+    """
     cutter = build_cutter(
         main,
         blade_thickness=blade_thickness,
@@ -932,39 +975,52 @@ def build_sandwich(
         sharp_edge=sharp_edge,
         alignment=alignment,
     )
-    seal_outer = main.buffer(-max(0.2, gap), join_style=1, quad_segs=8)
-    seal_inner = seal_outer.buffer(-max(0.5, seal_width), join_style=1, quad_segs=8)
-    seal_ring = seal_outer.difference(seal_inner)
-    seal_height = max(2.0, base_height + blade_depth * 0.62)
+    width = max(0.8, float(seal_width))
+    seal_outer = main.buffer(-max(0.2, float(gap)), join_style=1, quad_segs=8)
+    if seal_outer.is_empty:
+        seal_outer = main.buffer(-0.2, join_style=1, quad_segs=8)
+    seal_inner = seal_outer.buffer(-width, join_style=1, quad_segs=8)
+    for _ in range(3):
+        if not seal_inner.is_empty or seal_outer.is_empty:
+            break
+        width = max(0.4, width * 0.5)
+        seal_inner = seal_outer.buffer(-width, join_style=1, quad_segs=8)
+    seal_ring = (
+        seal_outer.difference(seal_inner)
+        if not seal_outer.is_empty and not seal_inner.is_empty
+        else None
+    )
+    seal_height = max(2.0, base_height + blade_depth * 0.55)
     parts = [cutter]
-    # A shallow connector ring ties the sealing ring to the cutter base so the
-    # sandwich tool is one printable piece instead of a loose inner ring.
-    if not seal_outer.is_empty:
-        connector_outer = main.buffer(max(base_width * 0.5, 0.6), join_style=1, quad_segs=8)
+
+    # Narrow shelf in the gap, overlapping both the cutter base and the seal
+    # band.  It keeps the tool printable as one piece without blocking the
+    # cutting edge.
+    if seal_ring is not None and not seal_outer.is_empty:
+        connector_outer = main.buffer(min(1.2, max(0.4, base_width * 0.35)), join_style=1, quad_segs=8)
         connector = connector_outer.difference(seal_outer)
         for p in _ring_parts(connector):
             if p.area > 0.01:
-                parts.append(extrude_polygon(p, 0.0, max(1.0, base_height)))
-    for p in _ring_parts(seal_ring):
-        if p.area > 0.01:
-            parts.append(extrude_polygon(p, 0.0, seal_height))
-    # Crimping bumps around the seal ring.  Buffer results can be multipart on
-    # narrow or detailed artwork, so walk every component instead of assuming
-    # a single Polygon.
-    for seal_path_poly in _ring_parts(seal_inner.buffer(max(0.1, seal_width * 0.5), join_style=1)):
-        if seal_path_poly.is_empty:
-            continue
-        path = seal_path_poly.exterior
-        per = max(0.5, dent_spacing)
-        n = max(4, int(path.length / per))
-        for i in range(n):
-            pt = path.interpolate((i + 0.5) / n, normalized=True)
-            bump = Point(pt.x, pt.y).buffer(max(0.4, dent_size / 2), quad_segs=8)
-            parts.append(extrude_polygon(bump, seal_height - 0.2, max(0.3, dent_depth)))
-    out = parts[0]
-    for p in parts[1:]:
-        out = out.append(p)
-    return out
+                parts.append(extrude_polygon(p, 0.0, max(1.0, base_height * 0.6)))
+
+        for p in _ring_parts(seal_ring):
+            if p.area > 0.01:
+                parts.append(extrude_polygon(p, 0.0, seal_height))
+
+    # Crimping dents distributed evenly around the middle of the band.
+    if seal_ring is not None:
+        for path_poly in _ring_parts(seal_outer.buffer(-width * 0.5, join_style=1, quad_segs=8)):
+            if path_poly.is_empty:
+                continue
+            path = path_poly.exterior
+            per = max(0.5, dent_spacing)
+            n = max(4, int(path.length / per))
+            for i in range(n):
+                pt = path.interpolate((i + 0.5) / n, normalized=True)
+                bump = Point(pt.x, pt.y).buffer(max(0.4, dent_size / 2), quad_segs=8)
+                parts.append(extrude_polygon(bump, seal_height - 0.2, max(0.3, dent_depth)))
+
+    return _append_all(parts).oriented()
 
 
 def build_roller(
@@ -985,6 +1041,7 @@ def build_roller(
     back: float = 0.0,
     remove_edge: bool = False,
     depth_curve: str = "none",
+    pattern_mode: str = "drawing",
 ) -> Mesh:
     """Hollow texture roller with wrapped, repeated and curved pattern tiles."""
     radius = max(4.0, diameter / 2)
@@ -997,49 +1054,112 @@ def build_roller(
     parts = [extrude_polygon(tube, -length / 2, length)]
     around = max(1, int(repeats_around))
     along = max(1, int(repeats_along))
+    # Brick and mirror tiles need an even count around the cylinder so the
+    # pattern closes cleanly at the seam.
+    if pattern in {"brick", "mirror"} and around > 1 and around % 2 == 1:
+        around += 1
     cell_w = 2 * math.pi * radius / around
     cell_h = length / along
     margin = max(0.0, min(float(margin), min(cell_w, cell_h) * 0.3))
     usable_w = max(1.0, cell_w - margin * 2.0)
     usable_h = max(1.0, cell_h - margin * 2.0)
 
-    source = main
-    if remove_edge and details:
-        merged = unary_union([d for d in details if not d.is_empty])
-        if not merged.is_empty:
-            source = merged
-    if rotate:
-        source = affinity.rotate(source, 90, origin="center")
-    b = source.bounds
+    source_details = [d for d in (details or []) if d is not None and not d.is_empty]
+
+    # Apply the same transform to the silhouette and its interior details so
+    # they stay registered.  Scaling each detail around its own centre was the
+    # cause of the floating/misplaced relief lines.
+    pivot = main.centroid
+    b = main.bounds
     bw = max(1e-6, b[2] - b[0])
     bh = max(1e-6, b[3] - b[1])
-    fit = min(usable_w / bw, usable_h / bh) * 0.82
-    tile = affinity.scale(source, fit, fit, origin="center")
-    tile = affinity.translate(tile, -tile.centroid.x, -tile.centroid.y)
-    tile_w = tile.bounds[2] - tile.bounds[0]
-    tile_h = tile.bounds[3] - tile.bounds[1]
-    patch_w = max(usable_w * 0.82, tile_w)
-    patch_h = max(usable_h * 0.82, tile_h)
+    fit = min(usable_w / bw, usable_h / bh) * 0.9
+
+    def prepare(geom: Polygon) -> Polygon:
+        g = affinity.translate(geom, -pivot.x, -pivot.y)
+        if rotate:
+            g = affinity.rotate(g, 90, origin=(0, 0))
+        return affinity.scale(g, fit, fit, origin=(0, 0))
+
+    tile = prepare(main)
+    tile_b = tile.bounds
+    offset_x = -(tile_b[0] + tile_b[2]) / 2.0
+    offset_y = -(tile_b[1] + tile_b[3]) / 2.0
+    tile = affinity.translate(tile, offset_x, offset_y)
+    tile_b = tile.bounds
     tile_details: list[Polygon] = []
-    if not invert and not remove_edge and details:
-        for detail in details:
-            transformed = affinity.scale(detail, fit, fit, origin="center")
-            transformed = affinity.translate(transformed, -tile.centroid.x, -tile.centroid.y)
-            clipped_detail = transformed.intersection(tile)
-            for p in _ring_parts(clipped_detail):
-                if p.area > 0.02:
-                    tile_details.append(p)
+    for detail in source_details:
+        transformed = affinity.translate(prepare(detail), offset_x, offset_y)
+        clipped_detail = transformed.intersection(tile)
+        for p in _ring_parts(clipped_detail):
+            if p.area > 0.02:
+                tile_details.append(p)
+
+    # Drawing mode uses the stamp-like line artwork: the outer outline plus
+    # the interior details, not a large filled silhouette.  Silhouette mode
+    # keeps the old filled pattern, with details raised on top.
+    line_drawing = pattern_mode == "drawing" and bool(tile_details)
+    # Engraved mode always keeps the drawing: a filled silhouette recess
+    # would hide the interior lines.
+    if invert and tile_details:
+        line_drawing = True
+    edge_w = max(0.8, min(2.5, max(0.3, relief) * 1.2))
+    detail_grow = max(0.05, min(0.3, max(0.3, relief) * 0.15))
+    separate_details: list[Polygon] = []
+    if line_drawing:
+        # Non-cutter modes follow the original drawing: use the interior
+        # details, never add the cutter's outer border as a pattern line.
+        detail_shapes = [
+            d.buffer(detail_grow, join_style=1, quad_segs=8) for d in tile_details
+        ]
+        pattern_tile: Polygon | MultiPolygon = unary_union(detail_shapes)
+    elif pattern_mode == "silhouette" and remove_edge and tile_details:
+        pattern_tile = unary_union(tile_details)
+    else:
+        pattern_tile = tile
+        if not invert:
+            separate_details = tile_details
+    if pattern_tile.is_empty:
+        pattern_tile = tile
+    pb = pattern_tile.bounds
+    patch_w = max(usable_w * 0.98, (pb[2] - pb[0]) + edge_w)
+    patch_h = max(usable_h * 0.98, (pb[3] - pb[1]) + edge_w)
 
     def mapped(mesh: Mesh, theta0: float, axial0: float, mirror: bool) -> Mesh:
         verts = mesh.vertices.copy()
+        faces = mesh.faces.copy()
         if mirror:
             verts[:, 0] *= -1.0
+            faces = faces[:, ::-1].copy()
         out = np.zeros_like(verts)
         for i, (x, y, z) in enumerate(verts):
             angle = theta0 + x / max(radius, 1e-6)
-            rad = radius + z - 0.2
-            out[i] = (rad * math.cos(angle), rad * math.sin(angle), axial0 + y)
-        return Mesh(out, mesh.faces.copy())
+            radial = radius + z - 0.2
+            out[i] = (radial * math.cos(angle), radial * math.sin(angle), axial0 + y)
+        return Mesh(out, faces)
+
+    # Large flat triangles would cut straight chords through the cylinder and
+    # look like random facets in the 3D preview.  Subdivide uniformly (keeping
+    # the mesh closed) until the wrapped tiles read as a smooth curve.
+    max_arc = max(1.2, min(3.5, (2.0 * math.pi * radius) / 128.0))
+    max_faces = 14000
+
+    def wrapped(poly: Polygon, z0: float, height: float,
+                theta0: float, axial0: float, mirror: bool,
+                refine: bool = True) -> list[Mesh]:
+        if poly.is_empty or height <= 0.01:
+            return []
+        mesh = extrude_polygon(poly, z0, height)
+        if len(mesh.faces) == 0:
+            return []
+        if refine:
+            pb = poly.bounds
+            span = max(1e-6, pb[2] - pb[0])
+            needed = int(math.ceil(math.log(max(1.0, span / max_arc), 2.0)))
+            allowed = max(0, int(math.floor(math.log(max_faces / max(1, len(mesh.faces)), 4.0))))
+            iterations = max(0, min(5, needed, allowed))
+            mesh = _subdivide_flat(mesh, iterations)
+        return [mapped(mesh, theta0, axial0, mirror)]
 
     for ia in range(around):
         for il in range(along):
@@ -1050,29 +1170,42 @@ def build_roller(
             mirror = pattern == "mirror" and (ia + il) % 2 == 1
             if invert:
                 patch = box(-patch_w / 2, -patch_h / 2, patch_w / 2, patch_h / 2)
-                inverse = patch.difference(tile)
+                cut_pattern = pattern_tile.buffer(-0.08, join_style=1, quad_segs=8)
+                if cut_pattern.is_empty:
+                    cut_pattern = pattern_tile
+                inverse = patch.difference(cut_pattern)
                 for p in _ring_parts(inverse):
                     if p.area > 0.02:
-                        layer = extrude_polygon(p, back, max(0.3, relief) + 0.25)
-                        parts.append(mapped(layer, theta0, axial0, mirror))
+                        # Keep engraved geometry flat: curved layers on the
+                        # inverse can create open island caps around holes.
+                        parts.extend(wrapped(
+                            p, back, max(0.3, relief) + 0.25,
+                            theta0, axial0, mirror, refine=False,
+                        ))
             else:
                 for layer_poly, z0, height in _curved_relief_layers(
-                    tile, back, max(0.3, relief) + 0.25, depth_curve
+                    pattern_tile, back, max(0.3, relief) + 0.25, depth_curve
                 ):
-                    layer = extrude_polygon(layer_poly, z0, height)
-                    parts.append(mapped(layer, theta0, axial0, mirror))
-                for detail in tile_details:
+                    parts.extend(wrapped(layer_poly, z0, height, theta0, axial0, mirror))
+                for detail in separate_details:
                     detail_height = max(0.35, min(0.9, relief * 0.4))
-                    layer = extrude_polygon(
-                        detail, back + max(0.3, relief) - 0.05, detail_height
-                    )
-                    parts.append(mapped(layer, theta0, axial0, mirror))
+                    for layer_poly, z0, height in _curved_relief_layers(
+                        detail,
+                        back + max(0.3, relief) - 0.05,
+                        detail_height,
+                        depth_curve,
+                    ):
+                        parts.extend(wrapped(
+                            layer_poly, z0, height, theta0, axial0, mirror
+                        ))
     # End rims.
     if rim > 0:
         rim_width = max(0.5, rim)
         for z0 in (-length / 2, length / 2 - rim_width):
             r_out = Point(0, 0).buffer(outer_radius + 1.2, quad_segs=64)
-            r_in = Point(0, 0).buffer(outer_radius, quad_segs=64)
+            # Overlap the tube wall slightly instead of sharing its surface:
+            # coincident faces make the combined mesh non-manifold.
+            r_in = Point(0, 0).buffer(max(0.5, outer_radius - 0.5), quad_segs=64)
             ring = r_out.difference(r_in)
             parts.append(extrude_polygon(ring, z0, rim_width))
     out = parts[0]
@@ -1087,6 +1220,7 @@ def build_roller(
 
 def build_stencil(
     main: Polygon,
+    details: list[Polygon] | None = None,
     *,
     width: float,
     height: float,
@@ -1099,19 +1233,23 @@ def build_stencil(
     pattern: str = "grid",
     bridges: bool = True,
     bridge_width: float = 1.2,
+    line_width: float = 1.2,
 ) -> Mesh:
-    """Flat stencil sheet with the motif repeated as through-cut openings.
+    """Flat stencil sheet with the complete drawing repeated as openings.
 
-    The sheet always keeps a solid margin around the pattern.  When a motif
-    has an interior island (for example the centre of an "O"), a thin backing
-    bridge keeps that island attached instead of leaving a loose piece.
+    Solid silhouettes are cut as one opening.  When the artwork has interior
+    details, the stencil cuts the outer outline and every interior detail so
+    the result is the whole drawing, not only the outer silhouette.  A thin
+    backing bridge keeps interior islands attached.
     """
     rows = max(1, int(rows))
     cols = max(1, int(cols))
     width = max(10.0, float(width))
     height = max(10.0, float(height))
     margin = max(0.0, min(float(margin), min(width, height) * 0.35))
+    line_w = max(0.4, float(line_width))
     sheet = box(-width / 2, -height / 2, width / 2, height / 2)
+    details = [d for d in (details or []) if d is not None and not d.is_empty]
     b = main.bounds
     bw = max(1e-6, b[2] - b[0])
     bh = max(1e-6, b[3] - b[1])
@@ -1119,20 +1257,36 @@ def build_stencil(
     available_h = max(4.0, height - margin * 2)
     cell_w = available_w / cols
     cell_h = available_h / rows
-    fit = min((cell_w - max(0.5, spacing)) / bw, (cell_h - max(0.5, spacing)) / bh)
+    gap = max(0.5, spacing) + (line_w if details else 0.0)
+    fit = min((cell_w - gap) / bw, (cell_h - gap) / bh)
     if shape_size and shape_size > 0:
         fit = min(fit, float(shape_size) / max(bw, bh))
     scale = max(0.05, fit)
-    pattern_poly = affinity.scale(main, scale, scale, origin="center")
-    # Guarantee a true border even when the motif is very asymmetric.
-    pb = pattern_poly.bounds
-    pattern_poly = affinity.translate(
-        pattern_poly,
-        -(pb[0] + pb[2]) / 2,
-        -(pb[1] + pb[3]) / 2,
-    )
-    half_pattern_w = (pb[2] - pb[0]) / 2
-    half_pattern_h = (pb[3] - pb[1]) / 2
+
+    pivot = main.centroid
+    scaled_main = affinity.scale(main, scale, scale, origin=pivot)
+    pb = scaled_main.bounds
+    offset_x = -(pb[0] + pb[2]) / 2.0
+    offset_y = -(pb[1] + pb[3]) / 2.0
+    pattern_main = affinity.translate(scaled_main, offset_x, offset_y)
+    pattern_details = [
+        affinity.translate(affinity.scale(d, scale, scale, origin=pivot), offset_x, offset_y)
+        for d in details
+    ]
+
+    if pattern_details:
+        # Follow the original drawing: cut the interior details.  The outer
+        # border is only the cutter silhouette, so it is not added here.
+        pattern_cut = unary_union([
+            d.buffer(max(0.05, line_w * 0.25), join_style=1, quad_segs=8)
+            for d in pattern_details
+        ])
+    else:
+        pattern_cut = pattern_main
+
+    cb = pattern_cut.bounds
+    half_pattern_w = (cb[2] - cb[0]) / 2.0
+    half_pattern_h = (cb[3] - cb[1]) / 2.0
     cuts: list[Polygon] = []
     for r in range(rows):
         for c in range(cols):
@@ -1146,7 +1300,7 @@ def build_stencil(
                 phase = (r * cols + c + 1) * 1.618
                 cx += math.sin(phase) * cell_w * 0.14
                 cy += math.cos(phase * 1.37) * cell_h * 0.14
-            cuts.append(affinity.translate(pattern_poly, cx, cy))
+            cuts.append(affinity.translate(pattern_cut, cx, cy))
     holes = unary_union(cuts)
     result = sheet.difference(holes)
     pieces = [p for p in _ring_parts(result) if p.area > 0.05]
@@ -1170,10 +1324,7 @@ def build_stencil(
         parts.append(extrude_polygon(p, 0.0, max(0.6, thickness)))
     if not parts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
-    out = parts[0]
-    for p in parts[1:]:
-        out = out.append(p)
-    return out
+    return _append_all(parts)
 
 
 def build_topper(
@@ -1187,8 +1338,9 @@ def build_topper(
     backing: float = 0.0,
     pin_position: float = 0.0,
     invert: bool = False,
+    detail_curve: str = "none",
 ) -> Mesh:
-    """Flat cake topper with a printable stake in the same plane."""
+    """Flat cake topper with a tapered printable stake in the same plane."""
     base_poly = main.buffer(max(0.0, float(backing)), join_style=1, quad_segs=8)
     if base_poly.is_empty:
         base_poly = main
@@ -1199,6 +1351,7 @@ def build_topper(
         for p in _ring_parts(clipped):
             if p.area > 0.15:
                 clipped_details.append(p)
+    relief_height = max(0.3, relief) + 0.2
     if invert and clipped_details:
         # Raise the background and leave the artwork at base level.  This is the
         # same physical result as an inverted stamp without needing 3D CSG.
@@ -1207,19 +1360,40 @@ def build_topper(
         cover = base_poly.difference(unary_union([d for d in details if not d.is_empty]))
         for p in _ring_parts(cover):
             if p.area > 0.15:
-                parts.append(extrude_polygon(p, thickness - 0.2, max(0.3, relief) + 0.2))
+                for layer, z0, height in _curved_relief_layers(
+                    p, thickness - 0.2, relief_height, detail_curve
+                ):
+                    parts.append(extrude_polygon(layer, z0, height))
     else:
         for p in clipped_details:
-            parts.append(extrude_polygon(p, thickness - 0.2, max(0.3, relief) + 0.2))
+            for layer, z0, height in _curved_relief_layers(
+                p, thickness - 0.2, relief_height, detail_curve
+            ):
+                parts.append(extrude_polygon(layer, z0, height))
     b = base_poly.bounds
-    usable = max(0.0, (b[2] - b[0]) - max(1.0, pin_width))
+    pin_w = max(1.0, float(pin_width))
+    pin_l = max(2.0, float(pin_length))
+    usable = max(0.0, (b[2] - b[0]) - pin_w)
     cx = (float(pin_position) / 100.0) * usable / 2
-    pin = box(
-        cx - max(1.0, pin_width) / 2,
-        b[1] - max(2.0, pin_length),
-        cx + max(1.0, pin_width) / 2,
-        b[1] + 0.5,
-    )
+    pin_strip = box(cx - pin_w / 2, b[1] - 1.0, cx + pin_w / 2, b[3] + 1.0)
+    slice_poly = base_poly.intersection(pin_strip)
+    attach_y = slice_poly.bounds[1] if not slice_poly.is_empty else b[1]
+    tip_w = min(pin_w, max(1.0, pin_w * 0.72))
+    chamfer = min(0.8, pin_l * 0.25)
+    shoulder_y = attach_y - pin_l + min(6.0, pin_l * 0.4)
+    tip_y = attach_y - pin_l
+    pin = Polygon([
+        (cx - pin_w / 2, attach_y + 0.5),
+        (cx + pin_w / 2, attach_y + 0.5),
+        (cx + pin_w / 2, shoulder_y),
+        (cx + tip_w / 2, tip_y + chamfer),
+        (cx + tip_w * 0.35, tip_y),
+        (cx - tip_w * 0.35, tip_y),
+        (cx - tip_w / 2, tip_y + chamfer),
+        (cx - pin_w / 2, shoulder_y),
+    ])
+    if not pin.is_valid:
+        pin = pin.buffer(0)
     if pin.is_empty or pin.area <= 0.01:
         return parts[0] if len(parts) == 1 else _append_all(parts)
     parts.append(extrude_polygon(pin, 0.0, max(1.0, thickness)))
@@ -1282,6 +1456,7 @@ def build_cake_pop(
     plunger_clearance: float,
     plunger_back: float,
     plunger_relief: float,
+    plunger_face: str = "imprint",
 ) -> tuple[Mesh, Mesh]:
     """A two-piece cake-pop mould: open tray plus fitted plunger.
 
@@ -1311,12 +1486,26 @@ def build_cake_pop(
     if plunger_poly.is_empty:
         plunger_poly = main.buffer(-0.2, join_style=1, quad_segs=8)
     plunger_parts = [extrude_polygon(plunger_poly, 0.0, max(1.0, plunger_back))]
-    for d in details:
-        clipped = d.intersection(plunger_poly)
-        for p in _ring_parts(clipped):
-            if p.area > 0.15:
+    face = str(plunger_face) if str(plunger_face) in {"imprint", "outline", "none"} else "imprint"
+    relief_h = max(0.3, plunger_relief) + 0.2
+    if face == "imprint":
+        for d in details:
+            clipped = d.intersection(plunger_poly)
+            for p in _ring_parts(clipped):
+                if p.area > 0.15:
+                    plunger_parts.append(extrude_polygon(
+                        p, max(0.0, plunger_back - 0.2), relief_h
+                    ))
+    elif face == "outline":
+        inner = plunger_poly.buffer(-0.8, join_style=1, quad_segs=8)
+        dense = plunger_poly.difference(inner) if not inner.is_empty else None
+        if dense is None or dense.is_empty or dense.area <= 0.02:
+            dense = plunger_poly.boundary.buffer(0.5, cap_style=1, join_style=1)
+            dense = dense.intersection(plunger_poly)
+        for p in _ring_parts(dense):
+            if p.area > 0.02:
                 plunger_parts.append(extrude_polygon(
-                    p, max(0.0, plunger_back - 0.2), max(0.3, plunger_relief) + 0.2
+                    p, max(0.0, plunger_back - 0.2), relief_h
                 ))
     # Side grip tab, printed in the same plane as the plunger.
     pb = plunger_poly.bounds
@@ -1377,102 +1566,142 @@ def build_bookmark(
     hole_diameter: float,
     hole_margin: float,
     relief: float,
-    style: str = "line",
+    style: str = "relief",
     line_width: float = 0.4,
     gap: float = 1.0,
     bridge: float = 14.0,
     flare: float = 6.0,
-    lip: float = 8.0,
+    lip: float = 4.0,
     hinge_thickness: float = 0.6,
 ) -> Mesh:
-    """Flat-printed page marker: two plates joined by a living hinge.
+    """Fold-over page clip that marks the page and snaps shut.
 
-    The two rounded rectangles are printed side by side, connected by three
-    thin hinge straps on their top surface.  Fold one plate over the page and
-    the optional grip ridges hold it.  Printing flat avoids supports and keeps
-    the hinge layers oriented along the strongest direction.
+    The strip prints flat as one 50 x 150 mm rectangle, half the footprint of
+    the old side-by-side pair.  A continuous living hinge across the middle
+    folds the top half over the bottom half.  One inner face carries a raised
+    motif and the other a matching recess, so the page is embossed.  A small
+    bead/groove pair near the free edge closes the clip.
     """
     W = max(20.0, float(width))
     H = max(50.0, float(height))
     T = max(1.2, float(thickness))
-    G = max(0.3, float(gap))
-    HINGE_T = max(0.3, min(T - 0.2, float(hinge_thickness)))
+    G = max(0.3, min(3.0, float(gap)))
+    HINGE_T = max(0.25, min(T - 0.4, float(hinge_thickness)))
     TAB = max(0.0, min(12.0, float(flare)))
-    GRIP = max(3.0, min(20.0, float(lip)))
-    safe_margin = max(4.0, float(margin))
-    design_gap = max(safe_margin, GRIP + 2.0)
+    safe_margin = max(2.0, min(float(margin), min(W, H / 2.0) * 0.3))
+    half = H / 2.0
+    hinge_floor = min(T - 0.6, max(0.6, T * 0.5))
+    strip = rounded_rect(W, H, corner)
 
-    def plate_at(cx: float) -> Polygon:
-        plate = rounded_rect(W, H, corner)
-        return affinity.translate(plate, cx, H / 2)
-
-    left = plate_at(W / 2)
-    right = plate_at(W + G + W / 2)
+    lower_region = strip.intersection(box(-W / 2 - 1, -H / 2 - 1, W / 2 + 1, -G / 2))
+    upper_region = strip.intersection(box(-W / 2 - 1, G / 2, W / 2 + 1, H / 2 + 1))
+    hinge_region = strip.intersection(box(-W / 2 - 1, -G / 2 - 0.2, W / 2 + 1, G / 2 + 0.2))
     parts: list[Mesh] = []
 
-    # A through-cut silhouette is visible from both sides once the marker is
-    # folded, unlike a one-sided relief.  The frame stays wide enough to keep
-    # the plates stiff and the hinge safe.
-    if style not in {"none"}:
-        b = main.bounds
-        bw = max(1e-6, b[2] - b[0])
-        bh = max(1e-6, b[3] - b[1])
-        design_w = max(6.0, W - design_gap * 2.0)
-        design_h = max(6.0, H - max(design_gap, 8.0) * 2.0)
-        scale = min(design_w / bw, design_h / bh)
-        if scale > 0:
-            for plate, cx in ((left, W / 2), (right, W + G + W / 2)):
-                hole = affinity.scale(main, scale, scale, origin="center")
-                hole = affinity.translate(hole, cx, H / 2)
-                if not hole.is_empty and plate.buffer(-0.7).contains(hole):
-                    cut_plate = plate.difference(hole)
-                    for piece in _ring_parts(cut_plate):
-                        if piece.area > 0.05:
-                            parts.append(extrude_polygon(piece, 0.0, T))
-                    continue
-                parts.append(extrude_polygon(plate, 0.0, T))
+    # Continuous living hinge at the middle.  It uses only the 1 mm gap and
+    # leaves the two full-thickness plates free to fold.
+    for p in _ring_parts(hinge_region):
+        if p.area > 0.01:
+            parts.append(extrude_polygon(p, 0.0, HINGE_T))
+
+    # Clamping bead on the lower inner face and matching groove on the upper
+    # inner face.  They line up across the hinge when the clip is closed.
+    bead_x = min(W * 0.65, max(8.0, float(bridge)))
+    bead_y = max(2.0, min(8.0, float(lip)))
+    bead_len = max(1.2, min(2.2, T * 0.7))
+    safe_margin = max(safe_margin, bead_y + bead_len + 1.0)
+    snap_h = max(0.35, min(0.9, max(0.3, float(relief)) * 0.7))
+    bead = rounded_rect(bead_x, bead_len, bead_len / 2)
+    lower_bead = affinity.translate(bead, 0.0, -half + bead_y)
+    upper_groove = affinity.translate(bead, 0.0, half - bead_y)
+
+    # The raised motif and its recess are mirrored across the hinge so they
+    # nest when the clip folds shut.
+    if style != "none":
+        detail_parts = [d for d in details if d is not None and not d.is_empty]
+        if style == "line":
+            line_w = max(0.8, min(2.0, float(line_width) * 2.0))
+            if detail_parts:
+                mark = unary_union([
+                    d.boundary.buffer(line_w / 2, cap_style=1, join_style=1)
+                    for d in detail_parts
+                ])
+            else:
+                mark = main.boundary.buffer(line_w / 2, cap_style=1, join_style=1)
         else:
-            parts.extend((extrude_polygon(left, 0.0, T), extrude_polygon(right, 0.0, T)))
+            mark = unary_union(detail_parts) if detail_parts else main
+        if mark.is_empty:
+            mark = main
     else:
-        parts.extend((extrude_polygon(left, 0.0, T), extrude_polygon(right, 0.0, T)))
-
-    # Living hinge: narrow straps on the top surface bridge the 1 mm gap.  The
-    # bridge is supported at both ends, so it prints without supports.
-    strap_w = max(4.0, min(H * 0.9, float(bridge)))
-    if strap_w >= H * 0.85:
-        centers = [H / 2]
-        strap_w = H
-    else:
-        centers = [H * 0.14, H * 0.5, H * 0.86]
-        strap_w = min(strap_w, H * 0.26)
-    for cy in centers:
-        strap = box(
-            W - 0.5,
-            max(0.4, cy - strap_w / 2),
-            W + G + 0.5,
-            min(H - 0.4, cy + strap_w / 2),
+        mark = None
+    mark_lower: Polygon | None = None
+    mark_upper: Polygon | None = None
+    if mark is not None and not mark.is_empty:
+        available_w = max(2.0, W - safe_margin * 2.0)
+        available_h = max(2.0, (half - G / 2.0) - safe_margin * 2.0)
+        mb = mark.bounds
+        mw = max(1e-6, mb[2] - mb[0])
+        mh = max(1e-6, mb[3] - mb[1])
+        scale = min(available_w / mw, available_h / mh) * 0.98
+        scaled = affinity.scale(mark, scale, scale, origin="center")
+        sb = scaled.bounds
+        center_y = (-half - G / 2.0) / 2.0
+        mark_lower = affinity.translate(
+            scaled,
+            -(sb[0] + sb[2]) / 2.0,
+            center_y - (sb[1] + sb[3]) / 2.0,
         )
-        parts.append(extrude_polygon(strap, T - HINGE_T, HINGE_T))
+        mark_lower = mark_lower.intersection(lower_region)
+        mark_upper = affinity.scale(mark_lower, 1, -1, origin=(0, 0))
+        mark_upper = mark_upper.intersection(upper_region)
 
-    # Two shallow ridges sit on the inner face of the left plate.  They press
-    # the page against the flat right plate when folded.
-    ridge_len = max(4.0, H - 2.0 * max(4.0, safe_margin))
-    for ridge_x in (4.0, 6.5):
-        ridge = box(ridge_x - 0.6, (H - ridge_len) / 2, ridge_x + 0.6, (H + ridge_len) / 2)
-        parts.append(extrude_polygon(ridge, T - 0.05, 0.55))
+    raised_h = max(0.0, min(3.0, float(relief)))
+    if raised_h <= 0.01:
+        mark_lower = None
+        mark_upper = None
+    cut_h = min(T - hinge_floor - 0.2, max(raised_h + 0.2, snap_h + 0.25))
+    cut_h = max(0.3, cut_h)
 
-    # A small pull tab makes the flat clamshell easy to open without tools.
+    # Lower plate: full thickness plus raised motif and bead.
+    for p in _ring_parts(lower_region):
+        if p.area > 0.01:
+            parts.append(extrude_polygon(p, 0.0, T))
+    if mark_lower is not None:
+        for p in _ring_parts(mark_lower):
+            if p.area > 0.02:
+                parts.append(extrude_polygon(p, T - 0.03, raised_h))
+    for p in _ring_parts(lower_bead.intersection(lower_region)):
+        if p.area > 0.01:
+            for layer, z0, height in _curved_relief_layers(
+                p, T - 0.03, snap_h, "round"
+            ):
+                parts.append(extrude_polygon(layer, z0, height))
+
+    # Upper plate: a floor plus the top ring around the recessed motif and the
+    # closure groove.  The recess lets the raised motif press the page.
+    for p in _ring_parts(upper_region):
+        if p.area > 0.01:
+            parts.append(extrude_polygon(p, 0.0, T - cut_h))
+    top = upper_region
+    if mark_upper is not None and not mark_upper.is_empty:
+        top = top.difference(mark_upper)
+    top = top.difference(upper_groove)
+    for p in _ring_parts(top):
+        if p.area > 0.01:
+            parts.append(extrude_polygon(p, T - cut_h, cut_h))
+
+    # Small pull tab on the free edge of the lower plate.
     if TAB > 0.3:
-        tab_w = min(15.0, H * 0.24)
-        tab = rounded_rect(TAB + 1.2, tab_w, min(3.0, tab_w / 3.0))
-        tab = affinity.translate(tab, -TAB / 2.0 + 0.6, H / 2.0)
-        parts.append(extrude_polygon(tab, 0.0, T))
+        tab_w = min(W * 0.45, max(8.0, bead_x))
+        tab = rounded_rect(tab_w, TAB, min(TAB / 2.0, 3.0))
+        tab = affinity.translate(tab, 0.0, -half - TAB / 2.0 + 0.5)
+        for p in _ring_parts(tab):
+            if p.area > 0.01:
+                parts.append(extrude_polygon(p, 0.0, T))
 
     if not parts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
-    out = parts[0]
-    for part in parts[1:]:
-        out = out.append(part)
+    out = _append_all(parts)
     bounds = out.bounds
     out = out.translated([
         -(bounds["min"][0] + bounds["max"][0]) / 2.0,

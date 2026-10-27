@@ -1,6 +1,6 @@
 import { Heart, X } from "lucide-react";
 
-export const DONATE_URL = "https://github.com/sponsors/dhernandezgit";
+export const DONATE_URL = "https://paypal.me/Darkniel42";
 
 export default function DonateDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   if (!open) return null;
@@ -17,11 +17,11 @@ export default function DonateDialog({ open, onClose }: { open: boolean; onClose
         <div className="donate-heart"><Heart size={34} /></div>
         <p className="donate-copy">
           CalicoCutters es gratis, local y sin anuncios. Si quieres ayudar a mantener el motor, los tests y las
-          próximas herramientas, puedes invitarme a un café o apoyar el proyecto en GitHub Sponsors.
+          próximas herramientas, puedes apoyar el proyecto por PayPal.
         </p>
         <div className="donate-actions">
           <a className="primary donate-link" href={DONATE_URL} target="_blank" rel="noreferrer">
-            <Heart size={16} /> Apoyar en GitHub Sponsors
+            <Heart size={16} /> Apoyar en PayPal
           </a>
           <button type="button" className="soft-button" onClick={onClose}>Ahora no</button>
         </div>

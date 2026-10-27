@@ -669,13 +669,16 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
   border-color: rgba(255, 255, 255, .22);
   background: linear-gradient(135deg, #75465f, #bd6d8c);
   color: #fff;
-  padding: 8px 18px;
-  font-size: 12px;
+  min-width: 156px;
+  justify-content: center;
+  padding: 10px 26px;
+  font-size: 15px;
   font-weight: 800;
   letter-spacing: .015em;
   box-shadow: 0 5px 15px rgba(117, 70, 95, .3);
 }
-.view-options-button.view-main svg { stroke-width: 2.4; }
+.view-options-button.view-main svg { width: 19px; height: 19px; stroke-width: 2.4; }
+.projection-tabs button { padding: 7px 10px; font-size: 11px; }
 .view-options-button.view-main:hover, .view-options-button.view-main.on {
   border-color: rgba(255, 255, 255, .3);
   background: linear-gradient(135deg, #673a52, #ae5d7e);

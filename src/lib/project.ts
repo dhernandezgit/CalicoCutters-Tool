@@ -42,8 +42,13 @@ function normalizeSettings(raw: Partial<DesignSettings> | null | undefined): Des
   out.stampEdgeMethod = out.stampEdgeMethod === "offset" ? "offset" : "preserve";
   out.stampDetailCurve = ["chamfer", "round"].includes(String(out.stampDetailCurve)) ? out.stampDetailCurve : "none";
   out.rollerPattern = ["brick", "mirror"].includes(String(out.rollerPattern)) ? out.rollerPattern : "grid";
-  out.rollerDepthCurve = ["chamfer", "round"].includes(String(out.rollerDepthCurve)) ? out.rollerDepthCurve : "none";
+  out.rollerPatternMode = ["drawing", "silhouette"].includes(String(out.rollerPatternMode)) ? out.rollerPatternMode : "drawing";
+  out.rollerDepthCurve = ["none", "chamfer", "round"].includes(String(out.rollerDepthCurve)) ? out.rollerDepthCurve : "round";
   out.stencilPattern = ["diagonal", "random"].includes(String(out.stencilPattern)) ? out.stencilPattern : "grid";
+  out.sandwichPart = ["cutter", "seal"].includes(String(out.sandwichPart)) ? out.sandwichPart : "both";
+  out.bookmarkDesignStyle = ["line", "relief", "none"].includes(String(out.bookmarkDesignStyle)) ? out.bookmarkDesignStyle : "relief";
+  out.topperDepthCurve = ["chamfer", "round"].includes(String(out.topperDepthCurve)) ? out.topperDepthCurve : "none";
+  out.cakePopPlungerFace = ["outline", "none"].includes(String(out.cakePopPlungerFace)) ? out.cakePopPlungerFace : "imprint";
   if (typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color)) out.color = input.color;
   return out as unknown as DesignSettings;
 }

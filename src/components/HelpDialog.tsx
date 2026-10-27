@@ -101,7 +101,7 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
           <p>
             El menú “Qué vas a crear” agrupa galletas, sellos, sándwich, rodillo, repostería y papelería:
             cortador + sello, cortador, cortador con relieve, sello, sándwich, rodillo de textura, topper,
-            stencil, galleta de práctica, molde cake pop y pinza de página plana con bisagras vivas.
+            stencil, galleta de práctica, molde cake pop y pinza de página que se dobla y marca la página.
             Cada tipo cambia el resultado; no hay variantes que repitan el mismo cortador.
           </p>
         </div>

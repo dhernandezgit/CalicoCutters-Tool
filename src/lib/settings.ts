@@ -96,6 +96,14 @@ export function applyCheckFix(settings: DesignSettings, code: string): DesignSet
       return { ...settings, stencilMargin: Math.max(3, settings.stencilMargin) };
     case "stencil_small":
       return { ...settings, stencilShapeSize: Math.max(10, settings.stencilShapeSize) };
+    case "stencil_repeats":
+      return {
+        ...settings,
+        stencilRows: Math.max(1, Math.floor(settings.stencilRows / 2)),
+        stencilCols: Math.max(1, Math.floor(settings.stencilCols / 2)),
+      };
+    case "stencil_line":
+      return { ...settings, stencilLineWidth: Math.max(1.2, settings.stencilLineWidth) };
     case "stencil_islands":
       return { ...settings, stencilBridges: true };
     case "topper_thin":
@@ -138,6 +146,22 @@ export function applyCheckFix(settings: DesignSettings, code: string): DesignSet
       return { ...settings, rollerRelief: Math.min(settings.rollerRelief, settings.rollerDiameter * 0.2) };
     case "roller_bore":
       return { ...settings, rollerBore: Math.max(0, Math.min(settings.rollerBore, settings.rollerDiameter * 0.5)) };
+    case "roller_repeats":
+      return {
+        ...settings,
+        rollerRepeatsAround: Math.max(1, Math.floor(settings.rollerRepeatsAround / 2)),
+        rollerRepeatsAlong: Math.max(1, Math.floor(settings.rollerRepeatsAlong / 2)),
+      };
+    case "topper_relief":
+      return { ...settings, topperRelief: Math.min(settings.topperRelief, Math.max(1, settings.topperThickness)) };
+    case "bookmark_thin":
+      return { ...settings, bookmarkThickness: Math.max(2.4, settings.bookmarkThickness) };
+    case "bookmark_short":
+      return { ...settings, bookmarkHeight: Math.max(100, settings.bookmarkHeight) };
+    case "bookmark_relief":
+      return { ...settings, bookmarkRelief: Math.min(settings.bookmarkRelief, Math.max(0.2, settings.bookmarkThickness * 0.5)) };
+    case "bookmark_hinge":
+      return { ...settings, pageClipHingeThickness: Math.min(settings.pageClipHingeThickness, Math.max(0.3, settings.bookmarkThickness - 0.5)) };
     default:
       return applyPrintableSettings(settings);
   }

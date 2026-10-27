@@ -63,7 +63,7 @@ function initialTheme(): "light" | "dark" {
     const saved = localStorage.getItem(THEME_KEY);
     if (saved === "light" || saved === "dark") return saved;
   } catch { /* ignore */ }
-  return typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "light";
 }
 
 function loadPreviewPreferences(): PreviewPreferences {
@@ -184,6 +184,7 @@ export default function App() {
   const [wireframe, setWireframe] = useState(false);
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const [technical, setTechnical] = useState(false);
+  const [projection, setProjection] = useState<"perspective" | "orthographic">("perspective");
   const [autoRotate, setAutoRotate] = useState(false);
   const [showBed, setShowBed] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
@@ -663,7 +664,7 @@ export default function App() {
 
   const partNames = new Set(displayBuild?.parts.map((p) => p.name) ?? []);
   const hasCutterPart = ["Cortador", "Cortador espejo", "Impronta", "Multicortador", "Puzzle", "Cortador sándwich", "Set de cortadores"].some((name) => partNames.has(name));
-  const hasStampPart = partNames.has("Sello") || partNames.has("Sello espejo");
+  const hasStampPart = ["Sello", "Sello espejo", "Sello sándwich"].some((name) => partNames.has(name));
 
   useEffect(() => {
     if (isolate === "stamp" && !hasStampPart) setIsolate("all");
@@ -734,6 +735,10 @@ export default function App() {
               <button type="button" title="Vista superior" onClick={() => { setTab("3d"); viewportRef.current?.view("top"); }}>Top</button>
               <button type="button" title="Vista frontal" onClick={() => { setTab("3d"); viewportRef.current?.view("front"); }}>Front</button>
               <button type="button" title="Ajustar vista" onClick={() => { setTab("3d"); viewportRef.current?.fit(); }}><Maximize2 size={16} /></button>
+            </div>
+            <div className="segmented projection-tabs">
+              <button type="button" className={projection === "perspective" ? "on" : ""} onClick={() => { setTab("3d"); setProjection("perspective"); }}>Perspectiva</button>
+              <button type="button" className={projection === "orthographic" ? "on" : ""} onClick={() => { setTab("3d"); setProjection("orthographic"); viewportRef.current?.view("iso"); }}>Isométrica</button>
             </div>
             </div>
             <div className="viewer-toolbar-center">
@@ -934,6 +939,7 @@ export default function App() {
                 bedWidth={primary?.settings.bedWidth ?? 256}
                 bedDepth={primary?.settings.bedDepth ?? 256}
                 technical={technical}
+                projection={projection}
                 autoRotate={autoRotate}
                 showBed={showBed}
                 showGrid={showGrid}

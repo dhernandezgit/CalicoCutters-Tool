@@ -78,6 +78,7 @@ export interface DesignSettings {
   multiCols: number;
   multiSpacing: number;
 
+  sandwichPart: "both" | "cutter" | "seal";
   sandwichSealWidth: number;
   sandwichGap: number;
   sandwichDentSize: number;
@@ -92,6 +93,7 @@ export interface DesignSettings {
   rollerRepeatsAlong: number;
   rollerRim: number;
   rollerPattern: "grid" | "brick" | "mirror";
+  rollerPatternMode: "drawing" | "silhouette";
   rollerMargin: number;
   rollerRotate: boolean;
   rollerInvert: boolean;
@@ -110,6 +112,7 @@ export interface DesignSettings {
   stencilBridges: boolean;
   stencilBridgeWidth: number;
   stencilThickness: number;
+  stencilLineWidth: number;
 
   topperThickness: number;
   topperRelief: number;
@@ -118,6 +121,7 @@ export interface DesignSettings {
   topperPinWidth: number;
   topperPinPosition: number;
   topperInvert: boolean;
+  topperDepthCurve: "none" | "chamfer" | "round";
 
   practiceThickness: number;
   practiceWallHeight: number;
@@ -147,6 +151,7 @@ export interface DesignSettings {
   cakePopPlungerClearance: number;
   cakePopPlungerBack: number;
   cakePopRelief: number;
+  cakePopPlungerFace: "imprint" | "outline" | "none";
   cakePopTray: boolean;
   cakePopTrayRotation: number;
   cakePopTrayDepth: number;
@@ -306,6 +311,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   multiCols: 2,
   multiSpacing: 4,
 
+  sandwichPart: "both",
   sandwichSealWidth: 4,
   sandwichGap: 0.5,
   sandwichDentSize: 3,
@@ -320,24 +326,26 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   rollerRepeatsAlong: 1,
   rollerRim: 2,
   rollerPattern: "grid",
+  rollerPatternMode: "drawing",
   rollerMargin: 0,
   rollerRotate: false,
   rollerInvert: false,
   rollerBack: 0,
   rollerRemoveEdge: false,
-  rollerDepthCurve: "none",
+  rollerDepthCurve: "round",
 
   stencilWidth: 100,
   stencilHeight: 100,
-  stencilRows: 3,
-  stencilCols: 3,
+  stencilRows: 1,
+  stencilCols: 1,
   stencilSpacing: 3,
   stencilMargin: 3,
-  stencilShapeSize: 15,
+  stencilShapeSize: 0,
   stencilPattern: "grid",
   stencilBridges: true,
   stencilBridgeWidth: 1.2,
   stencilThickness: 1.5,
+  stencilLineWidth: 1.2,
 
   topperThickness: 5,
   topperRelief: 2,
@@ -346,6 +354,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   topperPinWidth: 6,
   topperPinPosition: 0,
   topperInvert: false,
+  topperDepthCurve: "none",
 
   practiceThickness: 3,
   practiceWallHeight: 8,
@@ -360,11 +369,11 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   bookmarkHoleDiameter: 6,
   bookmarkHoleMargin: 10,
   bookmarkRelief: 0.8,
-  bookmarkDesignStyle: "line",
+  bookmarkDesignStyle: "relief",
   pageClipGap: 1,
   pageClipBridge: 14,
   pageClipFlare: 6,
-  pageClipLip: 8,
+  pageClipLip: 4,
   pageClipHingeThickness: 0.6,
 
   cakePopMoldHeight: 18,
@@ -375,6 +384,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   cakePopPlungerClearance: 0.6,
   cakePopPlungerBack: 2.5,
   cakePopRelief: 2,
+  cakePopPlungerFace: "imprint",
   cakePopTray: false,
   cakePopTrayRotation: 180,
   cakePopTrayDepth: 50,

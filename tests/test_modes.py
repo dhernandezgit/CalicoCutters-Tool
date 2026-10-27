@@ -159,11 +159,41 @@ def test_texture_roller_keeps_interior_details():
     with_details = _shape().to_dict()
     without_details = _shape().to_dict()
     without_details["details"] = []
-    base = {**DEFAULT_SETTINGS, "mode": "roller", "rollerRepeatsAround": 2, "rollerRepeatsAlong": 1}
+    base = {**DEFAULT_SETTINGS, "mode": "roller", "rollerPatternMode": "silhouette", "rollerRepeatsAround": 2, "rollerRepeatsAlong": 1}
     detailed = build({"shape": with_details, "settings": base})
     plain = build({"shape": without_details, "settings": base})
     assert detailed["parts"][0]["volume"] > plain["parts"][0]["volume"] + 100
     assert _mesh(detailed["parts"][0]).is_watertight
+
+
+def test_texture_roller_closes_odd_repeats_for_brick_and_mirror():
+    for pattern in ("brick", "mirror"):
+        result = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "roller",
+            "rollerPattern": pattern,
+            "rollerRepeatsAround": 3,
+        }})
+        assert any("4 repeticiones" in warning for warning in result["warnings"])
+        assert _mesh(result["parts"][0]).is_watertight
+
+
+def test_texture_roller_engraved_silhouette_keeps_interior_details():
+    detailed = _shape().to_dict()
+    plain = _shape().to_dict()
+    plain["details"] = []
+    settings = {
+        **DEFAULT_SETTINGS,
+        "mode": "roller",
+        "rollerPatternMode": "silhouette",
+        "rollerInvert": True,
+        "rollerDepthCurve": "round",
+    }
+    with_details = build({"shape": detailed, "settings": settings})
+    without_details = build({"shape": plain, "settings": settings})
+    assert _mesh(with_details["parts"][0]).is_watertight
+    assert _mesh(without_details["parts"][0]).is_watertight
+    assert with_details["parts"][0]["volume"] != without_details["parts"][0]["volume"]
 
 
 def test_texture_roller_layouts_and_inversion_stay_watertight():
@@ -186,16 +216,48 @@ def test_texture_roller_layouts_and_inversion_stay_watertight():
             assert result["parts"][0]["volume"] > 0
 
 
-def test_sandwich_has_cutter_and_seal():
+def test_sandwich_has_separate_cutter_and_seal_parts():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,
         "mode": "sandwich",
         "sandwichSealWidth": 4,
         "sandwichGap": 0.6,
     }})
-    mesh = _mesh(result["parts"][0])
-    assert mesh.is_watertight
-    assert result["parts"][0]["volume"] > 0
+    assert [p["name"] for p in result["parts"]] == ["Cortador sándwich", "Sello sándwich"]
+    for part in result["parts"]:
+        mesh = _mesh(part)
+        assert mesh.is_watertight
+        assert part["volume"] > 0
+
+
+def test_sandwich_can_be_cutter_only_or_seal_only():
+    cutter = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "sandwich",
+        "sandwichPart": "cutter",
+    }})
+    assert [p["name"] for p in cutter["parts"]] == ["Cortador sándwich"]
+    seal = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "sandwich",
+        "sandwichPart": "seal",
+    }})
+    assert [p["name"] for p in seal["parts"]] == ["Sello sándwich"]
+    assert _mesh(seal["parts"][0]).is_watertight
+
+
+def test_sandwich_3mf_has_both_separate_objects():
+    result = export_3mf({
+        "shape": _shape().to_dict(),
+        "settings": {**DEFAULT_SETTINGS, "mode": "sandwich"},
+        "name": "sandwich",
+    })
+    raw = base64.b64decode(result["data_b64"])
+    with zipfile.ZipFile(io.BytesIO(raw)) as z:
+        model = z.read("3D/3dmodel.model").decode("utf-8")
+    assert 'name="Cortador sándwich"' in model
+    assert 'name="Sello sándwich"' in model
+    assert model.count("<item ") == 2
 
 
 def test_3mf_is_millimetres_and_has_separate_objects():
@@ -262,6 +324,54 @@ def test_cake_pop_has_mould_and_plunger():
         mesh = _mesh(part)
         assert mesh.is_watertight
         assert mesh.volume > 0
+
+
+def test_cake_pop_plunger_face_options():
+    volumes = {}
+    for face in ("imprint", "outline", "none"):
+        result = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "cakepop",
+            "cakePopPlungerFace": face,
+        }})
+        plunger = next(p for p in result["parts"] if p["name"] == "Prensador")
+        mesh = _mesh(plunger)
+        assert mesh.is_watertight, face
+        volumes[face] = plunger["volume"]
+    assert volumes["imprint"] > volumes["none"]
+    assert volumes["outline"] > volumes["none"]
+
+
+def test_stencil_defaults_to_one_full_size_motif():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "stencil",
+    }})
+    mesh = _mesh(result["parts"][0])
+    assert mesh.is_watertight
+    # One opening instead of the old 3 x 3 grid of tiny copies; the motif now
+    # uses most of the sheet.
+    assert mesh.bounds[1][0] - mesh.bounds[0][0] == pytest.approx(100, abs=0.2)
+    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(100, abs=0.2)
+    assert result["parts"][0]["volume"] < 100 * 100 * 1.5
+
+
+def test_stencil_with_interior_details_cuts_the_complete_drawing():
+    detailed = _shape().to_dict()
+    plain = _shape().to_dict()
+    plain["details"] = []
+    settings = {
+        **DEFAULT_SETTINGS,
+        "mode": "stencil",
+        "stencilBridges": False,
+    }
+    with_details = _mesh(build({"shape": detailed, "settings": settings})["parts"][0])
+    without_details = _mesh(build({"shape": plain, "settings": settings})["parts"][0])
+    # Cutting only the interior details removes less material than cutting the
+    # whole outer silhouette, and proves the drawing is actually used.
+    assert with_details.is_watertight
+    assert without_details.is_watertight
+    assert with_details.volume > without_details.volume
 
 
 def test_stencil_stays_inside_requested_sheet():
@@ -350,6 +460,18 @@ def test_topper_invert_relief_is_watertight():
     assert _mesh(normal["parts"][0]).is_watertight
     assert _mesh(inverted["parts"][0]).is_watertight
     assert inverted["parts"][0]["volume"] != normal["parts"][0]["volume"]
+
+
+def test_topper_depth_curves_stay_watertight():
+    for curve in ("none", "chamfer", "round"):
+        result = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "topper",
+            "topperDepthCurve": curve,
+        }})
+        mesh = _mesh(result["parts"][0])
+        assert mesh.is_watertight, curve
+        assert result["parts"][0]["volume"] > 0
 
 
 def test_invalid_settings_are_clamped_instead_of_crashing():
@@ -540,7 +662,7 @@ def test_stamp_decoration_curves_stay_watertight():
         assert result["parts"][0]["volume"] > 0
 
 
-def test_page_clip_prints_flat_as_two_hinged_plates():
+def test_page_clip_prints_flat_as_one_folding_strip():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,
         "mode": "bookmark",
@@ -548,13 +670,13 @@ def test_page_clip_prints_flat_as_two_hinged_plates():
     assert result["parts"][0]["name"] == "Pinza de página"
     mesh = _mesh(result["parts"][0])
     assert mesh.is_watertight
-    # Printed flat: two 50 mm plates side by side, 150 mm tall and only a few
-    # layers thick.  The finished folded marker is reported separately.
-    assert mesh.bounds[1][1] - mesh.bounds[0][1] == pytest.approx(150, abs=0.5)
-    assert mesh.bounds[1][0] - mesh.bounds[0][0] > 100
+    # Printed flat as a single 50 x 150 mm strip (plus the pull tab).  Half the
+    # old side-by-side footprint and reported folded dimensions.
+    assert mesh.bounds[1][0] - mesh.bounds[0][0] == pytest.approx(50, abs=0.5)
+    assert 149 <= mesh.bounds[1][1] - mesh.bounds[0][1] <= 157
     assert mesh.bounds[1][2] - mesh.bounds[0][2] < 4
     assert result["dimensions"]["width"] == pytest.approx(50, abs=0.2)
-    assert result["dimensions"]["height"] == pytest.approx(150, abs=0.2)
+    assert result["dimensions"]["height"] == pytest.approx(75, abs=0.2)
 
 
 def test_preprocess_defaults_preserve_fine_details():

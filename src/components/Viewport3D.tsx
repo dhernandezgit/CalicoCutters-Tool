@@ -3,6 +3,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import type { BuildResult, DesignShape } from "../types";
+
+type ViewCamera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
 import {
   surfaceOption,
   type PrintFinish,
@@ -28,6 +30,7 @@ interface Props {
   bedWidth?: number;
   bedDepth?: number;
   technical?: boolean;
+  projection?: "perspective" | "orthographic";
   autoRotate?: boolean;
   showBed?: boolean;
   showGrid?: boolean;
@@ -593,6 +596,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     bedWidth = 256,
     bedDepth = 256,
     technical = false,
+    projection = "perspective",
     autoRotate = false,
     showBed = true,
     showGrid = true,
@@ -618,7 +622,9 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
   const sceneRef = useRef<{
     renderer: THREE.WebGLRenderer;
     scene: THREE.Scene;
-    camera: THREE.PerspectiveCamera;
+    camera: ViewCamera;
+    perspective: THREE.PerspectiveCamera;
+    orthographic: THREE.OrthographicCamera;
     controls: OrbitControls;
     group: THREE.Group;
     bed: THREE.Group;
@@ -637,6 +643,66 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
   centerPickRef.current = centerPick;
   const centerPickedRef = useRef(onCenterPicked);
   centerPickedRef.current = onCenterPicked;
+  const projectionRef = useRef<"perspective" | "orthographic">(projection);
+  projectionRef.current = projection;
+  const technicalRef = useRef(technical);
+  technicalRef.current = technical;
+
+  const viewportAspect = (renderer: THREE.WebGLRenderer) => {
+    const w = renderer.domElement.clientWidth || 800;
+    const h = renderer.domElement.clientHeight || 600;
+    return w / Math.max(1, h);
+  };
+
+  const fitOrtho = (
+    camera: THREE.OrthographicCamera,
+    aspect: number,
+    radius: number,
+    wide = false,
+  ) => {
+    const height = Math.max(10, radius * (wide ? 1.7 : 1.45));
+    camera.top = height / 2;
+    camera.bottom = -height / 2;
+    camera.left = -(height * aspect) / 2;
+    camera.right = (height * aspect) / 2;
+    camera.near = 0.1;
+    camera.far = Math.max(6000, radius * 40 + 1000);
+    camera.zoom = 1;
+    camera.updateProjectionMatrix();
+  };
+
+  const frameBox = (box: THREE.Box3, wide = false) => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    const radius = Math.max(size.x, size.y, size.z, 10);
+    const aspect = viewportAspect(scene.renderer);
+    const camera = scene.camera;
+    const dir = new THREE.Vector3(0.72, 0.95, 1.25).normalize();
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const fov = (camera.fov * Math.PI) / 180;
+      const fitHeight = radius / (2 * Math.tan(fov / 2));
+      const fitWidth = fitHeight / Math.max(1, aspect);
+      const distance = Math.max(fitHeight, fitWidth) * (wide ? 1.42 : 1.2) + radius * 0.08;
+      camera.position.copy(center).addScaledVector(dir, distance);
+      camera.near = Math.max(0.1, distance / 100);
+      camera.far = distance * 30;
+      camera.updateProjectionMatrix();
+    } else {
+      fitOrtho(camera, aspect, radius, wide);
+      const distance = radius * 4;
+      camera.position.copy(center).addScaledVector(dir, distance);
+      camera.near = 0.1;
+      camera.far = distance + radius * 8 + 1000;
+      camera.updateProjectionMatrix();
+    }
+    scene.controls.target.copy(center);
+    scene.controls.update();
+    scene.controls.minDistance = Math.max(18, radius * 0.08);
+    scene.controls.maxDistance = Math.max(1200, radius * 8);
+    if (centerMarkerRef.current) centerMarkerRef.current.visible = false;
+  };
 
   const doFit = () => {
     const scene = sceneRef.current;
@@ -649,22 +715,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
       if (!stageBox.isEmpty()) box.union(stageBox);
     }
     const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(size.x, size.y, size.z, 10);
-    const fov = (scene.camera.fov * Math.PI) / 180;
-    const fitHeight = radius / (2 * Math.tan(fov / 2));
-    const fitWidth = fitHeight / Math.max(1, scene.camera.aspect);
-    const distance = Math.max(fitHeight, fitWidth) * (Math.max(size.x, size.y, size.z) > 120 ? 1.42 : 1.18) + radius * 0.08;
-    const dir = new THREE.Vector3(0.72, 0.95, 1.25).normalize();
-    scene.camera.position.copy(center).addScaledVector(dir, distance);
-    scene.camera.near = Math.max(0.1, distance / 100);
-    scene.camera.far = distance * 30;
-    scene.camera.updateProjectionMatrix();
-    scene.controls.target.copy(center);
-    scene.controls.update();
-    scene.controls.minDistance = Math.max(18, radius * 0.08);
-    scene.controls.maxDistance = Math.max(1200, radius * 8);
-    if (centerMarkerRef.current) centerMarkerRef.current.visible = false;
+    frameBox(box, Math.max(size.x, size.y, size.z) > 120);
   };
 
   const setView = (kind: "iso" | "top" | "front" | "side" | "bottom") => {
@@ -680,19 +731,31 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     const size = box.getSize(new THREE.Vector3());
     const center = box.getCenter(new THREE.Vector3());
     const radius = Math.max(size.x, size.y, size.z, 10);
-    const fov = (scene.camera.fov * Math.PI) / 180;
-    const fitHeight = radius / (2 * Math.tan(fov / 2));
-    const fitWidth = fitHeight / Math.max(1, scene.camera.aspect);
-    const distance = Math.max(fitHeight, fitWidth) * (Math.max(size.x, size.y, size.z) > 120 ? 1.42 : 1.18) + radius * 0.08;
-    if (kind === "top") scene.camera.position.set(center.x, center.y + distance, center.z + 0.01);
-    else if (kind === "bottom") scene.camera.position.set(center.x, center.y - distance, center.z + 0.01);
-    else if (kind === "front") scene.camera.position.set(center.x, center.y + radius * 0.25, center.z + distance);
-    else if (kind === "side") scene.camera.position.set(center.x + distance, center.y + radius * 0.25, center.z + 0.01);
+    const wide = Math.max(size.x, size.y, size.z) > 120;
+    const aspect = viewportAspect(scene.renderer);
+    const camera = scene.camera;
+    let distance: number;
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const fov = (camera.fov * Math.PI) / 180;
+      const fitHeight = radius / (2 * Math.tan(fov / 2));
+      const fitWidth = fitHeight / Math.max(1, aspect);
+      distance = Math.max(fitHeight, fitWidth) * (wide ? 1.42 : 1.18) + radius * 0.08;
+    } else {
+      fitOrtho(camera, aspect, radius, wide);
+      distance = radius * 4;
+      camera.near = 0.1;
+      camera.far = distance + radius * 8 + 1000;
+    }
+    if (kind === "top") camera.position.set(center.x, center.y + distance, center.z + 0.01);
+    else if (kind === "bottom") camera.position.set(center.x, center.y - distance, center.z + 0.01);
+    else if (kind === "front") camera.position.set(center.x, center.y + radius * 0.25, center.z + distance);
+    else if (kind === "side") camera.position.set(center.x + distance, center.y + radius * 0.25, center.z + 0.01);
     else {
       const dir = new THREE.Vector3(0.72, 0.95, 1.25).normalize();
-      scene.camera.position.copy(center).addScaledVector(dir, distance);
+      camera.position.copy(center).addScaledVector(dir, distance);
     }
-    scene.camera.lookAt(center);
+    camera.lookAt(center);
+    camera.updateProjectionMatrix();
     scene.controls.target.copy(center);
     scene.controls.update();
   };
@@ -704,20 +767,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     const box = new THREE.Box3().setFromObject(model);
     if (box.isEmpty()) return;
     const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const radius = Math.max(size.x, size.y, size.z, 10);
-    const fov = (scene.camera.fov * Math.PI) / 180;
-    const fitHeight = radius / (2 * Math.tan(fov / 2));
-    const fitWidth = fitHeight / Math.max(1, scene.camera.aspect);
-    const distance = Math.max(fitHeight, fitWidth) * (Math.max(size.x, size.y, size.z) > 120 ? 1.35 : 1.2) + radius * 0.08;
-    const dir = new THREE.Vector3(0.72, 0.95, 1.25).normalize();
-    scene.camera.position.copy(center).addScaledVector(dir, distance);
-    scene.camera.near = Math.max(0.1, distance / 100);
-    scene.camera.far = distance * 30;
-    scene.camera.updateProjectionMatrix();
-    scene.controls.target.copy(center);
-    scene.controls.update();
-    if (centerMarkerRef.current) centerMarkerRef.current.visible = false;
+    frameBox(box, Math.max(size.x, size.y, size.z) > 120);
   };
 
   const screenshot = () => {
@@ -733,8 +783,11 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     const host = hostRef.current;
     if (!host) return;
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 6000);
-    camera.position.set(100, 120, 170);
+    const perspective = new THREE.PerspectiveCamera(34, 1, 0.1, 6000);
+    perspective.position.set(100, 120, 170);
+    const orthographic = new THREE.OrthographicCamera(-100, 100, 100, -100, 0.1, 6000);
+    orthographic.position.copy(perspective.position);
+    const initialCamera: ViewCamera = projectionRef.current === "orthographic" ? orthographic : perspective;
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance", preserveDrawingBuffer: true });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
     renderer.setSize(host.clientWidth || 800, host.clientHeight || 600, false);
@@ -745,7 +798,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     renderer.toneMappingExposure = 1.05;
     host.appendChild(renderer.domElement);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(initialCamera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.075;
     controls.rotateSpeed = 0.72;
@@ -766,7 +819,8 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
       const rect = renderer.domElement.getBoundingClientRect();
       pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-      raycaster.setFromCamera(pointer, camera);
+      const activeCamera = sceneRef.current?.camera ?? initialCamera;
+      raycaster.setFromCamera(pointer, activeCamera);
       const root = modelRef.current;
       if (!root) return;
       if (centerPickRef.current) {
@@ -777,7 +831,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
         if (point) {
           const delta = point.clone().sub(controls.target);
           controls.target.copy(point);
-          camera.position.add(delta);
+          activeCamera.position.add(delta);
           controls.update();
           const marker = centerMarkerRef.current;
           if (marker) {
@@ -838,8 +892,15 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
       const w = host.clientWidth || 800;
       const h = host.clientHeight || 600;
       renderer.setSize(w, h, false);
-      camera.aspect = w / Math.max(1, h);
-      camera.updateProjectionMatrix();
+      const aspect = w / Math.max(1, h);
+      perspective.aspect = aspect;
+      perspective.updateProjectionMatrix();
+      const orthoHeight = orthographic.top - orthographic.bottom;
+      if (Number.isFinite(orthoHeight) && orthoHeight > 0) {
+        orthographic.left = -(orthoHeight * aspect) / 2;
+        orthographic.right = (orthoHeight * aspect) / 2;
+      }
+      orthographic.updateProjectionMatrix();
     };
     const ro = new ResizeObserver(resize);
     ro.observe(host);
@@ -848,11 +909,12 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     const tick = () => {
       raf = requestAnimationFrame(tick);
       controls.update();
-      renderer.render(scene, camera);
+      const activeCamera = sceneRef.current?.camera ?? initialCamera;
+      renderer.render(scene, activeCamera);
     };
     tick();
 
-    sceneRef.current = { renderer, scene, camera, controls, group, bed, fit: doFit, view: setView, resize };
+    sceneRef.current = { renderer, scene, camera: initialCamera, perspective, orthographic, controls, group, bed, fit: doFit, view: setView, resize };
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
@@ -872,6 +934,51 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
       sceneRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const next = projection === "orthographic" ? scene.orthographic : scene.perspective;
+    const prev = scene.camera;
+    if (prev === next) return;
+    const aspect = viewportAspect(scene.renderer);
+    next.position.copy(prev.position);
+    next.quaternion.copy(prev.quaternion);
+    next.up.copy(prev.up);
+    next.near = 0.1;
+    next.far = Math.max(6000, prev.far || 6000);
+    if (next instanceof THREE.OrthographicCamera && prev instanceof THREE.PerspectiveCamera) {
+      const distance = Math.max(1, prev.position.distanceTo(scene.controls.target));
+      const height = Math.max(10, 2 * distance * Math.tan((prev.fov * Math.PI) / 180 / 2));
+      next.top = height / 2;
+      next.bottom = -height / 2;
+      next.left = -(height * aspect) / 2;
+      next.right = (height * aspect) / 2;
+      next.zoom = 1;
+    } else if (next instanceof THREE.PerspectiveCamera && prev instanceof THREE.OrthographicCamera) {
+      const height = Math.max(10, (prev.top - prev.bottom) / Math.max(0.01, prev.zoom));
+      const fov = technicalRef.current ? 14 : 34;
+      next.fov = fov;
+      next.aspect = aspect;
+      const distance = (height / 2) / Math.tan((fov * Math.PI) / 180 / 2);
+      const dir = prev.position.clone().sub(scene.controls.target);
+      if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1);
+      dir.normalize();
+      next.position.copy(scene.controls.target).addScaledVector(dir, distance);
+      next.near = Math.max(0.1, distance / 100);
+      next.far = distance * 30;
+    } else if (next instanceof THREE.PerspectiveCamera) {
+      next.aspect = aspect;
+    } else {
+      const height = next.top - next.bottom;
+      next.left = -(height * aspect) / 2;
+      next.right = (height * aspect) / 2;
+    }
+    next.updateProjectionMatrix();
+    scene.camera = next;
+    scene.controls.object = next;
+    scene.controls.update();
+  }, [projection]);
 
   useEffect(() => {
     const scene = sceneRef.current;
@@ -1054,6 +1161,7 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
+    if (!(scene.camera instanceof THREE.PerspectiveCamera)) return;
     const fov = technical ? 14 : 34;
     if (Math.abs(scene.camera.fov - fov) > 0.01) {
       scene.camera.fov = fov;

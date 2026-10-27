@@ -18,18 +18,22 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Genera un sello coordinado con respaldo y relieve; en Cortador + sello se muestra dentro del cortador.
 - Relieve positivo, relieve negativo hundido, borde a ras del dibujo, par espejo y mangos en uno o ambos extremos.
 - Menú agrupado y plegable por **Galletas, Sellos, Sándwich, Rodillo, Repostería y Papelería**:
-  Cortador + sello, cortador, cortador con relieve, sello, sándwich, rodillo de textura,
-  topper, stencil, galleta de práctica, molde cake pop y pinza de página.
+  Cortador + sello, cortador, cortador con relieve, sello, sándwich (cortador y/o sellador),
+  rodillo de textura, topper, stencil, galleta de práctica, molde cake pop y pinza de página.
   Todos los tipos están disponibles también en Básico.
-- **Pinza de página plana**: dos placas rectangulares con tres bisagras vivas, pestaña de apertura y dibujo calado. Se imprime tumbada, sin soportes y sin montaje.
+- **Pinza de página**: una tira que se dobla por la mitad, con el dibujo del sello en relieve y hueco a juego para marcar la página y cierre a presión. Ocupa la mitad que la versión de dos placas y se imprime plana, sin soportes.
 - **Visualización 3D tipo CookieCAD V8**: 14 superficies de color, mármol, madera o color propio; materiales sólido, bicolor, degradado, glitter y seda; masa, galleta suelta, regla y moneda.
+- **Cámara en perspectiva o isométrica** desde la barra del visor, con botón **Vista** grande para abrir el panel de escena, materiales y cámara.
 - **Centro de giro movible**: haz clic en cualquier punto del modelo o de la masa para orbitar alrededor de ese punto; también puedes desplazar con el botón derecho.
 - **Medidas 3D** con líneas y cotas de ancho, fondo y alto.
-- **Modo oscuro** manual y según la preferencia del sistema.
+- **Modo oscuro** manual; la app arranca en claro por defecto.
 - **Buscador de ajustes** por nombre y contenido de cada sección.
 - **Flujo guiado**: presets de 3–4 pulgadas, consejos de imagen, revisión superior/lateral/inferior y checklist de primera impresión.
 - **Mockup PNG** para catálogo o redes y **SVG** de contorno para edición o listings.
-- **Rodillo de textura avanzado**: patrones repetido, ladrillo y reflejado; giro del origen, margen, inversión, grosor posterior, borde exterior y curvas de profundidad.
+- **Rodillo de textura avanzado**: patrones repetido, ladrillo y reflejado, con cierre automático de la costura; motivo de dibujo (contorno + detalles, como un sello) o silueta rellena; giro del origen, margen, inversión, grosor posterior, borde exterior y curvas redondeadas por defecto. El dibujo se subdivide antes de envolverlo para que la forma se vea completa y sin facetas grandes.
+- **Cortador sándwich**: cortador con banda de sellado integrada y sello central separado (o solo una de las piezas), con muescas configurables.
+- **Topper para tarta**: relieve con curva recta, chaflán o redondeada y pin estrechado para clavar con facilidad.
+- **Molde cake pop**: prensador con cara de relieve, solo contorno o lisa, además de molde, bandeja y palito.
 - **Bandeja de cake pop** opcional: hueco girado y dimensionable, holgura, margen, longitud de apoyo y altura.
 - Perfiles guardables de fabricación y preprocesado; opción de incluir el tamaño final y la escena de la vista previa.
 - Vista previa 3D real, vista 2D, selección múltiple y vista de un solo archivo.
@@ -94,9 +98,9 @@ Los tests comprueban:
 - Base: 3,5 mm de alto × 4 mm de ancho.
 - Sello: 5,5 mm de respaldo + 3 mm de relieve y 0,8 mm de holgura. El borde, si está activo, queda a la misma altura que el relieve; sin borde, la zona exterior queda a la altura de la base.
 - Punto de alineación superficial de 1,8 mm en la cara inferior del cortador y del sello (activo por defecto); no atraviesa la pieza.
-- Pinza de página: dos placas planas de 50 × 150 × 2,4 mm con tres bisagras vivas de 0,6 mm y pestaña de apertura. Se imprime tumbada, sin soportes; usa PETG o TPU para muchas aperturas.
-- Stencil: 1,5 mm de lámina y puentes de unión para islas interiores.
-- Cake pop: molde con agujero de palito, prensador a juego y bandeja de soporte opcional.
+- Pinza de página: tira plana de 50 × 150 × 2,4 mm que se dobla por la mitad; bisagra viva continua de 0,6 mm, dibujo en relieve/bajorrelieve y cierre a presión. Se imprime plana, sin soportes; usa PETG o PP para muchas aperturas.
+- Stencil: 1,5 mm de lámina, una forma a tamaño completo o patrón repetido (1 × 1 por defecto). Si el dibujo tiene detalles interiores, recorta el contorno y el dibujo completo, no solo la silueta.
+- Cake pop: molde con agujero de palito, prensador a juego (relieve, contorno o liso) y bandeja de soporte opcional.
 - Cama: 256 × 256 mm.
 - Sin soportes; base plana sobre la cama.
 
