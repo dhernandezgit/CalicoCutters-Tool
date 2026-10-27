@@ -21,6 +21,7 @@ export type PrinterProfile = "fdm04" | "fdm06" | "resin";
 export interface DesignSettings {
   mode: CreateMode;
   sizeMode: "longest" | "wh";
+  units: "mm" | "in";
   longest: number;
   width: number;
   height: number;
@@ -67,18 +68,31 @@ export interface DesignSettings {
   stampEdgeMethod: "preserve" | "offset";
   stampBorder: boolean;
   stampBorderWidth: number;
+  stampBacking: "outline" | "rect";
+  stampBackingPadding: number;
+  stampGrip: boolean;
+  stampGripDiameter: number;
+  stampGripDepth: number;
   stampDetailCurve: "none" | "chamfer" | "round";
   stampDetailGrow: number;
   mirror: boolean;
   mirrorPair: boolean;
 
   imprintDepth: number;
+  imprintInvert: boolean;
+  imprintEdgesOnly: boolean;
+  imprintBaseWidth: number;
+  imprintEdgeWidth: number;
 
   multiRows: number;
   multiCols: number;
   multiSpacing: number;
 
   sandwichPart: "both" | "cutter" | "seal";
+  sandwichDentShape: "round" | "triangle" | "square";
+  sandwichDentRound: boolean;
+  sandwichDentRadius: number;
+  sandwichOffsetOutward: boolean;
   sandwichSealWidth: number;
   sandwichGap: number;
   sandwichDentSize: number;
@@ -88,6 +102,8 @@ export interface DesignSettings {
   rollerDiameter: number;
   rollerLength: number;
   rollerRelief: number;
+  rollerSourceScale: number;
+  rollerRimHeight: number;
   rollerBore: number;
   rollerRepeatsAround: number;
   rollerRepeatsAlong: number;
@@ -101,6 +117,7 @@ export interface DesignSettings {
   rollerRemoveEdge: boolean;
   rollerDepthCurve: "none" | "chamfer" | "round";
 
+  stencilLayout: "grid" | "dimensions" | "computed";
   stencilWidth: number;
   stencilHeight: number;
   stencilRows: number;
@@ -152,6 +169,7 @@ export interface DesignSettings {
   cakePopPlungerBack: number;
   cakePopRelief: number;
   cakePopPlungerFace: "imprint" | "outline" | "none";
+  cakePopPlungerMode: "single" | "two";
   cakePopTray: boolean;
   cakePopTrayRotation: number;
   cakePopTrayDepth: number;
@@ -160,6 +178,7 @@ export interface DesignSettings {
   cakePopTrayLength: number;
   cakePopTrayHeight: number;
 
+  cutterSetMode: "sizes" | "shapes";
   setCount: number;
   setStep: number;
   setSpacing: number;
@@ -254,6 +273,7 @@ export interface BambuSettings {
 export const DEFAULT_SETTINGS: DesignSettings = {
   mode: "cutter-stamp",
   sizeMode: "longest",
+  units: "mm",
   longest: 80,
   width: 80,
   height: 80,
@@ -300,18 +320,31 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   stampEdgeMethod: "preserve",
   stampBorder: true,
   stampBorderWidth: 1.6,
+  stampBacking: "outline",
+  stampBackingPadding: 2,
+  stampGrip: false,
+  stampGripDiameter: 20,
+  stampGripDepth: 2,
   stampDetailCurve: "round",
   stampDetailGrow: 0,
   mirror: false,
   mirrorPair: false,
 
   imprintDepth: 4.5,
+  imprintInvert: false,
+  imprintEdgesOnly: false,
+  imprintBaseWidth: 1.2,
+  imprintEdgeWidth: 1.2,
 
   multiRows: 2,
   multiCols: 2,
   multiSpacing: 4,
 
   sandwichPart: "both",
+  sandwichDentShape: "round",
+  sandwichDentRound: false,
+  sandwichDentRadius: 1,
+  sandwichOffsetOutward: false,
   sandwichSealWidth: 4,
   sandwichGap: 0.5,
   sandwichDentSize: 3,
@@ -321,6 +354,8 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   rollerDiameter: 35,
   rollerLength: 90,
   rollerRelief: 1,
+  rollerSourceScale: 100,
+  rollerRimHeight: 1.2,
   rollerBore: 8,
   rollerRepeatsAround: 2,
   rollerRepeatsAlong: 1,
@@ -334,6 +369,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   rollerRemoveEdge: false,
   rollerDepthCurve: "round",
 
+  stencilLayout: "grid",
   stencilWidth: 100,
   stencilHeight: 100,
   stencilRows: 1,
@@ -370,10 +406,10 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   bookmarkHoleMargin: 10,
   bookmarkRelief: 0.8,
   bookmarkDesignStyle: "relief",
-  pageClipGap: 1,
-  pageClipBridge: 14,
-  pageClipFlare: 6,
-  pageClipLip: 4,
+  pageClipGap: 0.6,
+  pageClipBridge: 4,
+  pageClipFlare: 0,
+  pageClipLip: 1,
   pageClipHingeThickness: 0.6,
 
   cakePopMoldHeight: 18,
@@ -385,6 +421,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   cakePopPlungerBack: 2.5,
   cakePopRelief: 2,
   cakePopPlungerFace: "imprint",
+  cakePopPlungerMode: "single",
   cakePopTray: false,
   cakePopTrayRotation: 180,
   cakePopTrayDepth: 50,
@@ -393,6 +430,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   cakePopTrayLength: 25,
   cakePopTrayHeight: 12,
 
+  cutterSetMode: "sizes",
   setCount: 3,
   setStep: 0.18,
   setSpacing: 10,

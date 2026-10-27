@@ -291,7 +291,15 @@ def extrude_polygon(poly: Polygon | MultiPolygon, z0: float, height: float) -> M
             else:
                 all_faces.append([a, b, c])
                 all_faces.append([a, c, d])
-    return Mesh(vertices, np.asarray(all_faces, dtype=np.int64)).merged().orient_consistent()
+    verts_arr = np.asarray(vertices, dtype=float)
+    faces_arr = np.asarray(all_faces, dtype=np.int64)
+    if len(faces_arr):
+        tri = verts_arr[faces_arr]
+        area2 = np.linalg.norm(
+            np.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0]), axis=1
+        )
+        faces_arr = faces_arr[area2 > 1e-9]
+    return Mesh(verts_arr, faces_arr).merged().orient_consistent()
 
 
 def _ring_array(
@@ -787,14 +795,72 @@ def build_stamp(
     recessed: bool = False,
     detail_curve: str = "none",
     detail_grow: float = 0.0,
+    backing: str = "outline",
+    backing_padding: float = 2.0,
+    grip: bool = False,
+    grip_diameter: float = 20.0,
+    grip_depth: float = 2.0,
 ) -> Mesh:
-    stamp_poly = main.buffer(-clearance, join_style=1, quad_segs=8)
-    if stamp_poly.is_empty:
-        stamp_poly = main.buffer(-min(0.3, clearance), join_style=1, quad_segs=8)
+    if backing == "rect":
+        b = main.bounds
+        pad = max(0.0, float(backing_padding))
+        stamp_poly = rounded_rect(
+            max(2.0, b[2] - b[0] + pad * 2.0),
+            max(2.0, b[3] - b[1] + pad * 2.0),
+            min(6.0, pad + 2.0),
+        )
+        stamp_poly = affinity.translate(
+            stamp_poly, (b[0] + b[2]) / 2.0, (b[1] + b[3]) / 2.0
+        )
+    else:
+        stamp_poly = main.buffer(-clearance, join_style=1, quad_segs=8)
+        if stamp_poly.is_empty:
+            stamp_poly = main.buffer(-min(0.3, clearance), join_style=1, quad_segs=8)
     if stamp_poly.is_empty:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
     stamp_components = _ring_parts(stamp_poly)
     parts: list[Mesh] = []
+
+    def stamp_base(component: Polygon, height: float) -> list[Mesh]:
+        out: list[Mesh] = []
+        gp = None
+        if grip:
+            cb = component.bounds
+            gr = min(
+                max(2.0, float(grip_diameter) / 2.0),
+                max(1.0, min(cb[2] - cb[0], cb[3] - cb[1]) * 0.22),
+            )
+            gc = component.centroid
+            gp = Point(gc.x, gc.y).buffer(gr, quad_segs=32)
+            if not component.buffer(-0.5).contains(gp):
+                gp = None
+        gd = min(max(0.3, float(grip_depth)), max(0.3, height - 0.5)) if gp is not None else 0.0
+        dimple = None
+        dep = 0.0
+        if alignment is not None:
+            ax, ay, ar = alignment
+            dimple = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
+            dep = min(0.4, max(0.12, height * 0.1))
+            if not component.buffer(0.05).contains(dimple):
+                dimple = None
+                dep = 0.0
+        if gd > 0.2 and gp is not None:
+            bottom = component.difference(gp)
+            if dimple is not None:
+                bottom = bottom.difference(dimple)
+            if not bottom.is_empty:
+                out.append(extrude_polygon(bottom, 0.0, gd))
+                out.append(extrude_polygon(component, gd - 0.01, height - gd + 0.01))
+                return out
+        if dimple is not None:
+            bottom = component.difference(dimple)
+            if not bottom.is_empty:
+                out.append(extrude_polygon(bottom, 0.0, dep))
+                out.append(extrude_polygon(component, dep - 0.01, height - dep + 0.01))
+                return out
+        out.append(extrude_polygon(component, 0.0, height))
+        return out
+
     for stamp_component in stamp_components:
         kept_details: list[Polygon] = []
         grow = max(0.0, min(2.0, float(detail_grow)))
@@ -823,38 +889,14 @@ def build_stamp(
             # Negative relief: the background is high and the artwork is a
             # shallow recess.  This leaves raised details in dough/fondant.
             plate_height = max(0.3, back_height - depth)
-            if alignment is not None:
-                ax, ay, ar = alignment
-                dimple = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
-                dep = min(0.4, max(0.1, plate_height * 0.2))
-                bottom_poly = stamp_component.difference(dimple)
-                if stamp_component.buffer(0.05).contains(dimple) and not bottom_poly.is_empty:
-                    parts.append(extrude_polygon(bottom_poly, 0.0, dep))
-                    parts.append(extrude_polygon(stamp_component, dep - 0.01, plate_height - dep + 0.01))
-                else:
-                    parts.append(extrude_polygon(stamp_component, 0.0, plate_height))
-            else:
-                parts.append(extrude_polygon(stamp_component, 0.0, plate_height))
+            parts.extend(stamp_base(stamp_component, plate_height))
             cutouts = unary_union([d for d in grown_details if not d.is_empty])
             cover = stamp_component.difference(cutouts)
             for p in _ring_parts(cover):
                 if p.area > 0.01:
                     parts.append(extrude_polygon(p, back_height - depth - 0.01, depth + 0.01))
             continue
-        if alignment is not None:
-            ax, ay, ar = alignment
-            dimple = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
-            dep = min(0.4, max(0.12, back_height * 0.1))
-            bottom_poly = stamp_component.difference(dimple)
-            if stamp_component.buffer(0.05).contains(dimple) and not bottom_poly.is_empty:
-                # The alignment mark belongs to the back/bed side of the
-                # stamp, never to the face that presses into the dough.
-                parts.append(extrude_polygon(bottom_poly, 0.0, dep))
-                parts.append(extrude_polygon(stamp_component, dep - 0.01, back_height - dep + 0.01))
-            else:
-                parts.append(extrude_polygon(stamp_component, 0.0, back_height))
-        else:
-            parts.append(extrude_polygon(stamp_component, 0.0, back_height))
+        parts.extend(stamp_base(stamp_component, back_height))
         if border and border_width > 0.2:
             # A true annular frame, built by subtracting an inset copy of the
             # plate.  Buffering the exterior line produced non-watertight
@@ -901,6 +943,13 @@ def build_imprint(
     alignment: tuple[float, float, float] | None = None,
     detail_curve: str = "none",
     detail_grow: float = 0.0,
+    extra_blade: bool = False,
+    extra_blade_depth: float = 0.0,
+    extra_blade_thickness: float = 0.0,
+    invert: bool = False,
+    edges_only: bool = False,
+    base_inset: float = 1.2,
+    edge_width: float = 1.2,
 ) -> Mesh:
     cutter = build_cutter(
         main,
@@ -910,20 +959,55 @@ def build_imprint(
         chamfer_height=chamfer_height,
         base_height=base_height,
         base_width=base_width,
-        base_shape=base_shape,
         sharp_edge=sharp_edge,
+        extra_blade=extra_blade,
+        extra_blade_depth=extra_blade_depth,
+        extra_blade_thickness=extra_blade_thickness,
+        base_shape=base_shape,
         alignment=alignment,
     )
-    floor_poly = main.buffer(-max(0.5, blade_thickness * 0.8), join_style=2)
+    grow = max(0.0, min(2.0, float(detail_grow)))
+    sources: list[Polygon] = []
+    for d in details:
+        source = d.buffer(grow / 2.0, join_style=1, quad_segs=8) if grow > 0.001 else d
+        for p in _ring_parts(source):
+            if p.area > 0.002:
+                sources.append(p)
+    if edges_only:
+        line_w = max(0.4, float(edge_width))
+        wall_h = max(1.0, min(max(1.0, blade_depth - 1.0), imprint_depth + 2.0))
+        parts = [cutter]
+        for p in sources:
+            ring = p.buffer(line_w / 2.0, join_style=1, quad_segs=8).difference(
+                p.buffer(-line_w / 2.0, join_style=1, quad_segs=8)
+            )
+            if ring.is_empty:
+                ring = p
+            for q in _ring_parts(ring):
+                if q.area > 0.01:
+                    parts.append(extrude_polygon(q, max(0.0, base_height - 0.2), wall_h))
+        return _append_all(parts)
+    floor_poly = main.buffer(-max(0.3, float(base_inset)), join_style=2)
     if floor_poly.is_empty:
         return cutter
     floor_z = max(1.0, base_height + blade_depth - imprint_depth)
+    if invert:
+        carve = max(0.3, min(float(imprint_depth), max(0.4, floor_z - 0.6)))
+        detail_union = unary_union(sources).intersection(floor_poly) if sources else None
+        base_poly = floor_poly.buffer(-0.1, join_style=1, quad_segs=8)
+        if base_poly.is_empty:
+            base_poly = floor_poly
+        floor_base = extrude_polygon(base_poly, 0.0, max(0.4, floor_z - carve + 0.2))
+        out = cutter.append(floor_base)
+        top = floor_poly.difference(detail_union) if detail_union is not None else floor_poly
+        for p in _ring_parts(top):
+            if p.area > 0.01:
+                out = out.append(extrude_polygon(p, floor_z - carve, carve))
+        return out
     floor = extrude_polygon(floor_poly, 0.0, floor_z)
     out = cutter.append(floor)
-    grow = max(0.0, min(2.0, float(detail_grow)))
     ceiling = floor_z + min(imprint_depth, blade_depth - 1)
-    for d in details:
-        source = d.buffer(grow / 2.0, join_style=1, quad_segs=8) if grow > 0.001 else d
+    for source in sources:
         clipped = source.intersection(floor_poly)
         if clipped.is_empty:
             continue
@@ -952,6 +1036,10 @@ def build_sandwich(
     dent_size: float,
     dent_spacing: float,
     dent_depth: float,
+    dent_shape: str = "round",
+    dent_round: bool = False,
+    dent_radius: float = 1.0,
+    offset_outward: bool = False,
     base_shape: str = "round",
     sharp_edge: bool = True,
     alignment: tuple[float, float, float] | None = None,
@@ -976,7 +1064,12 @@ def build_sandwich(
         alignment=alignment,
     )
     width = max(0.8, float(seal_width))
-    seal_outer = main.buffer(-max(0.2, float(gap)), join_style=1, quad_segs=8)
+    gap = max(0.0, float(gap))
+    seal_outer = (
+        main.buffer(gap, join_style=1, quad_segs=8)
+        if offset_outward
+        else main.buffer(-max(0.2, gap), join_style=1, quad_segs=8)
+    )
     if seal_outer.is_empty:
         seal_outer = main.buffer(-0.2, join_style=1, quad_segs=8)
     seal_inner = seal_outer.buffer(-width, join_style=1, quad_segs=8)
@@ -997,8 +1090,13 @@ def build_sandwich(
     # band.  It keeps the tool printable as one piece without blocking the
     # cutting edge.
     if seal_ring is not None and not seal_outer.is_empty:
-        connector_outer = main.buffer(min(1.2, max(0.4, base_width * 0.35)), join_style=1, quad_segs=8)
-        connector = connector_outer.difference(seal_outer)
+        if offset_outward:
+            connector = seal_outer.difference(
+                main.buffer(max(0.2, base_width), join_style=1, quad_segs=8)
+            )
+        else:
+            connector_outer = main.buffer(min(1.2, max(0.4, base_width * 0.35)), join_style=1, quad_segs=8)
+            connector = connector_outer.difference(seal_outer)
         for p in _ring_parts(connector):
             if p.area > 0.01:
                 parts.append(extrude_polygon(p, 0.0, max(1.0, base_height * 0.6)))
@@ -1015,9 +1113,34 @@ def build_sandwich(
             path = path_poly.exterior
             per = max(0.5, dent_spacing)
             n = max(4, int(path.length / per))
+            r = max(0.4, dent_size / 2.0)
             for i in range(n):
-                pt = path.interpolate((i + 0.5) / n, normalized=True)
-                bump = Point(pt.x, pt.y).buffer(max(0.4, dent_size / 2), quad_segs=8)
+                u = (i + 0.5) / n
+                pt = path.interpolate(u, normalized=True)
+                prev_pt = path.interpolate((u - 0.35 / n) % 1.0, normalized=True)
+                next_pt = path.interpolate((u + 0.35 / n) % 1.0, normalized=True)
+                tx, ty = next_pt.x - prev_pt.x, next_pt.y - prev_pt.y
+                tl = math.hypot(tx, ty) or 1.0
+                nx, ny = ty / tl, -tx / tl
+                if (pt.x - path_poly.centroid.x) * nx + (pt.y - path_poly.centroid.y) * ny < 0:
+                    nx, ny = -nx, -ny
+                if dent_shape == "triangle":
+                    bump: Polygon = Polygon([
+                        (pt.x + nx * r, pt.y + ny * r),
+                        (pt.x - ny * r * 0.9, pt.y + nx * r * 0.9),
+                        (pt.x + ny * r * 0.9, pt.y - nx * r * 0.9),
+                    ])
+                elif dent_shape == "square":
+                    h = r * 0.82
+                    bump = box(-h, -h, h, h)
+                    bump = affinity.rotate(bump, math.degrees(math.atan2(ty, tx)), origin=(0, 0))
+                    bump = affinity.translate(bump, pt.x, pt.y)
+                else:
+                    bump = Point(pt.x, pt.y).buffer(r, quad_segs=16)
+                if dent_round and dent_shape != "round":
+                    bump = bump.buffer(max(0.1, float(dent_radius)), join_style=1, quad_segs=8)
+                if not bump.is_valid:
+                    bump = bump.buffer(0)
                 parts.append(extrude_polygon(bump, seal_height - 0.2, max(0.3, dent_depth)))
 
     return _append_all(parts).oriented()
@@ -1030,6 +1153,8 @@ def build_roller(
     diameter: float,
     length: float,
     relief: float,
+    source_scale: float = 1.0,
+    rim_height: float = 1.2,
     bore: float,
     repeats_around: int,
     repeats_along: int,
@@ -1073,7 +1198,7 @@ def build_roller(
     b = main.bounds
     bw = max(1e-6, b[2] - b[0])
     bh = max(1e-6, b[3] - b[1])
-    fit = min(usable_w / bw, usable_h / bh) * 0.9
+    fit = min(usable_w / bw, usable_h / bh) * 0.9 * max(0.1, min(1.0, float(source_scale)))
 
     def prepare(geom: Polygon) -> Polygon:
         g = affinity.translate(geom, -pivot.x, -pivot.y)
@@ -1231,6 +1356,7 @@ def build_stencil(
     shape_size: float = 0.0,
     margin: float = 3.0,
     pattern: str = "grid",
+    layout: str = "grid",
     bridges: bool = True,
     bridge_width: float = 1.2,
     line_width: float = 1.2,
@@ -1255,6 +1381,17 @@ def build_stencil(
     bh = max(1e-6, b[3] - b[1])
     available_w = max(4.0, width - margin * 2)
     available_h = max(4.0, height - margin * 2)
+    if layout == "dimensions":
+        target = float(shape_size) if shape_size > 0 else min(available_w, available_h) * 0.2
+        target = max(2.0, target)
+        cols = max(1, int((available_w + spacing) // (target + spacing)))
+        rows = max(1, int((available_h + spacing) // (target + spacing)))
+        shape_size = target
+    elif layout == "computed" and shape_size > 0:
+        spacing = max(0.5, min(
+            (available_w - cols * shape_size) / (cols - 1) if cols > 1 else spacing,
+            (available_h - rows * shape_size) / (rows - 1) if rows > 1 else spacing,
+        ))
     cell_w = available_w / cols
     cell_h = available_h / rows
     gap = max(0.5, spacing) + (line_w if details else 0.0)
@@ -1517,6 +1654,75 @@ def build_cake_pop(
     return tray, _append_all(plunger_parts)
 
 
+def build_cake_pop_two(
+    main: Polygon,
+    details: list[Polygon],
+    *,
+    mold_height: float,
+    mold_wall: float,
+    base_height: float,
+    stick_hole: float,
+    hole_clearance: float,
+    plunger_clearance: float,
+    plunger_back: float,
+    plunger_relief: float,
+    plunger_face: str = "imprint",
+) -> tuple[Mesh, Mesh, Mesh]:
+    """Cake-pop mould with a two-piece plunger: stamp face + back plate."""
+    tray, _old_plunger = build_cake_pop(
+        main, details,
+        mold_height=mold_height,
+        mold_wall=mold_wall,
+        base_height=base_height,
+        stick_hole=stick_hole,
+        hole_clearance=hole_clearance,
+        plunger_clearance=plunger_clearance,
+        plunger_back=plunger_back,
+        plunger_relief=plunger_relief,
+        plunger_face=plunger_face,
+    )
+    plunger_poly = main.buffer(-max(0.2, plunger_clearance), join_style=1, quad_segs=8)
+    if plunger_poly.is_empty:
+        plunger_poly = main.buffer(-0.2, join_style=1, quad_segs=8)
+    face_poly = plunger_poly.buffer(-0.2, join_style=1, quad_segs=8)
+    if face_poly.is_empty:
+        face_poly = plunger_poly
+    face_h = max(1.2, min(3.0, plunger_back))
+    face_parts = [extrude_polygon(face_poly, 0.0, face_h)]
+    face = str(plunger_face) if str(plunger_face) in {"imprint", "outline", "none"} else "imprint"
+    relief_h = max(0.3, plunger_relief) + 0.2
+    if face == "imprint":
+        for d in details:
+            for p in _ring_parts(d.intersection(face_poly)):
+                if p.area > 0.15:
+                    face_parts.append(extrude_polygon(p, face_h - 0.2, relief_h))
+    elif face == "outline":
+        inner = face_poly.buffer(-0.8, join_style=1, quad_segs=8)
+        ring = face_poly.difference(inner) if not inner.is_empty else None
+        if ring is None or ring.is_empty or ring.area <= 0.02:
+            ring = face_poly.boundary.buffer(0.5, cap_style=1, join_style=1).intersection(face_poly)
+        for p in _ring_parts(ring):
+            if p.area > 0.02:
+                face_parts.append(extrude_polygon(p, face_h - 0.2, relief_h))
+
+    back_h = max(2.0, plunger_back)
+    back_outer = plunger_poly.buffer(1.2, join_style=1, quad_segs=8)
+    back_parts = [extrude_polygon(back_outer, 0.0, back_h)]
+    rim_outer = plunger_poly.buffer(0.9, join_style=1, quad_segs=8)
+    rim_inner = plunger_poly.buffer(-0.15, join_style=1, quad_segs=8)
+    rim = rim_outer.difference(rim_inner) if not rim_inner.is_empty else rim_outer
+    for p in _ring_parts(rim):
+        if p.area > 0.01:
+            back_parts.append(extrude_polygon(p, max(0.0, back_h - 0.2), 1.0))
+    pb = back_outer.bounds
+    grip_len = max(10.0, min(24.0, (pb[3] - pb[1]) * 0.32))
+    grip_wid = max(7.0, min(16.0, (pb[2] - pb[0]) * 0.18))
+    grip = rounded_rect(grip_len, grip_wid, grip_wid / 2)
+    grip = affinity.translate(grip, pb[2] - 1.5 + grip_len / 2, (pb[1] + pb[3]) / 2)
+    back_parts.append(extrude_polygon(grip, 0.0, back_h))
+    return tray, _append_all(face_parts), _append_all(back_parts)
+
+
 def _append_all(parts: list[Mesh]) -> Mesh:
     if not parts:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
@@ -1568,147 +1774,146 @@ def build_bookmark(
     relief: float,
     style: str = "relief",
     line_width: float = 0.4,
-    gap: float = 1.0,
-    bridge: float = 14.0,
+    gap: float = 0.6,
+    bridge: float = 4.0,
     flare: float = 6.0,
-    lip: float = 4.0,
+    lip: float = 1.0,
     hinge_thickness: float = 0.6,
-) -> Mesh:
-    """Fold-over page clip that marks the page and snaps shut.
+) -> tuple[Mesh, Mesh]:
+    """Two-piece page clip: a debossed base and a raised press.
 
-    The strip prints flat as one 50 x 150 mm rectangle, half the footprint of
-    the old side-by-side pair.  A continuous living hinge across the middle
-    folds the top half over the bottom half.  One inner face carries a raised
-    motif and the other a matching recess, so the page is embossed.  A small
-    bead/groove pair near the free edge closes the clip.
+    The base has the drawing recessed into its inner face and a shallow central
+    socket.  The press is a flat plate with the matching raised drawing and a
+    central pivot; its outer face is also debossed.  Both pieces print flat,
+    have no tall borders and no through-holes, and clamp the page between them.
     """
     W = max(20.0, float(width))
-    H = max(50.0, float(height))
+    H = max(20.0, float(height))
     T = max(1.2, float(thickness))
-    G = max(0.3, min(3.0, float(gap)))
-    HINGE_T = max(0.25, min(T - 0.4, float(hinge_thickness)))
-    TAB = max(0.0, min(12.0, float(flare)))
-    safe_margin = max(2.0, min(float(margin), min(W, H / 2.0) * 0.3))
-    half = H / 2.0
-    hinge_floor = min(T - 0.6, max(0.6, T * 0.5))
-    strip = rounded_rect(W, H, corner)
+    m = max(2.0, min(float(margin), min(W, H) * 0.3))
+    relief_h = max(0.0, min(2.5, float(relief)))
+    if relief_h <= 0.01:
+        relief_h = 0.8
+    outer_h = min(0.5, T * 0.22)
+    gap = max(0.2, min(3.0, float(gap)))
+    pivot_d = max(2.0, min(10.0, float(bridge)))
+    pivot_h = max(0.4, min(2.5, float(lip)))
+    tab = max(0.0, min(12.0, float(flare)))
+    plate = rounded_rect(W, H, corner)
 
-    lower_region = strip.intersection(box(-W / 2 - 1, -H / 2 - 1, W / 2 + 1, -G / 2))
-    upper_region = strip.intersection(box(-W / 2 - 1, G / 2, W / 2 + 1, H / 2 + 1))
-    hinge_region = strip.intersection(box(-W / 2 - 1, -G / 2 - 0.2, W / 2 + 1, G / 2 + 0.2))
-    parts: list[Mesh] = []
-
-    # Continuous living hinge at the middle.  It uses only the 1 mm gap and
-    # leaves the two full-thickness plates free to fold.
-    for p in _ring_parts(hinge_region):
-        if p.area > 0.01:
-            parts.append(extrude_polygon(p, 0.0, HINGE_T))
-
-    # Clamping bead on the lower inner face and matching groove on the upper
-    # inner face.  They line up across the hinge when the clip is closed.
-    bead_x = min(W * 0.65, max(8.0, float(bridge)))
-    bead_y = max(2.0, min(8.0, float(lip)))
-    bead_len = max(1.2, min(2.2, T * 0.7))
-    safe_margin = max(safe_margin, bead_y + bead_len + 1.0)
-    snap_h = max(0.35, min(0.9, max(0.3, float(relief)) * 0.7))
-    bead = rounded_rect(bead_x, bead_len, bead_len / 2)
-    lower_bead = affinity.translate(bead, 0.0, -half + bead_y)
-    upper_groove = affinity.translate(bead, 0.0, half - bead_y)
-
-    # The raised motif and its recess are mirrored across the hinge so they
-    # nest when the clip folds shut.
-    if style != "none":
-        detail_parts = [d for d in details if d is not None and not d.is_empty]
-        if style == "line":
-            line_w = max(0.8, min(2.0, float(line_width) * 2.0))
-            if detail_parts:
-                mark = unary_union([
-                    d.boundary.buffer(line_w / 2, cap_style=1, join_style=1)
-                    for d in detail_parts
-                ])
-            else:
-                mark = main.boundary.buffer(line_w / 2, cap_style=1, join_style=1)
-        else:
-            mark = unary_union(detail_parts) if detail_parts else main
-        if mark.is_empty:
-            mark = main
-    else:
+    detail_parts = [d for d in details if d is not None and not d.is_empty]
+    if style == "none":
         mark = None
-    mark_lower: Polygon | None = None
-    mark_upper: Polygon | None = None
+    elif style == "line":
+        lw = max(0.8, min(2.0, float(line_width) * 2.0))
+        if detail_parts:
+            mark = unary_union([
+                d.boundary.buffer(lw / 2, cap_style=1, join_style=1)
+                for d in detail_parts
+            ])
+        else:
+            mark = main.boundary.buffer(lw / 2, cap_style=1, join_style=1)
+    else:
+        mark = unary_union(detail_parts) if detail_parts else main
     if mark is not None and not mark.is_empty:
-        available_w = max(2.0, W - safe_margin * 2.0)
-        available_h = max(2.0, (half - G / 2.0) - safe_margin * 2.0)
+        available_w = max(2.0, W - m * 2.0)
+        available_h = max(2.0, H - m * 2.0)
         mb = mark.bounds
         mw = max(1e-6, mb[2] - mb[0])
         mh = max(1e-6, mb[3] - mb[1])
         scale = min(available_w / mw, available_h / mh) * 0.98
-        scaled = affinity.scale(mark, scale, scale, origin="center")
-        sb = scaled.bounds
-        center_y = (-half - G / 2.0) / 2.0
-        mark_lower = affinity.translate(
-            scaled,
-            -(sb[0] + sb[2]) / 2.0,
-            center_y - (sb[1] + sb[3]) / 2.0,
-        )
-        mark_lower = mark_lower.intersection(lower_region)
-        mark_upper = affinity.scale(mark_lower, 1, -1, origin=(0, 0))
-        mark_upper = mark_upper.intersection(upper_region)
+        mark = affinity.scale(mark, scale, scale, origin="center")
+        mb = mark.bounds
+        mark = affinity.translate(mark, -(mb[0] + mb[2]) / 2.0, -(mb[1] + mb[3]) / 2.0)
+    else:
+        mark = None
 
-    raised_h = max(0.0, min(3.0, float(relief)))
-    if raised_h <= 0.01:
-        mark_lower = None
-        mark_upper = None
-    cut_h = min(T - hinge_floor - 0.2, max(raised_h + 0.2, snap_h + 0.25))
-    cut_h = max(0.3, cut_h)
-
-    # Lower plate: full thickness plus raised motif and bead.
-    for p in _ring_parts(lower_region):
-        if p.area > 0.01:
-            parts.append(extrude_polygon(p, 0.0, T))
-    if mark_lower is not None:
-        for p in _ring_parts(mark_lower):
-            if p.area > 0.02:
-                parts.append(extrude_polygon(p, T - 0.03, raised_h))
-    for p in _ring_parts(lower_bead.intersection(lower_region)):
-        if p.area > 0.01:
-            for layer, z0, height in _curved_relief_layers(
-                p, T - 0.03, snap_h, "round"
-            ):
-                parts.append(extrude_polygon(layer, z0, height))
-
-    # Upper plate: a floor plus the top ring around the recessed motif and the
-    # closure groove.  The recess lets the raised motif press the page.
-    for p in _ring_parts(upper_region):
-        if p.area > 0.01:
-            parts.append(extrude_polygon(p, 0.0, T - cut_h))
-    top = upper_region
-    if mark_upper is not None and not mark_upper.is_empty:
-        top = top.difference(mark_upper)
-    top = top.difference(upper_groove)
-    for p in _ring_parts(top):
-        if p.area > 0.01:
-            parts.append(extrude_polygon(p, T - cut_h, cut_h))
-
-    # Small pull tab on the free edge of the lower plate.
-    if TAB > 0.3:
-        tab_w = min(W * 0.45, max(8.0, bead_x))
-        tab = rounded_rect(tab_w, TAB, min(TAB / 2.0, 3.0))
-        tab = affinity.translate(tab, 0.0, -half - TAB / 2.0 + 0.5)
-        for p in _ring_parts(tab):
+    def plate_base(
+        region: Polygon,
+        height: float,
+        mark_top: Polygon | None,
+        mark_bottom: Polygon | None,
+        socket: Polygon | None,
+        press: bool,
+    ) -> list[Mesh]:
+        parts: list[Mesh] = []
+        bottom = region
+        if mark_bottom is not None and not mark_bottom.is_empty:
+            bottom = bottom.difference(mark_bottom)
+        for p in _ring_parts(bottom):
             if p.area > 0.01:
-                parts.append(extrude_polygon(p, 0.0, T))
+                parts.append(extrude_polygon(p, 0.0, outer_h))
+        parts.append(extrude_polygon(region, outer_h - 0.01, height - outer_h + 0.01))
+        if mark_top is not None or socket is not None:
+            top = region
+            if mark_top is not None and not mark_top.is_empty:
+                top = top.difference(mark_top)
+            if socket is not None and not socket.is_empty:
+                top = top.difference(socket)
+            # The top layer is the full thickness; the recesses are the
+            # difference between this layer and the base.  Build the floor
+            # only where the top is removed by taking the difference from the
+            # full plate; the floor is already part of the full extrusion.
+            for p in _ring_parts(top):
+                if p.area > 0.01:
+                    parts.append(extrude_polygon(p, height - 0.01, T + 0.01))
+        return parts
 
-    if not parts:
-        return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
-    out = _append_all(parts)
-    bounds = out.bounds
-    out = out.translated([
-        -(bounds["min"][0] + bounds["max"][0]) / 2.0,
-        -(bounds["min"][1] + bounds["max"][1]) / 2.0,
-        0.0,
-    ])
-    return out.oriented()
+    # Base: debossed drawing on the top, shallow decorative deboss below and a
+    # central socket for the press pivot.
+    pivot = Point(0.0, 0.0).buffer(pivot_d / 2.0, quad_segs=32)
+    base_parts: list[Mesh] = []
+    base_parts.append(extrude_polygon(plate, 0.0, T - relief_h))
+    base_top = plate
+    if mark is not None and not mark.is_empty:
+        base_top = base_top.difference(mark)
+    base_top = base_top.difference(pivot)
+    for p in _ring_parts(base_top):
+        if p.area > 0.01:
+            base_parts.append(extrude_polygon(p, T - relief_h, relief_h))
+    # Decorative deboss on the outside of the base.
+    outer_bottom = plate if mark is None else plate.difference(mark)
+    # Rebuild the bottom outer layer without covering the decorative recess.
+    base_parts = []
+    for p in _ring_parts(outer_bottom):
+        if p.area > 0.01:
+            base_parts.append(extrude_polygon(p, 0.0, outer_h))
+    base_parts.append(extrude_polygon(plate, outer_h - 0.01, T - relief_h - outer_h + 0.01))
+    for p in _ring_parts(base_top):
+        if p.area > 0.01:
+            base_parts.append(extrude_polygon(p, T - relief_h, relief_h))
+    base = _append_all(base_parts).oriented()
+
+    # Press: slightly smaller plate; raised inner drawing and pivot; debossed
+    # decorated outer face.
+    press_poly = plate.buffer(-gap, join_style=1, quad_segs=8)
+    if press_poly.is_empty:
+        press_poly = plate.buffer(-0.3, join_style=1, quad_segs=8)
+    mirrored_mark = (
+        affinity.scale(mark, -1, 1, origin=(0, 0))
+        if mark is not None and not mark.is_empty
+        else None
+    )
+    press_parts: list[Mesh] = []
+    outer = press_poly if mirrored_mark is None else press_poly.difference(mirrored_mark)
+    for p in _ring_parts(outer):
+        if p.area > 0.01:
+            press_parts.append(extrude_polygon(p, 0.0, outer_h))
+    press_parts.append(extrude_polygon(
+        press_poly, outer_h - 0.01, T - outer_h + 0.01
+    ))
+    if mirrored_mark is not None:
+        for p in _ring_parts(mirrored_mark.intersection(press_poly)):
+            if p.area > 0.02:
+                for layer, z0, hgt in _curved_relief_layers(
+                    p, T - 0.03, max(0.25, relief_h - 0.2), "round"
+                ):
+                    press_parts.append(extrude_polygon(layer, z0, hgt))
+    for p in _ring_parts(pivot.intersection(press_poly)):
+        if p.area > 0.01:
+            press_parts.append(extrude_polygon(p, T - 0.03, pivot_h))
+    press = _append_all(press_parts).oriented()
+    return base, press
 
 
 def mesh_to_stl(mesh: Mesh) -> bytes:

@@ -82,6 +82,7 @@ class Shape:
     holes: list[list[Point2]] = field(default_factory=list)
     details: list[list[Point2]] = field(default_factory=list)
     extras: list[list[Point2]] = field(default_factory=list)
+    components: list[list[list[Point2]]] = field(default_factory=list)
     source_kind: str = "svg"
     warnings: list[str] = field(default_factory=list)
     image_size: tuple[int, int] | None = None
@@ -95,6 +96,19 @@ class Shape:
         if fixed is None:
             raise ValueError("La silueta principal es degenerada.")
         return fixed
+
+    @property
+    def component_polygons(self) -> list[Polygon]:
+        if not self.components:
+            return [self.main_polygon]
+        out: list[Polygon] = []
+        for rings in self.components:
+            if not rings:
+                continue
+            poly = _clean_polygon(Polygon(rings[0], rings[1:]))
+            if poly is not None and not poly.is_empty:
+                out.append(poly)
+        return out or [self.main_polygon]
 
     @property
     def detail_polygons(self) -> list[Polygon]:
@@ -113,6 +127,7 @@ class Shape:
             "holes": self.holes,
             "details": self.details,
             "extras": self.extras,
+            "components": self.components,
             "source_kind": self.source_kind,
             "warnings": self.warnings,
             "image_size": self.image_size,
@@ -128,6 +143,15 @@ class Shape:
         holes = _rings_from_json(d.get("holes"), "agujeros")
         details = _rings_from_json(d.get("details"), "detalles")
         extras = _rings_from_json(d.get("extras"), "formas exteriores")
+        components: list[list[list[Point2]]] = []
+        raw_components = d.get("components")
+        if isinstance(raw_components, (list, tuple)):
+            for comp in list(raw_components)[:200]:
+                if not isinstance(comp, (list, tuple)) or not comp:
+                    continue
+                rings = _rings_from_json(comp, "componente")
+                if rings:
+                    components.append(rings)
         warnings = d.get("warnings", [])
         if not isinstance(warnings, list):
             warnings = []
@@ -143,6 +167,7 @@ class Shape:
             holes=holes,
             details=details,
             extras=extras,
+            components=components,
             source_kind=str(d.get("source_kind", "svg")),
             warnings=[str(w) for w in warnings],
             image_size=image_size,
@@ -475,6 +500,10 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
         warnings.append("Se han ignorado trazos sin relleno. Convierte el dibujo a contornos rellenos para usarlos.")
 
     components.sort(key=lambda p: -p.area)
+    component_rings: list[list[list[Point2]]] = []
+    for comp in components:
+        outer, holes = _ring_list(comp)
+        component_rings.append([outer, *holes])
     main = components[0]
     details: list[Polygon] = []
     extras: list[Polygon] = []
@@ -513,6 +542,10 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
     cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
     merged = affinity.scale(merged, scale, scale, origin=(0, 0))
     merged = affinity.translate(merged, -cx * scale, -cy * scale)
+    component_rings = [
+        [[(x * scale - cx * scale, y * scale - cy * scale) for x, y in ring] for ring in comp]
+        for comp in component_rings
+    ]
     scaled_details: list[Polygon] = []
     for d in clipped_details:
         ds = affinity.scale(d, scale, scale, origin=(0, 0))
@@ -532,6 +565,7 @@ def parse_svg(svg_text: str, name: str = "Diseño", target_mm: float = 75.0) -> 
         outer=outer,
         holes=holes,
         details=detail_rings,
+        components=component_rings,
         source_kind="svg",
         warnings=warnings,
         source_svg=svg_text,
@@ -736,6 +770,10 @@ def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0, for
             main = unary_union([main, p])
             if isinstance(main, MultiPolygon):
                 main = max(main.geoms, key=lambda g: g.area)
+    component_rings: list[list[list[Point2]]] = []
+    for comp in main_polys:
+        outer, holes = _ring_list(comp)
+        component_rings.append([outer, *holes])
     details = [p for p in _detail_polys_from_mask(detail_mask, scale, scale)
                if main.buffer(0.4).contains(p.representative_point())]
     # Normalize precisely to the target longest side, then center.
@@ -748,6 +786,10 @@ def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0, for
     cx, cy = (minx + maxx) / 2, (miny + maxy) / 2
     main = affinity.translate(main, -cx, -cy)
     details = [affinity.translate(p, -cx, -cy) for p in details]
+    component_rings = [
+        [[(x * scale_final - cx, y * scale_final - cy) for x, y in ring] for ring in comp]
+        for comp in component_rings
+    ]
     # Remove the outline that hugs the silhouette and keep true interior ink.
     inner_zone = main.buffer(-max(0.7, min(main.bounds[2] - main.bounds[0], main.bounds[3] - main.bounds[1]) * 0.012))
     clipped_details: list[Polygon] = []
@@ -783,6 +825,7 @@ def parse_raster(data: bytes, name: str = "Imagen", target_mm: float = 75.0, for
         outer=outer,
         holes=holes,
         details=detail_rings,
+        components=component_rings,
         source_kind="raster",
         warnings=warnings,
         image_size=(img.width, img.height),

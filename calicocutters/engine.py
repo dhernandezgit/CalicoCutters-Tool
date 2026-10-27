@@ -16,8 +16,10 @@ from shapely.ops import unary_union
 
 from .mesh import (
     Mesh,
+    _append_all,
     build_bookmark,
     build_cake_pop,
+    build_cake_pop_two,
     build_cake_pop_tray,
     build_cutter,
     build_imprint,
@@ -32,7 +34,7 @@ from .mesh import (
     rounded_rect,
     three_mf_bytes,
 )
-from .shape import Shape
+from .shape import Shape, _clean_polygon
 
 DEFAULT_SETTINGS: dict[str, Any] = {
     "mode": "cutter-stamp",
@@ -77,16 +79,29 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "stampEdgeMethod": "preserve",
     "stampBorder": True,
     "stampBorderWidth": 1.6,
+    "stampBacking": "outline",
+    "stampBackingPadding": 2.0,
+    "stampGrip": False,
+    "stampGripDiameter": 20.0,
+    "stampGripDepth": 2.0,
     "stampDetailCurve": "round",
     "stampDetailGrow": 0.0,
     "mirror": False,
     "mirrorPair": False,
     "imprintDepth": 4.5,
+    "imprintInvert": False,
+    "imprintEdgesOnly": False,
+    "imprintBaseWidth": 1.2,
+    "imprintEdgeWidth": 1.2,
     "color": "#f39ab1",
     "multiRows": 2,
     "multiCols": 2,
     "multiSpacing": 4.0,
     "sandwichPart": "both",
+    "sandwichDentShape": "round",
+    "sandwichDentRound": False,
+    "sandwichDentRadius": 1.0,
+    "sandwichOffsetOutward": False,
     "sandwichSealWidth": 4.0,
     "sandwichGap": 0.5,
     "sandwichDentSize": 3.0,
@@ -95,6 +110,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "rollerDiameter": 35.0,
     "rollerLength": 90.0,
     "rollerRelief": 1.0,
+    "rollerSourceScale": 100.0,
+    "rollerRimHeight": 1.2,
     "rollerBore": 8.0,
     "rollerRepeatsAround": 2,
     "rollerRepeatsAlong": 1,
@@ -107,6 +124,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "rollerBack": 0.0,
     "rollerRemoveEdge": False,
     "rollerDepthCurve": "round",
+    "stencilLayout": "grid",
     "stencilWidth": 100.0,
     "stencilHeight": 100.0,
     "stencilRows": 1,
@@ -140,10 +158,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "bookmarkHoleMargin": 10.0,
     "bookmarkRelief": 0.8,
     "bookmarkDesignStyle": "relief",
-    "pageClipGap": 1.0,
-    "pageClipBridge": 14.0,
-    "pageClipFlare": 6.0,
-    "pageClipLip": 4.0,
+    "pageClipGap": 0.6,
+    "pageClipBridge": 4.0,
+    "pageClipFlare": 0.0,
+    "pageClipLip": 1.0,
     "pageClipHingeThickness": 0.6,
     "cakePopMoldHeight": 18.0,
     "cakePopMoldWall": 2.4,
@@ -154,6 +172,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "cakePopPlungerBack": 2.5,
     "cakePopRelief": 2.0,
     "cakePopPlungerFace": "imprint",
+    "cakePopPlungerMode": "single",
     "cakePopTray": False,
     "cakePopTrayRotation": 180.0,
     "cakePopTrayDepth": 50.0,
@@ -161,6 +180,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "cakePopTrayMargin": 5.0,
     "cakePopTrayLength": 25.0,
     "cakePopTrayHeight": 12.0,
+    "cutterSetMode": "sizes",
     "setCount": 3,
     "setStep": 0.18,
     "setSpacing": 10.0,
@@ -216,17 +236,25 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "stampRelief": (0.5, 10.0),
     "stampClearance": (0.2, 4.0),
     "stampBorderWidth": (0.5, 6.0),
+    "stampBackingPadding": (0.0, 12.0),
+    "stampGripDiameter": (4.0, 60.0),
+    "stampGripDepth": (0.5, 6.0),
     "stampDetailGrow": (0.0, 2.0),
     "imprintDepth": (1.0, 12.0),
+    "imprintBaseWidth": (0.3, 8.0),
+    "imprintEdgeWidth": (0.4, 4.0),
     "multiSpacing": (0.0, 30.0),
     "sandwichSealWidth": (0.8, 12.0),
     "sandwichGap": (0.0, 5.0),
     "sandwichDentSize": (1.0, 8.0),
     "sandwichDentSpacing": (2.0, 40.0),
     "sandwichDentDepth": (0.2, 6.0),
+    "sandwichDentRadius": (0.2, 4.0),
     "rollerDiameter": (15.0, 120.0),
     "rollerLength": (20.0, 200.0),
     "rollerRelief": (0.2, 6.0),
+    "rollerSourceScale": (10.0, 100.0),
+    "rollerRimHeight": (0.0, 6.0),
     "rollerBore": (0.0, 40.0),
     "rollerRim": (0.0, 10.0),
     "rollerMargin": (0.0, 20.0),
@@ -256,10 +284,10 @@ _NUMERIC_RANGES: dict[str, tuple[float, float]] = {
     "bookmarkHoleDiameter": (2.0, 20.0),
     "bookmarkHoleMargin": (5.0, 60.0),
     "bookmarkRelief": (0.0, 3.0),
-    "pageClipGap": (0.3, 3.0),
-    "pageClipBridge": (4.0, 80.0),
+    "pageClipGap": (0.2, 3.0),
+    "pageClipBridge": (2.0, 10.0),
     "pageClipFlare": (0.0, 12.0),
-    "pageClipLip": (2.0, 8.0),
+    "pageClipLip": (0.4, 2.5),
     "pageClipHingeThickness": (0.3, 1.2),
     "cakePopMoldHeight": (6.0, 40.0),
     "cakePopMoldWall": (1.2, 8.0),
@@ -296,7 +324,7 @@ _INTEGER_RANGES: dict[str, tuple[int, int]] = {
 _BOOLEAN_KEYS = {
     "lockAspect", "autoPrintable", "sharpEdge", "extraBlade",
     "addPressHandle", "pressHandlesBothEnds", "addBar", "stampRemoveOuterEdge", "stampBorder",
-    "mirror", "mirrorPair", "stencilBridges", "topperInvert", "stampRecessed",
+    "mirror", "mirrorPair", "stencilBridges", "topperInvert", "stampRecessed", "imprintInvert", "imprintEdgesOnly", "sandwichDentRound", "sandwichOffsetOutward", "stampGrip",
     "rollerRotate", "rollerInvert", "rollerRemoveEdge",
     "cakePopTray",
     "bookmarkHole",
@@ -354,11 +382,16 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
         else "none"
     )
     out["sandwichPart"] = str(out.get("sandwichPart")) if str(out.get("sandwichPart")) in {"both", "cutter", "seal"} else "both"
+    out["cutterSetMode"] = str(out.get("cutterSetMode")) if str(out.get("cutterSetMode")) in {"sizes", "shapes"} else "sizes"
+    out["sandwichDentShape"] = str(out.get("sandwichDentShape")) if str(out.get("sandwichDentShape")) in {"triangle", "square"} else "round"
+    out["stampBacking"] = str(out.get("stampBacking")) if str(out.get("stampBacking")) in {"rect"} else "outline"
     out["stencilPattern"] = "diagonal" if str(out.get("stencilPattern")) == "diagonal" else "random" if str(out.get("stencilPattern")) == "random" else "grid"
+    out["stencilLayout"] = str(out.get("stencilLayout")) if str(out.get("stencilLayout")) in {"dimensions", "computed"} else "grid"
     out["rollerPattern"] = str(out.get("rollerPattern")) if str(out.get("rollerPattern")) in {"brick", "mirror"} else "grid"
     out["rollerPatternMode"] = str(out.get("rollerPatternMode")) if str(out.get("rollerPatternMode")) in {"drawing", "silhouette"} else "drawing"
     out["topperDepthCurve"] = str(out.get("topperDepthCurve")) if str(out.get("topperDepthCurve")) in {"chamfer", "round"} else "none"
     out["cakePopPlungerFace"] = str(out.get("cakePopPlungerFace")) if str(out.get("cakePopPlungerFace")) in {"outline", "none"} else "imprint"
+    out["cakePopPlungerMode"] = str(out.get("cakePopPlungerMode")) if str(out.get("cakePopPlungerMode")) in {"two"} else "single"
     out["rollerDepthCurve"] = str(out.get("rollerDepthCurve")) if str(out.get("rollerDepthCurve")) in {"none", "chamfer", "round"} else "round"
     out["bookmarkDesignStyle"] = str(out.get("bookmarkDesignStyle")) if str(out.get("bookmarkDesignStyle")) in {"line", "relief", "none"} else "relief"
     out["bedModel"] = str(out.get("bedModel") or "bambu-p2s")[:40]
@@ -577,6 +610,74 @@ def _add_cutter_extras(mesh: Mesh, main: Polygon, settings: dict[str, Any]) -> M
         bar = _bar_polygon(main, settings)
         mesh = mesh.append(extrude_polygon(bar, 0.0, max(2.0, settings["baseHeight"] + settings["bladeDepth"] * 0.7)))
     return mesh
+
+
+def _sized_components(shape: Shape, settings: dict[str, Any]) -> list[Polygon]:
+    main = shape.main_polygon
+    b = main.bounds
+    bw = max(1e-6, b[2] - b[0])
+    bh = max(1e-6, b[3] - b[1])
+    if settings["sizeMode"] == "longest":
+        sx = sy = float(settings["longest"]) / max(bw, bh)
+    elif settings.get("lockAspect", True):
+        sx = sy = float(settings["width"]) / bw
+    else:
+        sx = float(settings["width"]) / bw
+        sy = float(settings["height"]) / bh
+    comps: list[Polygon] = []
+    for comp in shape.component_polygons:
+        q = _transform_poly(comp, sx, sy)
+        if settings.get("mirror"):
+            q = affinity.scale(q, -1, 1, origin=(0, 0))
+        clean = _clean_polygon(q)
+        if clean is not None and clean.area > 1e-4:
+            comps.append(clean)
+    if not comps:
+        comps = [main]
+    # Keep only top-level disconnected shapes: interior islands belong to the
+    # design, not to the cutter set.
+    top: list[Polygon] = []
+    for i, p in enumerate(comps):
+        inside = False
+        for j, other in enumerate(comps):
+            if i == j or other.area <= p.area * 1.02:
+                continue
+            if other.contains(p.representative_point()):
+                inside = True
+                break
+        if not inside:
+            top.append(p)
+    return top or comps
+
+
+def _build_cutter_set_shapes(components: list[Polygon], settings: dict[str, Any]) -> Mesh:
+    """One separate cutter per disconnected traced shape, arranged in a row."""
+    spacing = float(settings["setSpacing"])
+    bounds = [p.bounds for p in components]
+    widths = [max(1e-6, b[2] - b[0]) for b in bounds]
+    total = sum(widths) + spacing * max(0, len(components) - 1)
+    cursor = -total / 2.0
+    parts: list[Mesh] = []
+    for p, width in zip(components, widths):
+        align, _stamp_align = _alignment_locations(p, settings)
+        mesh = build_cutter(
+            p,
+            blade_thickness=settings["bladeThickness"],
+            blade_depth=settings["bladeDepth"],
+            tip_width=settings["tipWidth"],
+            chamfer_height=settings["chamferHeight"],
+            base_height=settings["baseHeight"],
+            base_width=settings["baseWidth"],
+            sharp_edge=bool(settings["sharpEdge"]),
+            extra_blade=bool(settings.get("extraBlade")),
+            extra_blade_depth=settings.get("extraBladeDepth", 0),
+            extra_blade_thickness=settings.get("extraBladeThickness", 0),
+            base_shape=str(settings.get("baseShape", "round")),
+            alignment=align,
+        )
+        parts.append(mesh.translated([cursor + width / 2.0, 0.0, 0.0]))
+        cursor += width + spacing
+    return _append_all(parts)
 
 
 def _build_cutter_set(main: Polygon, settings: dict[str, Any]) -> Mesh:
@@ -872,12 +973,14 @@ def _checks(
     if mode == "bookmark":
         if settings["bookmarkThickness"] < max(1.6, line * 3):
             out.append(_check("warn", f"Pinza de {settings['bookmarkThickness']:.1f} mm", "Una lámina de menos de 2 mm se dobla. Usa 2–3 mm.", "bookmark_thin"))
-        if settings["bookmarkHeight"] < 80:
-            out.append(_check("warn", f"Tira de {settings['bookmarkHeight']:.0f} mm", "La tira se dobla por la mitad; usa al menos 100 mm para que la pinza cerrada mida 50 mm.", "bookmark_short"))
+        if settings["bookmarkHeight"] < 50:
+            out.append(_check("warn", f"Pinza de {settings['bookmarkHeight']:.0f} mm", "Para una página de libro suele necesitarse al menos 50 mm de alto.", "bookmark_short"))
         if settings["bookmarkRelief"] > max(0.2, settings["bookmarkThickness"]):
-            out.append(_check("warn", "Marcado de la pinza demasiado profundo", "Reduce la profundidad o aumenta el grosor de la lámina para no debilitar el cierre.", "bookmark_relief"))
-        if settings["pageClipHingeThickness"] > settings["bookmarkThickness"] - 0.4:
-            out.append(_check("warn", "Bisagra casi tan gruesa como la placa", "Una bisagra gruesa no dobla bien; usa un grosor de 0,4–0,8 mm con placas de 2–3 mm.", "bookmark_hinge"))
+            out.append(_check("warn", "Marcado de la pinza demasiado profundo", "Reduce la profundidad o aumenta el grosor de la lámina para no debilitar la placa.", "bookmark_relief"))
+        if settings["pageClipLip"] > settings["bookmarkThickness"] - 0.4:
+            out.append(_check("warn", "Pivote demasiado alto", "Reduce la altura del pivote o aumenta el grosor de la placa para que no sobresalga.", "bookmark_pivot"))
+        if settings["pageClipBridge"] > settings["bookmarkWidth"] * 0.35:
+            out.append(_check("warn", "Pivote demasiado grande", "Un pivote grande debilita la prensa; usa un diámetro menor o una pinza más ancha.", "bookmark_pivot_size"))
 
     if mode == "cakepop":
         if settings["cakePopMoldWall"] < max(1.2, line * 3):
@@ -1006,7 +1109,10 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             cutter = _add_cutter_extras(cutter, main, settings)
             parts.append(("Cortador", cutter, "#f39ab1"))
         if settings["mode"] == "cutter-set":
-            cutters = _build_cutter_set(main, settings)
+            if settings.get("cutterSetMode") == "shapes":
+                cutters = _build_cutter_set_shapes(_sized_components(shape, settings), settings)
+            else:
+                cutters = _build_cutter_set(main, settings)
             parts.append(("Set de cortadores", cutters, "#f39ab1"))
         if settings["mode"] in {"stamp", "cutter-stamp"}:
             stamp = build_stamp(
@@ -1021,6 +1127,11 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 recessed=bool(settings.get("stampRecessed")),
                 detail_curve=str(settings.get("stampDetailCurve", "round")),
                 detail_grow=float(settings.get("stampDetailGrow", 0.0)),
+                backing=str(settings.get("stampBacking", "outline")),
+                backing_padding=float(settings.get("stampBackingPadding", 2.0)),
+                grip=bool(settings.get("stampGrip")),
+                grip_diameter=float(settings.get("stampGripDiameter", 20.0)),
+                grip_depth=float(settings.get("stampGripDepth", 2.0)),
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
         if settings["mode"] == "imprint":
@@ -1039,7 +1150,15 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 alignment=cutter_alignment,
                 detail_curve=str(settings.get("stampDetailCurve", "round")),
                 detail_grow=float(settings.get("stampDetailGrow", 0.0)),
+                extra_blade=bool(settings.get("extraBlade")),
+                extra_blade_depth=settings.get("extraBladeDepth", 0),
+                extra_blade_thickness=settings.get("extraBladeThickness", 0),
+                invert=bool(settings.get("imprintInvert")),
+                edges_only=bool(settings.get("imprintEdgesOnly")),
+                base_inset=float(settings.get("imprintBaseWidth", 1.2)),
+                edge_width=float(settings.get("imprintEdgeWidth", 1.2)),
             )
+            imprint = _add_cutter_extras(imprint, main, settings)
             parts.append(("Impronta", imprint, "#f39ab1"))
         if settings["mode"] == "multicutter":
             multi = build_multicutter(
@@ -1065,6 +1184,13 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 press_handle_shape=str(settings.get("pressHandleShape", "rounded")),
                 press_handles_both_ends=bool(settings.get("pressHandlesBothEnds")),
             )
+            if settings.get("addBar") and settings["barWidth"] >= 0.4:
+                mb = multi.bounds
+                multi_box = box(mb["min"][0], mb["min"][1], mb["max"][0], mb["max"][1])
+                bar = _bar_polygon(multi_box, settings)
+                multi = multi.append(extrude_polygon(
+                    bar, 0.0, max(2.0, settings["baseHeight"] + settings["bladeDepth"] * 0.7)
+                ))
             parts.append(("Multicortador", multi, "#f39ab1"))
         if settings["mode"] == "sandwich":
             sandwich_part = str(settings["sandwichPart"])
@@ -1108,6 +1234,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 diameter=settings["rollerDiameter"],
                 length=settings["rollerLength"],
                 relief=settings["rollerRelief"],
+                source_scale=settings["rollerSourceScale"] / 100.0,
+                rim_height=settings["rollerRimHeight"],
                 bore=settings["rollerBore"],
                 repeats_around=int(settings["rollerRepeatsAround"]),
                 repeats_along=int(settings["rollerRepeatsAlong"]),
@@ -1136,6 +1264,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 shape_size=settings["stencilShapeSize"],
                 margin=settings["stencilMargin"],
                 pattern=str(settings["stencilPattern"]),
+                layout=str(settings.get("stencilLayout", "grid")),
                 bridges=bool(settings["stencilBridges"]),
                 bridge_width=settings["stencilBridgeWidth"],
                 line_width=settings["stencilLineWidth"],
@@ -1164,7 +1293,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             )
             parts.append(("Galleta de práctica", practice, "#f39ab1"))
         if settings["mode"] == "bookmark":
-            bookmark = build_bookmark(
+            bookmark_base, bookmark_press = build_bookmark(
                 main,
                 details,
                 width=settings["bookmarkWidth"],
@@ -1184,23 +1313,41 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 lip=settings["pageClipLip"],
                 hinge_thickness=settings["pageClipHingeThickness"],
             )
-            parts.append(("Pinza de página", bookmark, "#f39ab1"))
+            parts.append(("Base pinza", bookmark_base, "#f39ab1"))
+            parts.append(("Prensa pinza", bookmark_press, "#b7a4e8"))
         if settings["mode"] == "cakepop":
-            tray, plunger = build_cake_pop(
-                main,
-                details,
-                mold_height=settings["cakePopMoldHeight"],
-                mold_wall=settings["cakePopMoldWall"],
-                base_height=settings["cakePopBase"],
-                stick_hole=settings["cakePopStickHole"],
-                hole_clearance=settings["cakePopHoleClearance"],
-                plunger_clearance=settings["cakePopPlungerClearance"],
-                plunger_back=settings["cakePopPlungerBack"],
-                plunger_relief=settings["cakePopRelief"],
-                plunger_face=str(settings.get("cakePopPlungerFace", "imprint")),
-            )
-            parts.append(("Molde cake pop", tray, "#f39ab1"))
-            parts.append(("Prensador", plunger, "#b7a4e8"))
+            if settings.get("cakePopPlungerMode") == "two":
+                tray, face, back = build_cake_pop_two(
+                    main, details,
+                    mold_height=settings["cakePopMoldHeight"],
+                    mold_wall=settings["cakePopMoldWall"],
+                    base_height=settings["cakePopBase"],
+                    stick_hole=settings["cakePopStickHole"],
+                    hole_clearance=settings["cakePopHoleClearance"],
+                    plunger_clearance=settings["cakePopPlungerClearance"],
+                    plunger_back=settings["cakePopPlungerBack"],
+                    plunger_relief=settings["cakePopRelief"],
+                    plunger_face=str(settings.get("cakePopPlungerFace", "imprint")),
+                )
+                parts.append(("Molde cake pop", tray, "#f39ab1"))
+                parts.append(("Cara prensador", face, "#b7a4e8"))
+                parts.append(("Respaldo prensador", back, "#8ed1c3"))
+            else:
+                tray, plunger = build_cake_pop(
+                    main,
+                    details,
+                    mold_height=settings["cakePopMoldHeight"],
+                    mold_wall=settings["cakePopMoldWall"],
+                    base_height=settings["cakePopBase"],
+                    stick_hole=settings["cakePopStickHole"],
+                    hole_clearance=settings["cakePopHoleClearance"],
+                    plunger_clearance=settings["cakePopPlungerClearance"],
+                    plunger_back=settings["cakePopPlungerBack"],
+                    plunger_relief=settings["cakePopRelief"],
+                    plunger_face=str(settings.get("cakePopPlungerFace", "imprint")),
+                )
+                parts.append(("Molde cake pop", tray, "#f39ab1"))
+                parts.append(("Prensador", plunger, "#b7a4e8"))
             if settings.get("cakePopTray"):
                 support = build_cake_pop_tray(
                     main,
@@ -1250,6 +1397,11 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 recessed=bool(settings.get("stampRecessed")),
                 detail_curve=str(settings.get("stampDetailCurve", "round")),
                 detail_grow=float(settings.get("stampDetailGrow", 0.0)),
+                backing=str(settings.get("stampBacking", "outline")),
+                backing_padding=float(settings.get("stampBackingPadding", 2.0)),
+                grip=bool(settings.get("stampGrip")),
+                grip_diameter=float(settings.get("stampGripDiameter", 20.0)),
+                grip_depth=float(settings.get("stampGripDepth", 2.0)),
             )
             parts.append(("Sello espejo", mirror_stamp, "#b7a4e8"))
     if not parts:
@@ -1274,7 +1426,7 @@ def build(payload: dict[str, Any]) -> dict[str, Any]:
         # The strip folds in half; report the folded clip size rather than the
         # full flat print footprint.
         width = settings["bookmarkWidth"]
-        height = settings["bookmarkHeight"] / 2.0
+        height = settings["bookmarkHeight"]
         depth = 2.0 * settings["bookmarkThickness"] + 0.2
     else:
         width = max(p["bounds"]["max"][0] for p in parts) - min(p["bounds"]["min"][0] for p in parts)

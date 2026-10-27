@@ -20,6 +20,11 @@ def _mesh(part):
     return trimesh.load(io.BytesIO(base64.b64decode(part["stl_b64"])), file_type="stl", force="mesh")
 
 
+def _all_shells_watertight(mesh):
+    parts = mesh.split(only_watertight=False)
+    return bool(parts) and all(part.is_watertight for part in parts)
+
+
 def _shape():
     return parse_svg(HEART, "heart.svg", 80)
 
@@ -64,7 +69,10 @@ def test_all_creation_modes_produce_printable_meshes(mode):
     assert result["parts"], mode
     for part in result["parts"]:
         mesh = _mesh(part)
-        assert mesh.is_watertight, f"{mode}: {part['name']}"
+        if mode == "bookmark":
+            assert _all_shells_watertight(mesh), f"{mode}: {part['name']}"
+        else:
+            assert mesh.is_watertight, f"{mode}: {part['name']}"
         assert mesh.is_winding_consistent, f"{mode}: {part['name']}"
         assert mesh.volume > 0
         assert part["triangles"] > 10
@@ -662,21 +670,20 @@ def test_stamp_decoration_curves_stay_watertight():
         assert result["parts"][0]["volume"] > 0
 
 
-def test_page_clip_prints_flat_as_one_folding_strip():
+def test_page_clip_is_a_two_piece_debossed_press():
     result = build({"shape": _shape().to_dict(), "settings": {
         **DEFAULT_SETTINGS,
         "mode": "bookmark",
     }})
-    assert result["parts"][0]["name"] == "Pinza de página"
-    mesh = _mesh(result["parts"][0])
-    assert mesh.is_watertight
-    # Printed flat as a single 50 x 150 mm strip (plus the pull tab).  Half the
-    # old side-by-side footprint and reported folded dimensions.
-    assert mesh.bounds[1][0] - mesh.bounds[0][0] == pytest.approx(50, abs=0.5)
-    assert 149 <= mesh.bounds[1][1] - mesh.bounds[0][1] <= 157
-    assert mesh.bounds[1][2] - mesh.bounds[0][2] < 4
+    assert [p["name"] for p in result["parts"]] == ["Base pinza", "Prensa pinza"]
+    for part in result["parts"]:
+        mesh = _mesh(part)
+        assert _all_shells_watertight(mesh), part["name"]
+        assert 48.0 <= mesh.bounds[1][0] - mesh.bounds[0][0] <= 50.3
+        assert 147.0 <= mesh.bounds[1][1] - mesh.bounds[0][1] <= 150.3
+        assert mesh.bounds[1][2] - mesh.bounds[0][2] < 4
     assert result["dimensions"]["width"] == pytest.approx(50, abs=0.2)
-    assert result["dimensions"]["height"] == pytest.approx(75, abs=0.2)
+    assert result["dimensions"]["height"] == pytest.approx(150, abs=0.2)
 
 
 def test_preprocess_defaults_preserve_fine_details():
@@ -693,3 +700,105 @@ def test_preprocess_defaults_preserve_fine_details():
     assert result["parts"]
     assert not any("minúsculo" in warning for warning in result["warnings"])
 
+
+
+def test_multicutter_applies_center_bar():
+    base = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS, "mode": "multicutter", "addBar": False,
+    }})
+    barred = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS, "mode": "multicutter", "addBar": True, "barWidth": 2,
+    }})
+    assert _mesh(barred["parts"][0]).is_watertight
+    assert barred["parts"][0]["volume"] > base["parts"][0]["volume"]
+
+
+def test_cutter_set_shapes_builds_separate_components():
+    svg = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100">
+    <circle cx="40" cy="50" r="25" fill="#111"/>
+    <rect x="100" y="25" width="60" height="50" fill="#111"/>
+    </svg>"""
+    shape = parse_svg(svg, "two.svg", 80)
+    result = build({"shape": shape.to_dict(), "settings": {
+        **DEFAULT_SETTINGS, "mode": "cutter-set", "cutterSetMode": "shapes",
+    }})
+    mesh = _mesh(result["parts"][0])
+    assert result["parts"][0]["name"] == "Set de cortadores"
+    assert mesh.is_watertight
+    assert len(mesh.split(only_watertight=False)) >= 2
+
+
+def test_imprint_invert_and_edges_only_stay_watertight():
+    for invert in (False, True):
+        for edges_only in (False, True):
+            result = build({"shape": _shape().to_dict(), "settings": {
+                **DEFAULT_SETTINGS,
+                "mode": "imprint",
+                "imprintInvert": invert,
+                "imprintEdgesOnly": edges_only,
+            }})
+            mesh = _mesh(result["parts"][0])
+            assert _all_shells_watertight(mesh), (invert, edges_only)
+            assert result["parts"][0]["volume"] > 0
+
+
+def test_stamp_grip_and_rect_backing_stay_watertight():
+    for backing in ("outline", "rect"):
+        for grip in (False, True):
+            result = build({"shape": _shape().to_dict(), "settings": {
+                **DEFAULT_SETTINGS,
+                "mode": "stamp",
+                "stampBacking": backing,
+                "stampGrip": grip,
+            }})
+            assert _mesh(result["parts"][0]).is_watertight, (backing, grip)
+
+
+def test_stencil_layout_modes_stay_watertight():
+    for layout in ("grid", "dimensions", "computed"):
+        result = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "stencil",
+            "stencilLayout": layout,
+            "stencilShapeSize": 20,
+            "stencilRows": 2,
+            "stencilCols": 2,
+        }})
+        assert _mesh(result["parts"][0]).is_watertight, layout
+
+
+def test_sandwich_dent_shapes_and_offset_stay_watertight():
+    for shape in ("round", "triangle", "square"):
+        for outward in (False, True):
+            result = build({"shape": _shape().to_dict(), "settings": {
+                **DEFAULT_SETTINGS,
+                "mode": "sandwich",
+                "sandwichDentShape": shape,
+                "sandwichDentRound": True,
+                "sandwichOffsetOutward": outward,
+            }})
+            assert _mesh(result["parts"][0]).is_watertight, (shape, outward)
+
+
+def test_cake_pop_two_piece_parts_are_watertight():
+    result = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "cakepop",
+        "cakePopPlungerMode": "two",
+    }})
+    assert [p["name"] for p in result["parts"]] == [
+        "Molde cake pop", "Cara prensador", "Respaldo prensador",
+    ]
+    for part in result["parts"]:
+        assert _all_shells_watertight(_mesh(part)), part["name"]
+
+
+def test_roller_source_scale_and_rim_height_stay_watertight():
+    for scale in (30, 100):
+        result = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "roller",
+            "rollerSourceScale": scale,
+            "rollerRimHeight": 3,
+        }})
+        assert _mesh(result["parts"][0]).is_watertight, scale

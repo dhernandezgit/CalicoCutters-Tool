@@ -160,8 +160,10 @@ export function applyCheckFix(settings: DesignSettings, code: string): DesignSet
       return { ...settings, bookmarkHeight: Math.max(100, settings.bookmarkHeight) };
     case "bookmark_relief":
       return { ...settings, bookmarkRelief: Math.min(settings.bookmarkRelief, Math.max(0.2, settings.bookmarkThickness * 0.5)) };
-    case "bookmark_hinge":
-      return { ...settings, pageClipHingeThickness: Math.min(settings.pageClipHingeThickness, Math.max(0.3, settings.bookmarkThickness - 0.5)) };
+    case "bookmark_pivot":
+      return { ...settings, pageClipLip: Math.max(0.4, Math.min(settings.pageClipLip, settings.bookmarkThickness - 0.5)) };
+    case "bookmark_pivot_size":
+      return { ...settings, pageClipBridge: Math.max(2, Math.min(settings.pageClipBridge, settings.bookmarkWidth * 0.3)) };
     default:
       return applyPrintableSettings(settings);
   }

@@ -36,19 +36,25 @@ function normalizeSettings(raw: Partial<DesignSettings> | null | undefined): Des
   const mode = String(out.mode);
   out.mode = MODES.has(mode) ? mode : "cutter-stamp";
   out.sizeMode = out.sizeMode === "wh" ? "wh" : "longest";
+  out.units = out.units === "in" ? "in" : "mm";
   out.printer = ["fdm04", "fdm06", "resin"].includes(String(out.printer)) ? out.printer : "fdm04";
   out.baseShape = ["rect", "chamfer", "round"].includes(String(out.baseShape)) ? out.baseShape : "chamfer";
   out.pressHandleShape = ["rect", "round", "rounded"].includes(String(out.pressHandleShape)) ? out.pressHandleShape : "rounded";
   out.stampEdgeMethod = out.stampEdgeMethod === "offset" ? "offset" : "preserve";
   out.stampDetailCurve = ["chamfer", "round"].includes(String(out.stampDetailCurve)) ? out.stampDetailCurve : "none";
+  out.stampBacking = out.stampBacking === "rect" ? "rect" : "outline";
   out.rollerPattern = ["brick", "mirror"].includes(String(out.rollerPattern)) ? out.rollerPattern : "grid";
   out.rollerPatternMode = ["drawing", "silhouette"].includes(String(out.rollerPatternMode)) ? out.rollerPatternMode : "drawing";
   out.rollerDepthCurve = ["none", "chamfer", "round"].includes(String(out.rollerDepthCurve)) ? out.rollerDepthCurve : "round";
   out.stencilPattern = ["diagonal", "random"].includes(String(out.stencilPattern)) ? out.stencilPattern : "grid";
+  out.stencilLayout = ["dimensions", "computed"].includes(String(out.stencilLayout)) ? out.stencilLayout : "grid";
   out.sandwichPart = ["cutter", "seal"].includes(String(out.sandwichPart)) ? out.sandwichPart : "both";
+  out.sandwichDentShape = ["triangle", "square"].includes(String(out.sandwichDentShape)) ? out.sandwichDentShape : "round";
+  out.cutterSetMode = out.cutterSetMode === "shapes" ? "shapes" : "sizes";
   out.bookmarkDesignStyle = ["line", "relief", "none"].includes(String(out.bookmarkDesignStyle)) ? out.bookmarkDesignStyle : "relief";
   out.topperDepthCurve = ["chamfer", "round"].includes(String(out.topperDepthCurve)) ? out.topperDepthCurve : "none";
   out.cakePopPlungerFace = ["outline", "none"].includes(String(out.cakePopPlungerFace)) ? out.cakePopPlungerFace : "imprint";
+  out.cakePopPlungerMode = out.cakePopPlungerMode === "two" ? "two" : "single";
   if (typeof input.color === "string" && /^#[0-9a-f]{6}$/i.test(input.color)) out.color = input.color;
   return out as unknown as DesignSettings;
 }
