@@ -62,7 +62,7 @@ export default function HelpDialog({ open, onClose }: { open: boolean; onClose: 
           <strong>Visualización</strong>
           <p>
             El botón “Vista” abre una escena tipo CookieCAD V8: 14 superficies de color, mármol o madera;
-            materiales sólidos, bicolor, degradado, glitter o seda; masa con galleta suelta, regla y moneda;
+            materiales sólidos, bicolor, degradado, glitter o seda; masa y galleta suelta con color ajustable, formas orgánicas y bisel; regla y moneda;
             medidas 3D y centro de giro movible. Haz clic en la pieza o en la masa para orbitar alrededor de ese punto;
             con el botón derecho desplazas la vista. También hay captura PNG, pantalla completa y ajuste de cámara.
           </p>

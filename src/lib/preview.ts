@@ -104,6 +104,8 @@ export interface PreviewPreferences {
   secondaryColor: string;
   finish: PrintFinish;
   showDough: boolean;
+  doughColor: string;
+  cookieColor: string;
   showCookie: boolean;
   showScale: boolean;
   showMeasurements: boolean;
@@ -116,6 +118,8 @@ export const DEFAULT_PREVIEW_PREFERENCES: PreviewPreferences = {
   secondaryColor: "#b7a4e8",
   finish: "satin",
   showDough: false,
+  doughColor: "#e3c08a",
+  cookieColor: "#d39a5e",
   showCookie: true,
   showScale: false,
   showMeasurements: false,

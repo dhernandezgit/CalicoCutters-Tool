@@ -44,6 +44,8 @@ interface Props {
   secondaryColor?: string;
   primaryShape?: DesignShape | null;
   showDough?: boolean;
+  doughColor?: string;
+  cookieColor?: string;
   showCookie?: boolean;
   showScale?: boolean;
   measurements?: boolean;
@@ -280,6 +282,17 @@ function cookiePath(shape: DesignShape, width: number, height: number): THREE.Pa
   return new THREE.Path(points.outer);
 }
 
+function organicSheetShape(width: number, depth: number): THREE.Shape {
+  const points: THREE.Vector2[] = [];
+  const n = 96;
+  for (let i = 0; i < n; i += 1) {
+    const t = (i / n) * Math.PI * 2;
+    const r = 1 + 0.028 * Math.sin(3 * t + 0.4) + 0.016 * Math.cos(5 * t) + 0.009 * Math.sin(7 * t + 1.2);
+    points.push(new THREE.Vector2(Math.cos(t) * width * 0.5 * r, Math.sin(t) * depth * 0.5 * r));
+  }
+  return new THREE.Shape(points);
+}
+
 function makeCookieTexture(base = "#d9a35d"): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 256;
@@ -298,7 +311,7 @@ function makeCookieTexture(base = "#d9a35d"): THREE.CanvasTexture {
       const y = rand() * 256;
       const radius = rand() * 1.8 + 0.3;
       ctx.beginPath();
-      ctx.fillStyle = rand() > 0.5 ? "rgba(125,74,30,0.16)" : "rgba(255,239,200,0.22)";
+      ctx.fillStyle = rand() > 0.5 ? "rgba(125,74,30,0.085)" : "rgba(255,245,220,0.13)";
       ctx.arc(x, y, radius, 0, Math.PI * 2);
       ctx.fill();
     }
@@ -311,7 +324,7 @@ function makeCookieTexture(base = "#d9a35d"): THREE.CanvasTexture {
   return texture;
 }
 
-function createDoughStage(shape: DesignShape | null | undefined, modelBox: THREE.Box3, showCookie: boolean, showScale: boolean): THREE.Group {
+function createDoughStage(shape: DesignShape | null | undefined, modelBox: THREE.Box3, showCookie: boolean, showScale: boolean, doughColor: string, cookieColor: string, bedWidth: number, bedDepth: number): THREE.Group {
   const stage = new THREE.Group();
   const size = modelBox.getSize(new THREE.Vector3());
   const center = modelBox.getCenter(new THREE.Vector3());
@@ -319,20 +332,27 @@ function createDoughStage(shape: DesignShape | null | undefined, modelBox: THREE
   const aspect = shape ? Math.max(0.2, shape.bounds.width / Math.max(1, shape.bounds.height)) : 1;
   const cookieW = aspect >= 1 ? footprint : footprint * aspect;
   const cookieH = aspect >= 1 ? footprint / aspect : footprint;
-  const sheetW = Math.max(120, size.x + 70);
-  const sheetD = Math.max(90, size.z + 70);
+  const sheetW = Math.max(80, Math.min(Math.max(80, bedWidth - 12), size.x + 70));
+  const sheetD = Math.max(70, Math.min(Math.max(70, bedDepth - 12), size.z + 70));
   const thickness = 4;
   const cookie = shape ? cookieShape(shape, cookieW, cookieH) : null;
-  const sheet = roundedRectShape(sheetW, sheetD, 12);
+  const sheet = organicSheetShape(sheetW, sheetD);
   const hole = shape && showCookie ? cookiePath(shape, cookieW, cookieH) : null;
   if (hole) sheet.holes.push(hole);
-  const sheetGeometry = new THREE.ExtrudeGeometry(sheet, { depth: thickness, bevelEnabled: false, curveSegments: 8 });
+  const sheetGeometry = new THREE.ExtrudeGeometry(sheet, {
+    depth: thickness,
+    bevelEnabled: true,
+    bevelSize: 1.6,
+    bevelThickness: 1.2,
+    bevelSegments: 3,
+    curveSegments: 18,
+  });
   sheetGeometry.rotateX(-Math.PI / 2);
   const doughMaterial = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     roughness: 0.94,
     metalness: 0.0,
-    map: makeCookieTexture("#efd39f"),
+    map: makeCookieTexture(doughColor),
   });
   const dough = new THREE.Mesh(sheetGeometry, doughMaterial);
   dough.position.set(center.x, 0, center.z);
@@ -341,22 +361,41 @@ function createDoughStage(shape: DesignShape | null | undefined, modelBox: THREE
   stage.add(dough);
 
   if (shape && cookie && showCookie) {
-    const cookieGeometry = new THREE.ExtrudeGeometry(cookie, { depth: thickness, bevelEnabled: false, curveSegments: 8 });
+    const cookieGeometry = new THREE.ExtrudeGeometry(cookie, {
+      depth: thickness,
+      bevelEnabled: true,
+      bevelSize: 1.2,
+      bevelThickness: 1.0,
+      bevelSegments: 3,
+      curveSegments: 18,
+    });
     cookieGeometry.rotateX(-Math.PI / 2);
     const cookieMaterial = new THREE.MeshStandardMaterial({
       color: 0xffffff,
       roughness: 0.9,
       metalness: 0.0,
-      map: makeCookieTexture("#dfa869"),
+      map: makeCookieTexture(cookieColor),
     });
     const looseGroup = new THREE.Group();
-    looseGroup.position.set(center.x + sheetW / 2 + cookieW / 2 + 18, 0, center.z + Math.min(20, sheetD * 0.1));
+    const preferredX = center.x + sheetW / 2 + cookieW / 2 + 16;
+    const maxX = center.x + bedWidth / 2 - cookieW / 2 - 8;
+    const looseX = Math.min(preferredX, maxX);
+    const overlapsDough = looseX < center.x + sheetW / 2 + cookieW / 2;
+    looseGroup.position.set(
+      looseX,
+      overlapsDough ? thickness + 1.4 : 0,
+      center.z + Math.min(20, sheetD * 0.1),
+    );
     looseGroup.rotation.y = -0.16;
     const loose = new THREE.Mesh(cookieGeometry, cookieMaterial);
     loose.castShadow = true;
     loose.receiveShadow = true;
     looseGroup.add(loose);
-    const detailMaterial = new THREE.MeshStandardMaterial({ color: 0xb9793d, roughness: 0.82, metalness: 0.0 });
+    const detailMaterial = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(cookieColor).multiplyScalar(0.78),
+      roughness: 0.84,
+      metalness: 0.0,
+    });
     for (const detail of shape.details.slice(0, 120)) {
       const points = mapDesignRing(detail, shape, cookieW, cookieH);
       if (points.length < 3) continue;
@@ -610,6 +649,8 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     secondaryColor = "#b7a4e8",
     primaryShape = null,
     showDough = false,
+    doughColor = "#e3c08a",
+    cookieColor = "#d39a5e",
     showCookie = true,
     showScale = false,
     measurements = false,
@@ -1130,9 +1171,9 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
     }
     const box = new THREE.Box3().setFromObject(model);
     if (box.isEmpty()) return;
-    stage.add(createDoughStage(primaryShape, box, showCookie, showScale));
+    stage.add(createDoughStage(primaryShape, box, showCookie, showScale, doughColor, cookieColor, bedWidth, bedDepth));
     requestAnimationFrame(doFit);
-  }, [build, primaryShape, showDough, showCookie, showScale]);
+  }, [build, primaryShape, showDough, showCookie, showScale, doughColor, cookieColor, bedWidth, bedDepth]);
 
   useEffect(() => {
     const scene = sceneRef.current;

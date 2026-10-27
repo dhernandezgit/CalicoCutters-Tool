@@ -820,6 +820,16 @@ export default function App() {
                               <>
                                 <Toggle label="Galleta suelta" checked={preview.showCookie} onChange={(v) => updatePreview({ showCookie: v })} />
                                 <Toggle label="Regla y moneda" checked={preview.showScale} onChange={(v) => updatePreview({ showScale: v })} />
+                                <div className="view-two-colors" style={{ gridColumn: "1 / -1" }}>
+                                  <label>
+                                    <span>Color de la masa</span>
+                                    <input type="color" value={preview.doughColor} onChange={(e) => updatePreview({ doughColor: e.target.value })} />
+                                  </label>
+                                  <label>
+                                    <span>Color de la galleta</span>
+                                    <input type="color" value={preview.cookieColor} onChange={(e) => updatePreview({ cookieColor: e.target.value })} />
+                                  </label>
+                                </div>
                               </>
                             )}
                           </>
@@ -953,6 +963,8 @@ export default function App() {
                 secondaryColor={preview.secondaryColor}
                 primaryShape={primary?.shape ?? null}
                 showDough={doughSceneAllowed && preview.showDough}
+                doughColor={preview.doughColor}
+                cookieColor={preview.cookieColor}
                 showCookie={preview.showCookie}
                 showScale={preview.showScale}
                 measurements={preview.showMeasurements}

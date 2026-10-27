@@ -23,7 +23,7 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
   molde cake pop y pinza de página.
   Todos los tipos están disponibles también en Básico.
 - **Pinza de página**: dos placas planas tipo cake pop. La base lleva el dibujo hundido y un pivote central; la prensa lleva el dibujo en relieve y el pivote a juego. Sin bisagra, sin bordes altos y sin agujeros; ambas caras exteriores llevan un bajorrelieve decorativo.
-- **Visualización 3D tipo CookieCAD V8**: 14 superficies de color, mármol, madera o color propio; materiales sólido, bicolor, degradado, glitter y seda; masa, galleta suelta, regla y moneda.
+- **Visualización 3D tipo CookieCAD V8**: 14 superficies de color, mármol, madera o color propio; materiales sólido, bicolor, degradado, glitter y seda; masa y galleta suelta con **color ajustable**, formas orgánicas, bisel y regla/moneda.
 - **Cámara en perspectiva o isométrica** desde la barra del visor, con botón **Vista** grande para abrir el panel de escena, materiales y cámara.
 - **Centro de giro movible**: haz clic en cualquier punto del modelo o de la masa para orbitar alrededor de ese punto; también puedes desplazar con el botón derecho.
 - **Medidas 3D** con líneas y cotas de ancho, fondo y alto.
