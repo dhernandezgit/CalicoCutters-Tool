@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.7.3 — 2026-11-01
+
+Revisión de herramientas que no son cortadores y correcciones del rodillo.
+
+### Rodillo de textura
+
+- **Eje 0 = cilindro sólido**, sin agujero mínimo oculto.
+- El modo **Dibujo** incluye ahora el contorno exterior y los detalles interiores;
+  antes se perdía el contorno.
+- **Quitar borde exterior** disponible también en modo Dibujo.
+- **Grabado invertido continuo**: la banda de fondo ya no queda cortada en islas
+  rectangulares entre celdas.
+- Se usa la **altura de borde** configurada, no un valor fijo.
+- Mejor aprovechamiento de la celda (94 %) y detalles interiores conservados.
+- En silueta grabada, los detalles interiores quedan como islas elevadas dentro del
+  hueco en vez de perderse.
+
+### Galleta de práctica
+
+- Los huecos interiores del contorno se rellenan para que sea una superficie sólida
+  de práctica, no un anillo.
+
+### Revisión de otras herramientas
+
+- Stencil: conserva contorno y detalles interiores con puentes.
+- Sello de relieve: usa el tamaño completo del diseño y no la holgura del cortador.
+- Topper, cake pop, bandeja, pinza de página y sándwich: geometría watertight y
+  funciones propias verificadas.
+
+### Calidad
+
+- 79 tests, typecheck y build.
+
 ## 0.7.2 — 2026-10-27
 
 Perfiles por defecto y detalles finos.

@@ -1185,10 +1185,10 @@ def build_roller(
     radius = max(4.0, diameter / 2)
     back = max(0.0, min(8.0, float(back)))
     outer_radius = radius + back
-    inner = max(0.4, min(radius - 1.0, bore / 2))
-    tube = Point(0, 0).buffer(outer_radius, quad_segs=64).difference(
-        Point(0, 0).buffer(inner, quad_segs=48)
-    )
+    inner = 0.0 if bore <= 0.05 else max(0.4, min(radius - 0.8, bore / 2))
+    tube = Point(0, 0).buffer(outer_radius, quad_segs=64)
+    if inner > 0.0:
+        tube = tube.difference(Point(0, 0).buffer(inner, quad_segs=48))
     parts = [extrude_polygon(tube, -length / 2, length)]
     around = max(1, int(repeats_around))
     along = max(1, int(repeats_along))
@@ -1211,7 +1211,7 @@ def build_roller(
     b = main.bounds
     bw = max(1e-6, b[2] - b[0])
     bh = max(1e-6, b[3] - b[1])
-    fit = min(usable_w / bw, usable_h / bh) * 0.9 * max(0.1, min(1.0, float(source_scale)))
+    fit = min(usable_w / bw, usable_h / bh) * 0.94 * max(0.1, min(1.0, float(source_scale)))
 
     def prepare(geom: Polygon) -> Polygon:
         g = affinity.translate(geom, -pivot.x, -pivot.y)
@@ -1233,25 +1233,31 @@ def build_roller(
             if p.area > 0.02:
                 tile_details.append(p)
 
-    # Drawing mode uses the stamp-like line artwork: the outer outline plus
-    # the interior details, not a large filled silhouette.  Silhouette mode
-    # keeps the old filled pattern, with details raised on top.
-    line_drawing = pattern_mode == "drawing" and bool(tile_details)
-    # Engraved mode always keeps the drawing: a filled silhouette recess
-    # would hide the interior lines.
-    if invert and tile_details:
-        line_drawing = True
+    # Drawing mode follows the complete drawing: the outer outline plus every
+    # interior detail.  Silhouette mode keeps the filled shape and raises the
+    # details on top.  "Remove outer edge" drops the silhouette outline while
+    # retaining the interior linework.
+    line_drawing = pattern_mode == "drawing"
     edge_w = max(0.8, min(2.5, max(0.3, relief) * 1.2))
     detail_grow = max(0.05, min(0.3, max(0.3, relief) * 0.15))
     separate_details: list[Polygon] = []
     if line_drawing:
-        # Non-cutter modes follow the original drawing: use the interior
-        # details, never add the cutter's outer border as a pattern line.
-        detail_shapes = [
-            d.buffer(detail_grow, join_style=1, quad_segs=8) for d in tile_details
-        ]
-        pattern_tile: Polygon | MultiPolygon = unary_union(detail_shapes)
-    elif pattern_mode == "silhouette" and remove_edge and tile_details:
+        line_shapes: list[Polygon] = []
+        if not remove_edge:
+            outer_band = tile.buffer(edge_w / 2.0, join_style=1, quad_segs=8).difference(
+                tile.buffer(-edge_w / 2.0, join_style=1, quad_segs=8)
+            )
+            line_shapes.extend(p for p in _ring_parts(outer_band) if p.area > 0.01)
+        line_shapes.extend(
+            p
+            for d in tile_details
+            for p in _ring_parts(d.buffer(detail_grow, join_style=1, quad_segs=8))
+            if p.area > 0.02
+        )
+        pattern_tile: Polygon | MultiPolygon = (
+            unary_union(line_shapes) if line_shapes else tile
+        )
+    elif remove_edge and tile_details:
         pattern_tile = unary_union(tile_details)
     else:
         pattern_tile = tile
@@ -1260,8 +1266,10 @@ def build_roller(
     if pattern_tile.is_empty:
         pattern_tile = tile
     pb = pattern_tile.bounds
-    patch_w = max(usable_w * 0.98, (pb[2] - pb[0]) + edge_w)
-    patch_h = max(usable_h * 0.98, (pb[3] - pb[1]) + edge_w)
+    # A continuous patch is essential for engraving; otherwise the inverse
+    # background appears as isolated raised rectangles.
+    patch_w = max(usable_w, (pb[2] - pb[0]) + edge_w)
+    patch_h = max(usable_h, (pb[3] - pb[1]) + edge_w)
 
     def mapped(mesh: Mesh, theta0: float, axial0: float, mirror: bool) -> Mesh:
         verts = mesh.vertices.copy()
@@ -1320,6 +1328,15 @@ def build_roller(
                             p, back, max(0.3, relief) + 0.25,
                             theta0, axial0, mirror, refine=False,
                         ))
+                if not line_drawing and not remove_edge:
+                    # Raised interior linework sits inside the recessed
+                    # silhouette, tied to the cylinder surface.
+                    for detail in tile_details:
+                        detail_height = max(0.3, min(0.75, relief * 0.55))
+                        parts.extend(wrapped(
+                            detail, back, detail_height,
+                            theta0, axial0, mirror, refine=False,
+                        ))
             else:
                 for layer_poly, z0, height in _curved_relief_layers(
                     pattern_tile, back, max(0.3, relief) + 0.25, depth_curve
@@ -1339,8 +1356,9 @@ def build_roller(
     # End rims.
     if rim > 0:
         rim_width = max(0.5, rim)
+        rim_extra = max(0.3, min(3.0, float(rim_height)))
         for z0 in (-length / 2, length / 2 - rim_width):
-            r_out = Point(0, 0).buffer(outer_radius + 1.2, quad_segs=64)
+            r_out = Point(0, 0).buffer(outer_radius + rim_extra, quad_segs=64)
             # Overlap the tube wall slightly instead of sharing its surface:
             # coincident faces make the combined mesh non-manifold.
             r_in = Point(0, 0).buffer(max(0.5, outer_radius - 0.5), quad_segs=64)
@@ -1753,8 +1771,11 @@ def build_practice(
     wall_width: float,
 ) -> Mesh:
     """Shallow solid-backed practice cookie with a wall following the outline."""
-    base = extrude_polygon(main, 0.0, max(1.0, thickness))
-    ring = main.buffer(max(0.4, wall_width), join_style=1, quad_segs=8).difference(main)
+    # A practice cookie is a solid surface for practicing icing.  Interior
+    # source holes would turn it into a ring and defeat that purpose.
+    solid = Polygon(main.exterior.coords)
+    base = extrude_polygon(solid, 0.0, max(1.0, thickness))
+    ring = solid.buffer(max(0.4, wall_width), join_style=1, quad_segs=8).difference(solid)
     parts = [base]
     for p in _ring_parts(ring):
         if p.area > 0.01:

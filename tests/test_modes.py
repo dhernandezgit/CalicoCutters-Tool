@@ -164,6 +164,34 @@ def test_cake_pop_tray_is_watertight_and_has_a_stick_passage():
     assert tray.volume > 0
 
 
+def test_texture_roller_zero_bore_is_solid():
+    base = {**DEFAULT_SETTINGS, "mode": "roller", "rollerPatternMode": "silhouette", "rollerBore": 0}
+    solid = build({"shape": _shape().to_dict(), "settings": base})
+    hollow = build({"shape": _shape().to_dict(), "settings": {**base, "rollerBore": 8}})
+    assert solid["parts"][0]["volume"] > hollow["parts"][0]["volume"]
+    assert _mesh(solid["parts"][0]).is_watertight
+
+
+def test_texture_roller_drawing_keeps_outer_outline():
+    full = build({"shape": _shape().to_dict(), "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "roller",
+        "rollerPatternMode": "drawing",
+        "rollerRepeatsAround": 2,
+    }})
+    no_details = _shape().to_dict()
+    no_details["details"] = []
+    outline_only = build({"shape": no_details, "settings": {
+        **DEFAULT_SETTINGS,
+        "mode": "roller",
+        "rollerPatternMode": "drawing",
+        "rollerRepeatsAround": 2,
+    }})
+    assert full["parts"][0]["volume"] > outline_only["parts"][0]["volume"]
+    assert _mesh(full["parts"][0]).is_watertight
+    assert _mesh(outline_only["parts"][0]).is_watertight
+
+
 def test_texture_roller_keeps_interior_details():
     with_details = _shape().to_dict()
     without_details = _shape().to_dict()

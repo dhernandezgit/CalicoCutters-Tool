@@ -1058,7 +1058,7 @@ export default function SettingsPanel({
           <div className="view-options-grid">
             <Toggle label="Girar origen 90°" checked={settings.rollerRotate} onChange={(v) => onChange({ rollerRotate: v })} />
             <Toggle label="Grabado (invertir relieve)" checked={settings.rollerInvert} onChange={(v) => onChange({ rollerInvert: v })} />
-            {settings.rollerPatternMode === "silhouette" && (<Toggle label="Quitar borde exterior" checked={settings.rollerRemoveEdge} onChange={(v) => onChange({ rollerRemoveEdge: v })} />)}
+            <Toggle label="Quitar borde exterior" checked={settings.rollerRemoveEdge} onChange={(v) => onChange({ rollerRemoveEdge: v })} />
             <label className="field-row">
               <span className="field-label">Curva de profundidad</span>
               <span className="field-input">
@@ -1070,7 +1070,7 @@ export default function SettingsPanel({
               </span>
             </label>
           </div>
-          <div className="inline-hint"><PaintRoller size={13} /><span>El dibujo se ajusta a cada celda y se envuelve alrededor del cilindro. «Dibujo» usa solo los detalles del dibujo, sin añadir el borde del cortador; «Silueta» hace un relieve macizo. El modo dibujo reproduce el trazo completo del diseño. El grosor posterior refuerza el motivo y lo une al cilindro. «Grabado» hunde el dibujo en la superficie y la curva suaviza las cimas.</span></div>
+          <div className="inline-hint"><PaintRoller size={13} /><span>«Dibujo» envuelve el contorno del diseño y sus detalles interiores; «Silueta rellena» hace un relieve macizo. «Quitar borde exterior» elimina el contorno y conserva el dibujo interior. «Grabado» hunde el motivo en una banda continua. El grosor posterior refuerza el motivo y la curva suaviza las cimas.</span></div>
         </Section>
       )}
 
