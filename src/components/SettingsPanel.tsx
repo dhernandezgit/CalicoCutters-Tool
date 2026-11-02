@@ -26,7 +26,7 @@ import {
   Stamp,
   Wand2,
 } from "lucide-react";
-import type { BuildResult, DesignSettings, DesignShape, PrintCheck } from "../types";
+import type { BuildResult, CreateMode, DesignSettings, DesignShape, PrintCheck } from "../types";
 import { DEFAULT_SETTINGS, PRINTER_BEDS, PRINTER_PROFILES } from "../types";
 import type { PreviewPreferences } from "../lib/preview";
 import Section, { SettingsSearchContext } from "./Section";
@@ -176,6 +176,95 @@ function Segmented<T extends string>({
           onClick={() => onChange(o.value)}
         >
           {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+interface SizePreset {
+  label: string;
+  detail: string;
+  patch: Partial<DesignSettings>;
+  active: (settings: DesignSettings) => boolean;
+}
+
+const closeTo = (a: number, b: number) => Math.abs(a - b) < 0.75;
+
+function cookiePresets(): SizePreset[] {
+  return [
+    { label: "Mini", detail: "30 mm · cuqui", patch: { sizeMode: "longest", longest: 30 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 30) },
+    { label: "Estándar", detail: "44 mm · Oreo", patch: { sizeMode: "longest", longest: 44 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 44) },
+    { label: "Grande", detail: "75 mm", patch: { sizeMode: "longest", longest: 75 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 75) },
+    { label: "Giga", detail: "100 mm", patch: { sizeMode: "longest", longest: 100 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 100) },
+  ];
+}
+
+function presetsForMode(mode: CreateMode): SizePreset[] {
+  if (mode === "roller") {
+    return [
+      { label: "Mini", detail: "25 × 60 mm", patch: { rollerDiameter: 25, rollerLength: 60 }, active: (s) => closeTo(s.rollerDiameter, 25) && closeTo(s.rollerLength, 60) },
+      { label: "Estándar", detail: "35 × 90 mm", patch: { rollerDiameter: 35, rollerLength: 90 }, active: (s) => closeTo(s.rollerDiameter, 35) && closeTo(s.rollerLength, 90) },
+      { label: "Grande", detail: "50 × 120 mm", patch: { rollerDiameter: 50, rollerLength: 120 }, active: (s) => closeTo(s.rollerDiameter, 50) && closeTo(s.rollerLength, 120) },
+      { label: "Giga", detail: "70 × 160 mm", patch: { rollerDiameter: 70, rollerLength: 160 }, active: (s) => closeTo(s.rollerDiameter, 70) && closeTo(s.rollerLength, 160) },
+    ];
+  }
+  if (mode === "stencil") {
+    return [
+      { label: "Mini", detail: "60 × 60 mm", patch: { stencilWidth: 60, stencilHeight: 60 }, active: (s) => closeTo(s.stencilWidth, 60) && closeTo(s.stencilHeight, 60) },
+      { label: "Estándar", detail: "100 × 100 mm", patch: { stencilWidth: 100, stencilHeight: 100 }, active: (s) => closeTo(s.stencilWidth, 100) && closeTo(s.stencilHeight, 100) },
+      { label: "Grande", detail: "140 × 140 mm", patch: { stencilWidth: 140, stencilHeight: 140 }, active: (s) => closeTo(s.stencilWidth, 140) && closeTo(s.stencilHeight, 140) },
+      { label: "Giga", detail: "180 × 180 mm", patch: { stencilWidth: 180, stencilHeight: 180 }, active: (s) => closeTo(s.stencilWidth, 180) && closeTo(s.stencilHeight, 180) },
+    ];
+  }
+  if (mode === "bookmark") {
+    return [
+      { label: "Mini", detail: "35 × 100 mm", patch: { bookmarkWidth: 35, bookmarkHeight: 100 }, active: (s) => closeTo(s.bookmarkWidth, 35) && closeTo(s.bookmarkHeight, 100) },
+      { label: "Estándar", detail: "50 × 150 mm", patch: { bookmarkWidth: 50, bookmarkHeight: 150 }, active: (s) => closeTo(s.bookmarkWidth, 50) && closeTo(s.bookmarkHeight, 150) },
+      { label: "Grande", detail: "60 × 180 mm", patch: { bookmarkWidth: 60, bookmarkHeight: 180 }, active: (s) => closeTo(s.bookmarkWidth, 60) && closeTo(s.bookmarkHeight, 180) },
+      { label: "Giga", detail: "75 × 200 mm", patch: { bookmarkWidth: 75, bookmarkHeight: 200 }, active: (s) => closeTo(s.bookmarkWidth, 75) && closeTo(s.bookmarkHeight, 200) },
+    ];
+  }
+  if (mode === "topper") {
+    return [
+      { label: "Mini", detail: "50 mm", patch: { sizeMode: "longest", longest: 50 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 50) },
+      { label: "Estándar", detail: "75 mm", patch: { sizeMode: "longest", longest: 75 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 75) },
+      { label: "Grande", detail: "100 mm", patch: { sizeMode: "longest", longest: 100 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 100) },
+      { label: "Giga", detail: "130 mm", patch: { sizeMode: "longest", longest: 130 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 130) },
+    ];
+  }
+  if (mode === "cakepop") {
+    return [
+      { label: "Mini", detail: "30 mm", patch: { sizeMode: "longest", longest: 30 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 30) },
+      { label: "Estándar", detail: "45 mm", patch: { sizeMode: "longest", longest: 45 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 45) },
+      { label: "Grande", detail: "60 mm", patch: { sizeMode: "longest", longest: 60 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 60) },
+      { label: "Giga", detail: "80 mm", patch: { sizeMode: "longest", longest: 80 }, active: (s) => s.sizeMode === "longest" && closeTo(s.longest, 80) },
+    ];
+  }
+  return cookiePresets();
+}
+
+function SizePresetRow({
+  settings,
+  onChange,
+}: {
+  settings: DesignSettings;
+  onChange: (patch: Partial<DesignSettings>) => void;
+}) {
+  const presets = presetsForMode(settings.mode);
+  return (
+    <div className="size-presets">
+      <span>Tamaños rápidos</span>
+      {presets.map((preset) => (
+        <button
+          key={preset.label}
+          type="button"
+          className={preset.active(settings) ? "on" : ""}
+          title={`${preset.label} · ${preset.detail}`}
+          onClick={() => onChange(preset.patch)}
+        >
+          <strong>{preset.label}</strong>
+          <small>{preset.detail}</small>
         </button>
       ))}
     </div>
@@ -491,13 +580,7 @@ export default function SettingsPanel({
             onChange={(v) => onChange({ units: v })}
           />
         </div>
-        <div className="size-presets">
-          <span>Tamaño recomendado</span>
-          <button type="button" className={settings.sizeMode === "longest" && Math.abs(settings.longest - 76) < 0.6 ? "on" : ""} onClick={() => onChange({ sizeMode: "longest", longest: 76 })}>3″</button>
-          <button type="button" className={settings.sizeMode === "longest" && Math.abs(settings.longest - 89) < 0.6 ? "on" : ""} onClick={() => onChange({ sizeMode: "longest", longest: 89 })}>3,5″</button>
-          <button type="button" className={settings.sizeMode === "longest" && Math.abs(settings.longest - 102) < 0.6 ? "on" : ""} onClick={() => onChange({ sizeMode: "longest", longest: 102 })}>4″</button>
-          <small>para empezar</small>
-        </div>
+        <SizePresetRow settings={settings} onChange={onChange} />
         {settings.sizeMode === "longest" ? (
           <NumberField
             label="Lado mayor del diseño"
@@ -1017,6 +1100,7 @@ export default function SettingsPanel({
             <NumberField label="Diámetro" value={settings.rollerDiameter} min={15} max={120} step={1} onChange={(v) => onChange({ rollerDiameter: v })} />
             <NumberField label="Longitud" value={settings.rollerLength} min={20} max={200} step={1} onChange={(v) => onChange({ rollerLength: v })} />
           </div>
+          <SizePresetRow settings={settings} onChange={onChange} />
           <div className="two-fields">
             <NumberField label="Profundidad del relieve" value={settings.rollerRelief} min={0.3} max={5} step={0.1} onChange={(v) => onChange({ rollerRelief: v })} />
             <NumberField label="Eje" value={settings.rollerBore} min={0} max={30} step={0.5} onChange={(v) => onChange({ rollerBore: v })} />
@@ -1105,6 +1189,7 @@ export default function SettingsPanel({
             <NumberField label="Ancho de lámina" value={settings.stencilWidth} min={30} max={250} step={1} onChange={(v) => onChange({ stencilWidth: v })} />
             <NumberField label="Alto de lámina" value={settings.stencilHeight} min={30} max={250} step={1} onChange={(v) => onChange({ stencilHeight: v })} />
           </div>
+          <SizePresetRow settings={settings} onChange={onChange} />
           <label className="field-row">
             <span className="field-label">Modo de disposición</span>
             <span className="field-input">
@@ -1208,8 +1293,9 @@ export default function SettingsPanel({
         <Section id="bookmark" title="Pinza de página" icon={<Paperclip size={16} />} defaultOpen summary={`${settings.bookmarkWidth.toFixed(0)} × ${settings.bookmarkHeight.toFixed(0)} mm`}>
           <div className="two-fields">
             <NumberField label="Ancho de la pinza" value={settings.bookmarkWidth} min={20} max={120} step={1} onChange={(v) => onChange({ bookmarkWidth: v })} />
-            <NumberField label="Alto de la pinza" value={settings.bookmarkHeight} min={50} max={180} step={1} onChange={(v) => onChange({ bookmarkHeight: v })} />
+            <NumberField label="Alto de la pinza" value={settings.bookmarkHeight} min={50} max={220} step={1} onChange={(v) => onChange({ bookmarkHeight: v })} />
           </div>
+          <SizePresetRow settings={settings} onChange={onChange} />
           <div className="two-fields">
             <NumberField label="Grosor de placa" value={settings.bookmarkThickness} min={1.2} max={5} step={0.2} onChange={(v) => onChange({ bookmarkThickness: v })} />
             <NumberField label="Holgura de la prensa" value={settings.pageClipGap} min={0.2} max={3} step={0.1} onChange={(v) => onChange({ pageClipGap: v })} />

@@ -529,6 +529,113 @@ def _subdivide_flat(mesh: Mesh, iterations: int) -> Mesh:
     return Mesh(np.asarray(verts, dtype=float), np.asarray(faces, dtype=np.int64))
 
 
+def _weld_vertices(mesh: Mesh, tolerance: float = 1e-6) -> Mesh:
+    """Merge coincident vertices so adaptive subdivision keeps a closed mesh."""
+    verts: list[tuple[float, float, float]] = []
+    lookup: dict[tuple[int, int, int], int] = {}
+    remap: list[int] = []
+    for raw in mesh.vertices:
+        key = tuple(int(round(float(c) / tolerance)) for c in raw)
+        idx = lookup.get(key)
+        if idx is None:
+            idx = len(verts)
+            lookup[key] = idx
+            verts.append((float(raw[0]), float(raw[1]), float(raw[2])))
+        remap.append(idx)
+    faces: list[tuple[int, int, int]] = []
+    for raw in mesh.faces:
+        a, b, c = (remap[int(i)] for i in raw)
+        if a == b or b == c or c == a:
+            continue
+        faces.append((a, b, c))
+    return Mesh(np.asarray(verts, dtype=float), np.asarray(faces, dtype=np.int64))
+
+
+def _adaptive_subdivide(
+    mesh: Mesh,
+    max_edge: float,
+    *,
+    max_faces: int = 240_000,
+    max_iterations: int = 10,
+) -> Mesh:
+    """Split only triangles with long edges.
+
+    Uniform subdivision explodes the face count on a large cylindrical sleeve.
+    This keeps the small pattern edges intact while smoothing the broad,
+    unobstructed parts of the surface.  Every pass splits whole shared edges,
+    so neighbouring triangles stay conforming and the result remains closed.
+    """
+    if len(mesh.faces) == 0:
+        return mesh
+    welded = _weld_vertices(mesh)
+    verts = [tuple(v) for v in welded.vertices]
+    faces = [tuple(int(i) for i in f) for f in welded.faces]
+    limit = max(1.0, float(max_edge))
+    for _ in range(max_iterations):
+        if len(faces) >= max_faces:
+            break
+        lengths: dict[tuple[int, int], float] = {}
+        for a, b, c in faces:
+            for p, q in ((a, b), (b, c), (c, a)):
+                key = (p, q) if p < q else (q, p)
+                if key in lengths:
+                    continue
+                pa = verts[key[0]]
+                pb = verts[key[1]]
+                lengths[key] = math.dist(pa, pb)
+        marked = {edge for edge, length in lengths.items() if length > limit}
+        if not marked:
+            break
+        midpoints: dict[tuple[int, int], int] = {}
+        for a, b in sorted(marked):
+            pa = verts[a]
+            pb = verts[b]
+            midpoints[(a, b)] = len(verts)
+            verts.append((
+                (pa[0] + pb[0]) / 2.0,
+                (pa[1] + pb[1]) / 2.0,
+                (pa[2] + pb[2]) / 2.0,
+            ))
+
+        def midpoint(a: int, b: int) -> int | None:
+            return midpoints.get((a, b) if a < b else (b, a))
+
+        new_faces: list[tuple[int, int, int]] = []
+        for a, b, c in faces:
+            ab = midpoint(a, b)
+            bc = midpoint(b, c)
+            ca = midpoint(c, a)
+            count = int(ab is not None) + int(bc is not None) + int(ca is not None)
+            if count == 0:
+                new_faces.append((a, b, c))
+            elif count == 1:
+                if ab is not None:
+                    new_faces.extend(((a, ab, c), (ab, b, c)))
+                elif bc is not None:
+                    new_faces.extend(((a, b, bc), (a, bc, c)))
+                else:
+                    new_faces.extend(((a, b, ca), (b, c, ca)))
+            elif count == 2:
+                if ab is not None and bc is not None:
+                    new_faces.extend(((a, ab, c), (ab, b, bc), (ab, bc, c)))
+                elif bc is not None and ca is not None:
+                    new_faces.extend(((a, b, bc), (a, bc, ca), (bc, c, ca)))
+                else:
+                    new_faces.extend(((a, ab, ca), (ab, b, c), (ab, c, ca)))
+            else:
+                new_faces.extend((
+                    (a, ab, ca),
+                    (ab, b, bc),
+                    (ca, bc, c),
+                    (ab, bc, ca),
+                ))
+        faces = new_faces
+    return _weld_vertices(
+        Mesh(np.asarray(verts, dtype=float), np.asarray(faces, dtype=np.int64)),
+        tolerance=1e-5,
+    )
+
+
 def _polygon_only(geom) -> Polygon | None:
     if geom is None or geom.is_empty:
         return None
@@ -1211,7 +1318,7 @@ def build_roller(
     b = main.bounds
     bw = max(1e-6, b[2] - b[0])
     bh = max(1e-6, b[3] - b[1])
-    fit = min(usable_w / bw, usable_h / bh) * 0.94 * max(0.1, min(1.0, float(source_scale)))
+    fit = min(usable_w / bw, usable_h / bh) * 0.99 * max(0.1, min(1.0, float(source_scale)))
 
     def prepare(geom: Polygon) -> Polygon:
         g = affinity.translate(geom, -pivot.x, -pivot.y)
@@ -1265,11 +1372,6 @@ def build_roller(
             separate_details = tile_details
     if pattern_tile.is_empty:
         pattern_tile = tile
-    pb = pattern_tile.bounds
-    # A continuous patch is essential for engraving; otherwise the inverse
-    # background appears as isolated raised rectangles.
-    patch_w = max(usable_w, (pb[2] - pb[0]) + edge_w)
-    patch_h = max(usable_h, (pb[3] - pb[1]) + edge_w)
 
     def mapped(mesh: Mesh, theta0: float, axial0: float, mirror: bool) -> Mesh:
         verts = mesh.vertices.copy()
@@ -1285,10 +1387,10 @@ def build_roller(
         return Mesh(out, faces)
 
     # Large flat triangles would cut straight chords through the cylinder and
-    # look like random facets in the 3D preview.  Subdivide uniformly (keeping
-    # the mesh closed) until the wrapped tiles read as a smooth curve.
-    max_arc = max(1.2, min(3.5, (2.0 * math.pi * radius) / 128.0))
-    max_faces = 14000
+    # look like random facets in the 3D preview.  Adaptive edge subdivision
+    # keeps the curved silhouette smooth without multiplying every small
+    # interior detail by the same factor.
+    max_edge = max(2.2, min(3.6, radius * 0.12))
 
     def wrapped(poly: Polygon, z0: float, height: float,
                 theta0: float, axial0: float, mirror: bool,
@@ -1299,45 +1401,91 @@ def build_roller(
         if len(mesh.faces) == 0:
             return []
         if refine:
-            pb = poly.bounds
-            span = max(1e-6, pb[2] - pb[0])
-            needed = int(math.ceil(math.log(max(1.0, span / max_arc), 2.0)))
-            allowed = max(0, int(math.floor(math.log(max_faces / max(1, len(mesh.faces)), 4.0))))
-            iterations = max(0, min(5, needed, allowed))
-            mesh = _subdivide_flat(mesh, iterations)
+            mesh = _adaptive_subdivide(mesh, max_edge, max_faces=60_000)
         return [mapped(mesh, theta0, axial0, mirror)]
 
-    for ia in range(around):
-        for il in range(along):
-            theta0 = (2 * math.pi * ia) / around
-            axial0 = -length / 2 + (il + 0.5) * cell_h
-            if pattern == "brick" and il % 2 == 1:
-                theta0 += math.pi / around
-            mirror = pattern == "mirror" and (ia + il) % 2 == 1
-            if invert:
-                patch = box(-patch_w / 2, -patch_h / 2, patch_w / 2, patch_h / 2)
-                cut_pattern = pattern_tile.buffer(-0.08, join_style=1, quad_segs=8)
-                if cut_pattern.is_empty:
-                    cut_pattern = pattern_tile
-                inverse = patch.difference(cut_pattern)
-                for p in _ring_parts(inverse):
-                    if p.area > 0.02:
-                        # Keep engraved geometry flat: curved layers on the
-                        # inverse can create open island caps around holes.
-                        parts.extend(wrapped(
-                            p, back, max(0.3, relief) + 0.25,
-                            theta0, axial0, mirror, refine=False,
-                        ))
-                if not line_drawing and not remove_edge:
-                    # Raised interior linework sits inside the recessed
-                    # silhouette, tied to the cylinder surface.
-                    for detail in tile_details:
-                        detail_height = max(0.3, min(0.75, relief * 0.55))
-                        parts.extend(wrapped(
-                            detail, back, detail_height,
-                            theta0, axial0, mirror, refine=False,
-                        ))
-            else:
+    if invert:
+        # Engraved rollers need one continuous raised sleeve.  Building a
+        # separate raised rectangle for every pattern cell produced visible
+        # flat panels, gaps and a polygonal silhouette.  Here the pattern is a
+        # set of vector holes cut out of a single cylindrical sleeve, so the
+        # base cylinder shows through as a clean, continuous recess.
+        sheet_w = 2.0 * math.pi * radius
+        sheet = box(-sheet_w / 2.0, -length / 2.0, sheet_w / 2.0, length / 2.0)
+        cut_pattern = pattern_tile.buffer(-0.08, join_style=1, quad_segs=8)
+        if cut_pattern.is_empty:
+            cut_pattern = pattern_tile
+
+        hole_parts: list[Polygon] = []
+        tile_holes: list[tuple[float, float, bool]] = []
+        # Put the unwrapped-sheet seam in the empty margin between motifs
+        # whenever the layout allows it, so a motif is not cut in half at the
+        # back of the roller.
+        seam_phase = math.pi / around if around % 2 == 0 else 0.0
+        for ia in range(around):
+            for il in range(along):
+                theta0 = (2.0 * math.pi * ia) / around + seam_phase
+                axial0 = -length / 2.0 + (il + 0.5) * cell_h
+                if pattern == "brick" and il % 2 == 1:
+                    theta0 += math.pi / around
+                mirror = pattern == "mirror" and (ia + il) % 2 == 1
+                tile_holes.append((theta0, axial0, mirror))
+                hole = cut_pattern
+                if mirror:
+                    hole = affinity.scale(hole, -1.0, 1.0, origin=(0.0, 0.0))
+                for shift in (-sheet_w, 0.0, sheet_w):
+                    translated = affinity.translate(
+                        hole, theta0 * radius + shift, axial0
+                    )
+                    hole_parts.extend(_ring_parts(translated))
+
+        holes = unary_union(hole_parts) if hole_parts else Polygon()
+        sleeve_shape = sheet.difference(holes)
+        sleeve_height = max(0.3, relief) + 0.25
+        sleeve_edge = max(2.8, min(4.2, radius * 0.16))
+        for sleeve_piece in _ring_parts(sleeve_shape):
+            if sleeve_piece.area <= 0.02:
+                continue
+            # Earcut can leave sub-micron slivers between nearly touching
+            # holes; those slivers create open edges in the extruded cap.
+            # A tolerance far below print resolution removes them cleanly.
+            clean_piece = sleeve_piece.simplify(0.01, preserve_topology=True)
+            if clean_piece.is_empty or clean_piece.area <= 0.02:
+                continue
+            sleeve_mesh = extrude_polygon(clean_piece, 0.0, sleeve_height)
+            sleeve_mesh = _adaptive_subdivide(
+                sleeve_mesh, sleeve_edge, max_faces=170_000
+            )
+            verts = sleeve_mesh.vertices.copy()
+            out = np.zeros_like(verts)
+            for i, (x, y, z) in enumerate(verts):
+                angle = x / max(radius, 1e-6)
+                radial = radius + back - 0.2 + z
+                out[i] = (
+                    radial * math.cos(angle),
+                    radial * math.sin(angle),
+                    y,
+                )
+            parts.append(Mesh(out, sleeve_mesh.faces.copy()))
+
+        if not line_drawing and not remove_edge:
+            # Interior linework remains raised from the cylinder floor inside
+            # the recess, instead of disappearing with the silhouette hole.
+            detail_height = max(0.3, min(0.75, relief * 0.55))
+            for theta0, axial0, mirror in tile_holes:
+                for detail in tile_details:
+                    parts.extend(wrapped(
+                        detail, back, detail_height,
+                        theta0, axial0, mirror, refine=True,
+                    ))
+    else:
+        for ia in range(around):
+            for il in range(along):
+                theta0 = (2.0 * math.pi * ia) / around
+                axial0 = -length / 2.0 + (il + 0.5) * cell_h
+                if pattern == "brick" and il % 2 == 1:
+                    theta0 += math.pi / around
+                mirror = pattern == "mirror" and (ia + il) % 2 == 1
                 for layer_poly, z0, height in _curved_relief_layers(
                     pattern_tile, back, max(0.3, relief) + 0.25, depth_curve
                 ):

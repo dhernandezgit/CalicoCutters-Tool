@@ -1,5 +1,43 @@
 # Changelog
 
+## 0.7.4 — 2026-11-02
+
+Rodillo de textura realmente cilíndrico y con bordes definidos.
+
+### Rodillo de textura
+
+- **Grabado continuo de verdad**: el modo invertido usa una sola manga
+  cilíndrica elevada con el motivo recortado como huecos vectoriales. Ya no hay
+  parches rectangulares por celda, ni huecos entre ellos, ni planos que rompan la
+  silueta circular.
+- **Bordes nítidos**: los contornos y detalles se recortan con geometría vectorial,
+  no con una máscara de píxeles, por lo que el borde queda limpio y repetible.
+- **Silueta circular estable**: la manga, el tubo y los bordes se subdividen de
+  forma adaptativa; las zonas grandes se curvan sin multiplicar los detalles
+  pequeños y sin perder la forma redonda.
+- **Detalles interiores conservados** en silueta grabada, elevados desde el fondo
+  del hueco.
+- Mejor aprovechamiento de la celda (99 %) para que las repeticiones cierren sin
+  dejar franjas vacías.
+- El modo normal (relieve elevado) también usa subdivisión adaptativa para evitar
+  facetas grandes en el contorno.
+
+### Tamaños rápidos
+
+- Cuatro presets por herramienta: **Mini**, **Estándar**, **Grande** y **Giga**.
+  Galletas: 30, 44 (tipo Oreo), 75 y 100 mm. Rodillo, stencil, pinza, topper y
+  cake pop tienen dimensiones equivalentes propias. Los campos numéricos siguen
+  disponibles para ajustar cualquier medida.
+
+### Vista 3D
+
+- Sombreado con ángulo de corte: las superficies curvas se ven suaves y los
+  bordes del rodillo, cortadores y relieves siguen definidos.
+
+### Calidad
+
+- 79 tests, typecheck y build.
+
 ## 0.7.3 — 2026-11-01
 
 Revisión de herramientas que no son cortadores y correcciones del rodillo.

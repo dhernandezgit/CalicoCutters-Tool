@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+import { toCreasedNormals } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { BuildResult, DesignShape } from "../types";
 
 type ViewCamera = THREE.PerspectiveCamera | THREE.OrthographicCamera;
@@ -1064,8 +1065,9 @@ const Viewport3D = forwardRef<Viewport3DHandle, Props>(function Viewport3D(
           const binary = atob(part.stl_b64 || "");
           const bytes = new Uint8Array(binary.length);
           for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-          const geometry = loader.parse(bytes.buffer);
-          geometry.computeVertexNormals();
+          const parsed = loader.parse(bytes.buffer);
+          parsed.deleteAttribute("normal");
+          const geometry = toCreasedNormals(parsed, Math.PI / 6);
           const spec = createPartMaterial(part, partIndex, materialStyle, finish, secondaryColor, wireframe);
           if (spec.gradient) {
             geometry.computeBoundingBox();
