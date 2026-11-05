@@ -952,8 +952,13 @@ def build_stamp(
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
     stamp_components = _ring_parts(stamp_poly)
     parts: list[Mesh] = []
+    accent_start = len(color_parts) if color_parts is not None else 0
+    raised_back = back_mark and len(details) > 24
+    raised_marks: list[Polygon] = []
+    raised_depth = 0.0
 
     def stamp_base(component: Polygon, height: float, mark_details: list[Polygon]) -> list[Mesh]:
+        nonlocal raised_depth
         out: list[Mesh] = []
         gp = None
         if grip:
@@ -995,12 +1000,46 @@ def build_stamp(
 
         mark_parts: list[Polygon] = []
         mark_depth = dep if dep > 0 else min(0.35, max(0.12, height * 0.1))
-        # Very detailed line-art (dozens of sub-millimetre interior rings) is
-        # not suitable for a reliable shallow back engraving.  The marking
-        # face still gets all the detail; keep the back clean rather than
-        # risking a GEOS topology failure during subtraction.
-        safe_back_mark = back_mark and len(details) <= 24
-        if two_color:
+        # Very detailed line-art is kept as a shallow raised mark instead of a
+        # subtraction.  Older GEOS builds can abort on the near-coincident
+        # slivers created while carving dozens of 0.05 mm groove rings.  A
+        # raised insert uses no fragile boolean difference and still prints
+        # reliably in one or two colours.
+        safe_back_mark = back_mark and not raised_back
+        if raised_back:
+            edge_margin = max(1.0, back_mark_width * 2.2)
+            safe = component.buffer(-edge_margin, join_style=1, quad_segs=8)
+            if not safe.is_empty:
+                if two_color:
+                    try:
+                        base_fill = main.intersection(safe) if backing == "rect" else safe
+                    except Exception:
+                        base_fill = safe
+                    for p in _ring_parts(base_fill):
+                        if p.area > 0.01:
+                            raised_marks.append(p)
+                else:
+                    inner_ref = component.buffer(-0.6, join_style=1, quad_segs=8)
+                    if not inner_ref.is_empty:
+                        main_mark = (
+                            main.intersection(inner_ref)
+                            if backing == "rect"
+                            else inner_ref
+                        )
+                        shapes = _outline_band_parts(main_mark, back_mark_width)
+                        for detail in mark_details:
+                            try:
+                                clipped_detail = detail.intersection(inner_ref)
+                            except Exception:
+                                clipped_detail = detail
+                            shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
+                        for shape in shapes:
+                            for p in _ring_parts(shape):
+                                if p.area > 0.002:
+                                    raised_marks.append(p)
+                if raised_marks:
+                    raised_depth = max(raised_depth, mark_depth)
+        elif two_color:
             if safe_back_mark:
                 edge_margin = max(1.0, back_mark_width * 2.2)
                 safe = component.buffer(-edge_margin, join_style=1, quad_segs=8)
@@ -1029,19 +1068,12 @@ def build_stamp(
                     else inner_ref
                 )
                 shapes.extend(_outline_band_parts(main_mark, back_mark_width))
-                # Pixel-traced line art can contain dozens of sub-millimetre
-                # detail rings.  Repeating all of them on the back makes the
-                # shallow relief unnecessarily fragile (and older GEOS builds
-                # can fail while subtracting near-coincident slivers).  Keep
-                # the readable outer contour and leave the fine linework on
-                # the marking face.
-                if len(mark_details) <= 24:
-                    for detail in mark_details:
-                        try:
-                            clipped_detail = detail.intersection(inner_ref)
-                        except Exception:
-                            clipped_detail = detail
-                        shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
+                for detail in mark_details:
+                    try:
+                        clipped_detail = detail.intersection(inner_ref)
+                    except Exception:
+                        clipped_detail = detail
+                    shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
             if shapes:
                 safe = component.buffer(-0.3, join_style=1, quad_segs=8)
                 if not safe.is_empty:
@@ -1150,6 +1182,23 @@ def build_stamp(
     out = parts[0]
     for p in parts[1:]:
         out = out.append(p)
+    if raised_back and raised_marks:
+        # Move the stamp body up by the mark thickness and put the raised
+        # illustration underneath it, resting on the print bed.
+        out = out.translated([0.0, 0.0, raised_depth])
+        mark_meshes = [
+            extrude_polygon(p, 0.0, raised_depth + 0.05)
+            for p in raised_marks
+        ]
+        if two_color and color_parts is not None:
+            for index in range(accent_start, len(color_parts)):
+                color_parts[index] = color_parts[index].translated(
+                    [0.0, 0.0, raised_depth]
+                )
+            color_parts.extend(mark_meshes)
+        else:
+            for mark_mesh in mark_meshes:
+                out = out.append(mark_mesh)
     return out
 
 

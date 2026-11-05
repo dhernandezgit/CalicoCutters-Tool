@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.7.8 — 2026-11-05
+
+Marca trasera recuperada para ilustraciones muy detalladas.
+
+### Marca trasera
+
+- Los dibujos de línea con más de 24 trazos finos ya no pierden la marca
+  trasera: se añade como una capa exterior elevada, sin operaciones de resta
+  frágiles.
+- El dibujo delantero, la marca trasera y el punto de orientación se mantienen
+  en el mismo objeto; con la opción de dos colores, la marca y el punto se
+  exportan en el color secundario.
+- La vista 3D ya no tiñe los objetos de relleno con el color principal del
+  archivo: conserva el color secundario de cada pieza.
+- Se elimina el aviso de marca omitida en sellos; se sustituye por un aviso
+  informativo de relieve exterior.
+- El modo impronta sigue protegiendo su fondo rebajado y mantiene su aviso
+  específico.
+
+### Calidad
+
+- 83 tests, typecheck y build.
+
 ## 0.7.7 — 2026-11-05
 
 Carga inicial instantánea, dibujos de línea finos y selector de unidades.

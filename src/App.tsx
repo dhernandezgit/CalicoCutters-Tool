@@ -128,7 +128,9 @@ function combineBuilds(assets: DesignAsset[], builds: Record<string, BuildResult
         ...p,
         assetId: a.id,
         assetName: a.name,
-        color: a.color || p.color,
+        color: /Dibujo a color|Punto a color/.test(p.name)
+          ? p.color
+          : (a.color || p.color),
         preview_offset: [
           p.preview_offset[0] + shiftX,
           p.preview_offset[1] + shiftY,

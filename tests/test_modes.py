@@ -228,6 +228,37 @@ def test_two_color_fill_creates_bambu_ready_accent_parts():
         assert "Metadata/model_settings.config" in z.namelist()
 
 
+def test_complex_line_art_keeps_a_raised_back_mark():
+    from shapely.geometry import LineString, Point
+    from calicocutters.shape import Shape
+
+    main = Point(0, 0).buffer(30, quad_segs=64)
+    details = [
+        list(LineString([(-22, -24 + index * 1.6), (22, -24 + index * 1.6)]).buffer(0.06).exterior.coords)
+        for index in range(30)
+    ]
+    shape = Shape(
+        name="line-art",
+        outer=list(main.exterior.coords),
+        details=details,
+        source_kind="builtin",
+    )
+    settings = {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "longest": 60,
+        "backMark": True,
+        "twoColorFill": True,
+        "secondaryColor": "#22aa66",
+        "color": "#112233",
+    }
+    result = build({"shape": shape.to_dict(), "settings": settings})
+    names = [part["name"] for part in result["parts"]]
+    assert "Dibujo a color" in names
+    assert all(_mesh(part).is_watertight for part in result["parts"])
+    assert any("relieve elevado" in warning for warning in result["warnings"])
+
+
 def test_texture_roller_zero_bore_is_solid():
     base = {**DEFAULT_SETTINGS, "mode": "roller", "rollerPatternMode": "silhouette", "rollerBore": 0}
     solid = build({"shape": _shape().to_dict(), "settings": base})

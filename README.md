@@ -1,6 +1,6 @@
 # CalicoCutters
 
-**Versión 0.7.5** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.7.8** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
@@ -34,7 +34,7 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - **Mockup PNG** para catálogo o redes y **SVG** de contorno para edición o listings.
 - **Tamaños rápidos por herramienta**: Mini, Estándar (galleta tipo Oreo de 44 mm), Grande (75 mm) y Giga, con equivalencias propias para rodillo, stencil, pinza, topper y cake pop. Los campos numéricos siguen disponibles; el selector mm/in ocupa el mismo ancho.
 - **Carga inicial instantánea**: el ejemplo Corazón se sirve ya analizado y generado, sin esperar a Pyodide. El motor sigue cargándose en segundo plano para el resto de funciones.
-- **Dibujos de línea a tamaño pequeño**: los trazos finos se engrosan automáticamente hasta una anchura imprimible; en dibujos muy detallados se omite la marca trasera si debilitaría la pieza, mostrando el aviso correspondiente.
+- **Dibujos de l?nea a tama?o peque?o**: los trazos finos se engrosan autom?ticamente hasta una anchura imprimible; en dibujos muy detallados la marca trasera se a?ade como relieve exterior controlado, sin debilitar la pieza.
 - **Dibujo marcado en la parte de atrás**: sellos e improntas graban un contorno fino del dibujo en la cara inferior, con la misma profundidad que el punto de orientación. Viene activado por defecto y se puede desactivar en Avanzado → Alineación.
 - **Relleno a dos colores opcional**: dibujo delantero, marca trasera y punto de orientación como piezas sólidas de un segundo color, con color configurable. El 3MF se exporta con dos materiales y metadatos de extrusor para Bambu Studio.
 - **Rodillo de textura avanzado**: patrones repetido, ladrillo y reflejado, con cierre automático de la costura; motivo de dibujo (contorno + detalles, como un sello) o silueta rellena; escala del origen, giro, margen, inversión, grosor posterior, borde exterior con altura y curvas redondeadas por defecto. En grabado se genera una sola manga cilíndrica continua con huecos vectoriales, sin parches rectangulares; el relieve elevado y la manga usan subdivisión adaptativa para conservar la silueta circular y los bordes definidos.

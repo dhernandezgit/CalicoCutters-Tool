@@ -1151,13 +1151,17 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             warnings.append("No hay espacio para el punto de alineación en el sello con este tamaño.")
     if settings["mode"] in stamp_modes and not details:
         warnings.append("El sello no tiene relieve interior; se imprimirá como una base plana.")
-    if back_mark and len(details) > 24 and (
-        settings["mode"] in {"stamp", "cutter-stamp", "imprint", "sandwich"}
-    ):
-        warnings.append(
-            "Marca trasera omitida: el dibujo tiene demasiados trazos finos para "
-            "grabarla en la cara inferior sin debilitarla. El dibujo delantero se mantiene completo."
-        )
+    if back_mark and len(details) > 24:
+        if settings["mode"] in stamp_modes:
+            warnings.append(
+                "Marca trasera en relieve elevado: el dibujo tiene muchos trazos "
+                "finos y se marca como una capa exterior para evitar fallos de geometría."
+            )
+        elif settings["mode"] == "imprint":
+            warnings.append(
+                "Marca trasera omitida: el dibujo tiene demasiados trazos finos para "
+                "grabarla en la cara inferior sin debilitarla. El dibujo delantero se mantiene completo."
+            )
     if settings["mode"] in cutter_modes and settings["bladeThickness"] < PRINTERS[settings["printer"]]["minWall"]:
         warnings.append(
             f"La cuchilla de {settings['bladeThickness']:.2f} mm está por debajo de "
