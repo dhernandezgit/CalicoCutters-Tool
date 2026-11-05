@@ -48,6 +48,7 @@ export interface DesignSettings {
   baseWidth: number;
   baseShape: "rect" | "chamfer" | "round";
   cutterWaistLine: boolean;
+  autoThickenLines: boolean;
 
   addPressHandle: boolean;
   pressHandleLength: number;
@@ -304,6 +305,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
   baseWidth: 4,
   baseShape: "rect",
   cutterWaistLine: false,
+  autoThickenLines: true,
 
   addPressHandle: false,
   pressHandleLength: 26,

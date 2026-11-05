@@ -66,6 +66,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "baseWidth": 4.0,
     "baseShape": "rect",
     "cutterWaistLine": False,
+    "autoThickenLines": True,
     "addPressHandle": False,
     "pressHandleLength": 26.0,
     "pressHandleWidth": 10.0,
@@ -332,7 +333,7 @@ _INTEGER_RANGES: dict[str, tuple[int, int]] = {
 _BOOLEAN_KEYS = {
     "lockAspect", "autoPrintable", "sharpEdge", "extraBlade",
     "addPressHandle", "pressHandlesBothEnds", "addBar", "stampRemoveOuterEdge", "stampBorder",
-    "mirror", "mirrorPair", "cutterWaistLine", "stencilBridges", "topperInvert", "stampRecessed", "imprintInvert", "imprintEdgesOnly", "sandwichDentRound", "sandwichOffsetOutward", "stampGrip",
+    "mirror", "mirrorPair", "cutterWaistLine", "autoThickenLines", "stencilBridges", "topperInvert", "stampRecessed", "imprintInvert", "imprintEdgesOnly", "sandwichDentRound", "sandwichOffsetOutward", "stampGrip",
     "rollerRotate", "rollerInvert", "rollerRemoveEdge",
     "cakePopTray",
     "bookmarkHole",
@@ -1113,22 +1114,29 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
         detail_modes.add("sandwich")
     if (
         settings["mode"] in detail_modes
+        and settings.get("autoThickenLines", True)
         and float(settings.get("stampDetailGrow", 0.0)) <= 0.01
     ):
-        automatic_grow = _auto_detail_grow(details, float(settings["lineWidth"]))
-        if automatic_grow > 0.05:
-            grown: list[Polygon] = []
-            for detail in details:
-                buffered = detail.buffer(
-                    automatic_grow / 2.0, join_style=1, quad_segs=8
-                )
+        target = max(0.6, float(settings["lineWidth"]) * 1.5)
+        grown: list[Polygon] = []
+        changed = False
+        for detail in details:
+            width = 2.0 * detail.area / max(detail.length, 1e-9)
+            needed = max(0.0, target - width)
+            if needed > 0.02:
+                changed = True
+                buffered = detail.buffer(needed / 2.0, join_style=1, quad_segs=8)
                 for p in _ring_parts(buffered):
                     if p.area > 0.002:
                         grown.append(p)
-            details = grown
+            else:
+                grown.append(detail)
+        details = grown
+        if changed:
             warnings.append(
-                "Trazos finos engrosados automáticamente para que se impriman "
-                f"a este tamaño (aprox. {automatic_grow + 0.3:.1f} mm de línea)."
+                "Solo se han engrosado los trazos inferiores a "
+                f"{target:.1f} mm para que se impriman; los detalles anchos "
+                "conservan su tamaño."
             )
     cutter_modes = {"cutter", "cutter-stamp", "imprint", "multicutter", "cutter-set"}
     if settings["mode"] == "sandwich" and settings.get("sandwichPart", "both") != "seal":

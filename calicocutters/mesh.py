@@ -400,17 +400,34 @@ def _ring_loft(layers: list[tuple[float, np.ndarray, np.ndarray]], segments: int
                 q1 = b + j2
                 faces.append([p0, p1, q1])
                 faces.append([p0, q1, q0])
-        if not (abs(z1 - z0) < 1e-9 and np.allclose(i0, i1, atol=1e-7)):
-            a = k * 2 * n + n
-            b = (k + 1) * 2 * n + n
-            for j in range(n):
-                j2 = (j + 1) % n
-                p0 = a + j
-                p1 = a + j2
-                q0 = b + j
-                q1 = b + j2
-                faces.append([p0, p1, q1])
-                faces.append([p0, q1, q0])
+    # Inner wall: collapse consecutive layers with the same inner loop into a
+    # single strip.  This avoids horizontal shading seams on the inside when
+    # only the outside is decorated (for example the cutter waist groove).
+    inner_pairs: list[tuple[int, int]] = []
+    span_start = 0
+    for k in range(1, len(cleaned)):
+        if not np.allclose(cleaned[k][2], cleaned[span_start][2], atol=1e-7):
+            if k - 1 > span_start:
+                inner_pairs.append((span_start, k - 1))
+            inner_pairs.append((k - 1, k))
+            span_start = k
+    if len(cleaned) - 1 > span_start:
+        inner_pairs.append((span_start, len(cleaned) - 1))
+    for k0, k1 in inner_pairs:
+        z0, _o0, _i0 = cleaned[k0]
+        z1, _o1, _i1 = cleaned[k1]
+        if k0 == k1 or (abs(z1 - z0) < 1e-9 and np.allclose(cleaned[k0][2], cleaned[k1][2], atol=1e-7)):
+            continue
+        a = k0 * 2 * n + n
+        b = k1 * 2 * n + n
+        for j in range(n):
+            j2 = (j + 1) % n
+            p0 = a + j
+            p1 = a + j2
+            q0 = b + j
+            q1 = b + j2
+            faces.append([p0, p1, q1])
+            faces.append([p0, q1, q0])
     # Caps.  The anti-collinear jitter in _ring_array keeps every boundary
     # vertex in earcut's output, so cap boundary edges match the wall edges.
     for layer_index, _z, flip in ((0, cleaned[0][0], True), (len(cleaned) - 1, cleaned[-1][0], False)):
@@ -748,16 +765,13 @@ def build_cutter(
             piece = max(parts, key=lambda p: p.area)
             groove_outer = list(piece.exterior.coords[:-1])
             # Keep the original inner wall; only the outside is relieved.
-            if piece.interiors:
-                groove_inner = list(piece.interiors[0].coords[:-1])
-            else:
-                groove_inner = inner_ring
+            groove_inner = inner_ring
         except Exception:
             return
         layers.extend([
             (low, outer_ring, inner_ring),
-            (low + 0.01, groove_outer, groove_inner),
-            (high - 0.01, groove_outer, groove_inner),
+            (low, groove_outer, groove_inner),
+            (high, groove_outer, groove_inner),
             (high, outer_ring, inner_ring),
         ])
         layers.sort(key=lambda layer: layer[0])
@@ -957,11 +971,11 @@ def build_multicutter(
                         if pieces:
                             gp = max(pieces, key=lambda p: p.area)
                             go = list(gp.exterior.coords[:-1])
-                            gi = list(gp.interiors[0].coords[:-1]) if gp.interiors else inner_blade
+                            gi = inner_blade
                             layers.extend([
                                 (low, outer_blade, inner_blade),
-                                (low + 0.01, go, gi),
-                                (high - 0.01, go, gi),
+                                (low, go, gi),
+                                (high, go, gi),
                                 (high, outer_blade, inner_blade),
                             ])
                             layers.sort(key=lambda layer: layer[0])

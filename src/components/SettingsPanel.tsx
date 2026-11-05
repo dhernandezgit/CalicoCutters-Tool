@@ -936,6 +936,12 @@ export default function SettingsPanel({
             </label>
             <NumberField label="Engrosar líneas" value={settings.stampDetailGrow} min={0} max={1.5} step={0.1} hint="0 = sin cambios" onChange={(v) => onChange({ stampDetailGrow: v })} />
           </div>
+          <Toggle
+            label="Engrosar automáticamente los trazos finos"
+            hint="Solo engrosa los detalles por debajo de ~0,6 mm; los detalles y líneas anchas no cambian. Desactívalo si prefieres conservar el dibujo original."
+            checked={settings.autoThickenLines !== false}
+            onChange={(v) => onChange({ autoThickenLines: v })}
+          />
           <div className="inline-hint">
             <Stamp size={13} />
             <span>Recto por defecto. Redondeado y chaflán solo se aplican si el detalle es lo bastante ancho; en líneas finas se mantiene recto y a altura completa para evitar picos. Engrosar líneas ayuda con trazos finos.</span>
@@ -1064,6 +1070,12 @@ export default function SettingsPanel({
             </label>
             <NumberField label="Engrosar líneas" value={settings.stampDetailGrow} min={0} max={1.5} step={0.1} onChange={(v) => onChange({ stampDetailGrow: v })} />
           </div>
+          <Toggle
+            label="Engrosar automáticamente los trazos finos"
+            hint="Solo engrosa los detalles por debajo de ~0,6 mm; los detalles anchos no cambian."
+            checked={settings.autoThickenLines !== false}
+            onChange={(v) => onChange({ autoThickenLines: v })}
+          />
           <div className="inline-hint"><Layers size={13} /><span>Recto por defecto: evita picos en líneas finas. Las curvas solo se aplican cuando el relieve tiene anchura suficiente.</span></div>
           <div className="two-fields">
             <NumberField label="Margen de la base" value={settings.imprintBaseWidth} min={0.3} max={8} step={0.1} onChange={(v) => onChange({ imprintBaseWidth: v })} />

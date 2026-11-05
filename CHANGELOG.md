@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.11 ? 2026-11-06
+
+Engrosado autom?tico selectivo para no ensanchar todo el dibujo.
+
+### Trazos finos
+
+- El engrosado autom?tico ya no aplica el mismo aumento a todos los detalles.
+- Solo se engrosan los trazos por debajo de ~0,6 mm; los detalles y l?neas que ya
+  eran anchos conservan su tama?o.
+- Nueva opci?n **Engrosar autom?ticamente los trazos finos**, activa por defecto,
+  para poder desactivarla y conservar el dibujo original.
+- El engrosado manual sigue disponible por separado.
+- La l?nea decorativa del cortador ya no genera una costura/reborde en la pared interior: solo se modifica la pared exterior.
+
+### Calidad
+
+- 85 tests, typecheck y build.
+
 ## 0.7.10 ? 2026-11-05
 
 3MF de un solo objeto con varios colores y l?nea decorativa del cortador.
