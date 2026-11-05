@@ -193,6 +193,7 @@ export interface DesignSettings {
 
   alignmentHole: boolean;
   alignmentHoleDiameter: number;
+  backMark: boolean;
 
   /** Colour of this design in preview / 3MF. */
   color?: string;
@@ -445,6 +446,7 @@ export const DEFAULT_SETTINGS: DesignSettings = {
 
   alignmentHole: true,
   alignmentHoleDiameter: 1.8,
+  backMark: true,
 };
 
 export const PRINTER_PROFILES: Record<

@@ -338,6 +338,10 @@ export default function SettingsPanel({
   const supportsExtras = ["cutter", "cutter-stamp", "multicutter", "imprint"].includes(settings.mode);
   const stampLike = settings.mode === "stamp" || settings.mode === "cutter-stamp"
     || (settings.mode === "sandwich" && settings.sandwichPart !== "cutter");
+  const backMarkAvailable = settings.mode === "stamp"
+    || settings.mode === "cutter-stamp"
+    || (settings.mode === "imprint" && !settings.imprintEdgesOnly)
+    || (settings.mode === "sandwich" && settings.sandwichPart !== "cutter");
   const aspect = shape ? shape.bounds.width / Math.max(shape.bounds.height, 0.001) : 1;
   const final = build?.parts[0];
   const finalW = final ? final.bounds.max[0] - final.bounds.min[0] : 0;
@@ -683,6 +687,14 @@ export default function SettingsPanel({
               max={5}
               step={0.1}
               onChange={(v) => onChange({ alignmentHoleDiameter: v })}
+            />
+          )}
+          {backMarkAvailable && (
+            <Toggle
+              label="Marcar el dibujo en la parte de atrás"
+              hint="Graba un contorno fino del dibujo en la cara inferior, con la misma profundidad que el punto de orientación. No afecta al relieve que marca la galleta."
+              checked={settings.backMark !== false}
+              onChange={(v) => onChange({ backMark: v })}
             />
           )}
         </Section>

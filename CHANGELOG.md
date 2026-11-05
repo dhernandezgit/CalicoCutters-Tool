@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.5 — 2026-11-05
+
+Dibujo identificativo en la parte de atrás del sello y de la impronta.
+
+### Sello e impronta
+
+- Nueva opción **Marcar el dibujo en la parte de atrás**, activa por defecto.
+- Graba un contorno fino del dibujo en la cara inferior del sello o de la base de
+  impronta, usando la misma profundidad que el punto de orientación.
+- El marcado es superficial: no atraviesa la pieza ni modifica la cara que marca
+  la galleta.
+- Se aplica a Sello de relieve, Cortador + sello, Cortador con relieve y al sello
+  del cortador sándwich. En el modo espejo también se marca la versión espejada.
+- La opción se puede desactivar en **Avanzado → Alineación**.
+
+### Calidad
+
+- 80 tests, typecheck y build.
+
 ## 0.7.4 — 2026-11-02
 
 Rodillo de textura realmente cilíndrico y con bordes definidos.

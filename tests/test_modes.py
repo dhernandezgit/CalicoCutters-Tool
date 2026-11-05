@@ -164,6 +164,28 @@ def test_cake_pop_tray_is_watertight_and_has_a_stick_passage():
     assert tray.volume > 0
 
 
+def test_back_mark_is_default_and_can_be_disabled():
+    for mode in ("stamp", "imprint", "cutter-stamp"):
+        marked = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": mode,
+        }})
+        plain = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": mode,
+            "backMark": False,
+        }})
+        marked_meshes = [_mesh(part) for part in marked["parts"]]
+        plain_meshes = [_mesh(part) for part in plain["parts"]]
+        assert all(mesh.is_watertight for mesh in marked_meshes), mode
+        assert all(mesh.is_watertight for mesh in plain_meshes), mode
+        marked_volume = sum(mesh.volume for mesh in marked_meshes)
+        plain_volume = sum(mesh.volume for mesh in plain_meshes)
+        assert marked_volume < plain_volume - 1, mode
+        for part in marked["parts"]:
+            assert part["bounds"]["min"][2] == pytest.approx(0.0, abs=0.01)
+
+
 def test_texture_roller_zero_bore_is_solid():
     base = {**DEFAULT_SETTINGS, "mode": "roller", "rollerPatternMode": "silhouette", "rollerBore": 0}
     solid = build({"shape": _shape().to_dict(), "settings": base})

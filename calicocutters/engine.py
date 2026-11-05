@@ -193,6 +193,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "preprocessMinDetail": 0.8,
     "alignmentHole": True,
     "alignmentHoleDiameter": 1.8,
+    "backMark": True,
 }
 
 PRINTERS = {
@@ -329,7 +330,7 @@ _BOOLEAN_KEYS = {
     "cakePopTray",
     "bookmarkHole",
     "preprocessSmooth", "preprocessPreserveCorners", "preprocessSmoothDetails", "preprocessRemoveTiny",
-    "alignmentHole",
+    "alignmentHole", "backMark",
 }
 
 
@@ -1068,6 +1069,11 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
     if settings["mode"] == "sandwich" and settings.get("sandwichPart", "both") != "cutter":
         stamp_modes.add("sandwich")
     cutter_alignment, stamp_alignment = _alignment_locations(main, settings)
+    back_mark = bool(settings.get("backMark", True))
+    back_mark_width = max(
+        0.6,
+        min(1.1, float(settings.get("alignmentHoleDiameter", 1.8)) * 0.5),
+    )
     if settings.get("alignmentHole"):
         if settings["mode"] in cutter_modes and cutter_alignment is None:
             warnings.append("No hay espacio para el punto de alineación en la base del cortador con este tamaño.")
@@ -1163,6 +1169,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 grip=bool(settings.get("stampGrip")),
                 grip_diameter=float(settings.get("stampGripDiameter", 20.0)),
                 grip_depth=float(settings.get("stampGripDepth", 2.0)),
+                back_mark=back_mark,
+                back_mark_width=back_mark_width,
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
         if settings["mode"] == "imprint":
@@ -1188,6 +1196,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 edges_only=bool(settings.get("imprintEdgesOnly")),
                 base_inset=float(settings.get("imprintBaseWidth", 1.2)),
                 edge_width=float(settings.get("imprintEdgeWidth", 1.2)),
+                back_mark=back_mark,
+                back_mark_width=back_mark_width,
             )
             imprint = _add_cutter_extras(imprint, main, settings)
             parts.append(("Impronta", imprint, "#f39ab1"))
@@ -1257,6 +1267,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     recessed=bool(settings.get("stampRecessed")),
                     detail_curve=str(settings.get("stampDetailCurve", "none")),
                     detail_grow=float(settings.get("stampDetailGrow", 0.0)),
+                    back_mark=back_mark,
+                    back_mark_width=back_mark_width,
                 )
                 parts.append(("Sello sándwich", sandwich_stamp, "#b7a4e8"))
         if settings["mode"] == "roller":
@@ -1438,6 +1450,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 grip=bool(settings.get("stampGrip")),
                 grip_diameter=float(settings.get("stampGripDiameter", 20.0)),
                 grip_depth=float(settings.get("stampGripDepth", 2.0)),
+                back_mark=back_mark,
+                back_mark_width=back_mark_width,
             )
             parts.append(("Sello espejo", mirror_stamp, "#b7a4e8"))
     if not parts:

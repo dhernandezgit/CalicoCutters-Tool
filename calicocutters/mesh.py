@@ -498,6 +498,19 @@ def _ring_parts(geom) -> list[Polygon]:
     return []
 
 
+def _outline_band_parts(geom: Polygon | None, width: float) -> list[Polygon]:
+    """Thin closed line around a shape, used for the shallow back marking."""
+    if geom is None or geom.is_empty:
+        return []
+    half = max(0.25, float(width) / 2.0)
+    outer = geom.buffer(half, join_style=1, quad_segs=8)
+    inner = geom.buffer(-half, join_style=1, quad_segs=8)
+    if outer.is_empty:
+        return []
+    band = outer.difference(inner) if not inner.is_empty else outer
+    return [p for p in _ring_parts(band) if p.area > 0.002]
+
+
 def _subdivide_flat(mesh: Mesh, iterations: int) -> Mesh:
     """Uniform 1-to-4 subdivision, used before wrapping onto a cylinder."""
     if iterations <= 0 or len(mesh.faces) == 0:
@@ -915,6 +928,8 @@ def build_stamp(
     grip: bool = False,
     grip_diameter: float = 20.0,
     grip_depth: float = 2.0,
+    back_mark: bool = False,
+    back_mark_width: float = 0.9,
 ) -> Mesh:
     if backing == "rect":
         b = main.bounds
@@ -936,7 +951,7 @@ def build_stamp(
     stamp_components = _ring_parts(stamp_poly)
     parts: list[Mesh] = []
 
-    def stamp_base(component: Polygon, height: float) -> list[Mesh]:
+    def stamp_base(component: Polygon, height: float, mark_details: list[Polygon]) -> list[Mesh]:
         out: list[Mesh] = []
         gp = None
         if grip:
@@ -960,6 +975,9 @@ def build_stamp(
                 dimple = None
                 dep = 0.0
         if gd > 0.2 and gp is not None:
+            # The grip recess occupies the centre of the back face.  The
+            # shallow identification mark would be hidden inside it, so keep
+            # the grip clean instead of carving a fragile second pocket.
             bottom = component.difference(gp)
             if dimple is not None:
                 bottom = bottom.difference(dimple)
@@ -967,11 +985,46 @@ def build_stamp(
                 out.append(extrude_polygon(bottom, 0.0, gd))
                 out.append(extrude_polygon(component, gd - 0.01, height - gd + 0.01))
                 return out
-        if dimple is not None:
-            bottom = component.difference(dimple)
+
+        mark = None
+        if back_mark:
+            shapes: list[Polygon] = []
+            edge_margin = max(0.6, back_mark_width * 1.6)
+            inner_ref = component.buffer(-edge_margin, join_style=1, quad_segs=8)
+            # On an outline-backed stamp the plate is already an inset copy of
+            # the silhouette, so follow that plate.  With a rectangular
+            # backing, follow the actual artwork instead of the rectangle.
+            if not inner_ref.is_empty:
+                main_mark = (
+                    main.intersection(inner_ref)
+                    if backing == "rect"
+                    else inner_ref
+                )
+                shapes.extend(_outline_band_parts(main_mark, back_mark_width))
+                for detail in mark_details:
+                    clipped_detail = detail.intersection(inner_ref)
+                    shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
+            if shapes:
+                safe = component.buffer(-0.3, join_style=1, quad_segs=8)
+                if not safe.is_empty:
+                    clipped = unary_union(shapes).intersection(safe)
+                    for p in _ring_parts(clipped):
+                        if p.area > 0.002:
+                            mark = p if mark is None else mark.union(p)
+        if dimple is not None or mark is not None:
+            groove_depth = dep if dep > 0 else min(0.35, max(0.12, height * 0.1))
+            bottom = component
+            if dimple is not None:
+                bottom = bottom.difference(dimple)
+            if mark is not None:
+                bottom = bottom.difference(mark)
             if not bottom.is_empty:
-                out.append(extrude_polygon(bottom, 0.0, dep))
-                out.append(extrude_polygon(component, dep - 0.01, height - dep + 0.01))
+                # Very thin grooves leave sub-micron slivers in earcut when
+                # the stamp has a narrow neck.  Cleaning them keeps the
+                # shallow marking layer watertight.
+                bottom = bottom.simplify(0.01, preserve_topology=True)
+                out.append(extrude_polygon(bottom, 0.0, groove_depth))
+                out.append(extrude_polygon(component, groove_depth - 0.01, height - groove_depth + 0.01))
                 return out
         out.append(extrude_polygon(component, 0.0, height))
         return out
@@ -1004,14 +1057,14 @@ def build_stamp(
             # Negative relief: the background is high and the artwork is a
             # shallow recess.  This leaves raised details in dough/fondant.
             plate_height = max(0.3, back_height - depth)
-            parts.extend(stamp_base(stamp_component, plate_height))
+            parts.extend(stamp_base(stamp_component, plate_height, kept_details))
             cutouts = unary_union([d for d in grown_details if not d.is_empty])
             cover = stamp_component.difference(cutouts)
             for p in _ring_parts(cover):
                 if p.area > 0.01:
                     parts.append(extrude_polygon(p, back_height - depth - 0.01, depth + 0.01))
             continue
-        parts.extend(stamp_base(stamp_component, back_height))
+        parts.extend(stamp_base(stamp_component, back_height, kept_details))
         if border and border_width > 0.2:
             # A true annular frame, built by subtracting an inset copy of the
             # plate.  Buffering the exterior line produced non-watertight
@@ -1070,6 +1123,8 @@ def build_imprint(
     edges_only: bool = False,
     base_inset: float = 1.2,
     edge_width: float = 1.2,
+    back_mark: bool = False,
+    back_mark_width: float = 0.9,
 ) -> Mesh:
     cutter = build_cutter(
         main,
@@ -1110,6 +1165,36 @@ def build_imprint(
     floor_poly = main.buffer(-max(0.3, float(base_inset)), join_style=2)
     if floor_poly.is_empty:
         return cutter
+
+    def marked_floor(poly: Polygon, top: float) -> list[Mesh]:
+        if not back_mark:
+            return [extrude_polygon(poly, 0.0, top)]
+        shapes: list[Polygon] = []
+        reference = poly.buffer(-max(0.2, back_mark_width * 0.5), join_style=1, quad_segs=8)
+        if not reference.is_empty:
+            shapes.extend(_outline_band_parts(reference, back_mark_width))
+        for detail in details:
+            clipped = detail.intersection(poly)
+            for p in _ring_parts(clipped):
+                shapes.extend(_outline_band_parts(p, back_mark_width))
+        if not shapes:
+            return [extrude_polygon(poly, 0.0, top)]
+        safe = poly.buffer(-max(0.2, back_mark_width * 0.5), join_style=1, quad_segs=8)
+        if safe.is_empty:
+            return [extrude_polygon(poly, 0.0, top)]
+        mark = unary_union(shapes).intersection(safe)
+        if mark.is_empty:
+            return [extrude_polygon(poly, 0.0, top)]
+        depth = min(0.35, max(0.12, base_height * 0.1))
+        bottom = poly.difference(mark)
+        if bottom.is_empty:
+            return [extrude_polygon(poly, 0.0, top)]
+        bottom = bottom.simplify(0.01, preserve_topology=True)
+        return [
+            extrude_polygon(bottom, 0.0, depth),
+            extrude_polygon(poly, depth - 0.01, top - depth + 0.01),
+        ]
+
     floor_z = max(1.0, base_height + blade_depth - imprint_depth)
     if invert:
         carve = max(0.3, min(float(imprint_depth), max(0.4, floor_z - 0.6)))
@@ -1117,15 +1202,17 @@ def build_imprint(
         base_poly = floor_poly.buffer(-0.1, join_style=1, quad_segs=8)
         if base_poly.is_empty:
             base_poly = floor_poly
-        floor_base = extrude_polygon(base_poly, 0.0, max(0.4, floor_z - carve + 0.2))
-        out = cutter.append(floor_base)
+        out = cutter
+        for floor_piece in marked_floor(base_poly, max(0.4, floor_z - carve + 0.2)):
+            out = out.append(floor_piece)
         top = floor_poly.difference(detail_union) if detail_union is not None else floor_poly
         for p in _ring_parts(top):
             if p.area > 0.01:
                 out = out.append(extrude_polygon(p, floor_z - carve, carve))
         return out
-    floor = extrude_polygon(floor_poly, 0.0, floor_z)
-    out = cutter.append(floor)
+    out = cutter
+    for floor_piece in marked_floor(floor_poly, floor_z):
+        out = out.append(floor_piece)
     ceiling = floor_z + min(imprint_depth, blade_depth - 1)
     for source in sources:
         clipped = source.intersection(floor_poly)
