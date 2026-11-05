@@ -1,6 +1,6 @@
 # CalicoCutters
 
-**Versión 0.7.9** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.7.10** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
@@ -15,6 +15,7 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Crea siluetas desde texto con tipografía, espaciado, mayúsculas y unión por la base.
 - Vectoriza dibujos de líneas y conserva los detalles interiores para el sello.
 - Genera un cortador exterior con cuchilla, base y mango opcional (desactivado por defecto).
+- **L?nea decorativa del cortador**: opci?n para hundir una l?nea exterior siguiendo el contorno, centrada en la cuchilla y de ~25 % de la altura; profundidad limitada para no debilitar el filo.
 - Genera un sello coordinado con respaldo y relieve; en Cortador + sello se muestra dentro del cortador.
 - Relieve positivo, relieve negativo hundido, borde a ras del dibujo, par espejo y mangos en uno o ambos extremos.
 - Menú agrupado y plegable por **Galletas, Lotes, Sellos, Sándwich, Rodillo, Repostería y Papelería**:
@@ -123,7 +124,7 @@ La app queda en `https://dhernandezgit.github.io/CalicoCutters-Tool/web/`.
 
 ## Bambu Studio
 
-El 3MF se descarga y se abre con doble clic o arrastrándolo a Bambu Studio. Bambu mantiene el cortador y el sello como objetos separados.
+El 3MF se descarga y se abre con doble clic o arrastr?ndolo a Bambu Studio. El cortador y el sello siguen siendo piezas separadas; el sello con color se carga como un ?nico objeto con partes de color.
 
 No hay botón de apertura directa: Bambu Studio bloquea las URLs de dominios de terceros, así que CalicoCutters no promete una integración que no funciona. Descarga el 3MF, ábrelo y lamina desde Bambu Studio.
 

@@ -65,6 +65,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "baseHeight": 3.5,
     "baseWidth": 4.0,
     "baseShape": "rect",
+    "cutterWaistLine": False,
     "addPressHandle": False,
     "pressHandleLength": 26.0,
     "pressHandleWidth": 10.0,
@@ -331,7 +332,7 @@ _INTEGER_RANGES: dict[str, tuple[int, int]] = {
 _BOOLEAN_KEYS = {
     "lockAspect", "autoPrintable", "sharpEdge", "extraBlade",
     "addPressHandle", "pressHandlesBothEnds", "addBar", "stampRemoveOuterEdge", "stampBorder",
-    "mirror", "mirrorPair", "stencilBridges", "topperInvert", "stampRecessed", "imprintInvert", "imprintEdgesOnly", "sandwichDentRound", "sandwichOffsetOutward", "stampGrip",
+    "mirror", "mirrorPair", "cutterWaistLine", "stencilBridges", "topperInvert", "stampRecessed", "imprintInvert", "imprintEdgesOnly", "sandwichDentRound", "sandwichOffsetOutward", "stampGrip",
     "rollerRotate", "rollerInvert", "rollerRemoveEdge",
     "cakePopTray",
     "bookmarkHole",
@@ -738,6 +739,7 @@ def _build_cutter_set(main: Polygon, settings: dict[str, Any]) -> Mesh:
             sharp_edge=bool(settings["sharpEdge"]),
             base_shape=str(settings.get("baseShape", "chamfer")),
             alignment=cutter_align,
+            waist_line=bool(settings.get("cutterWaistLine")),
         )
         if mesh.triangles:
             meshes.append(mesh)
@@ -1136,6 +1138,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
         stamp_modes.add("sandwich")
     cutter_alignment, stamp_alignment = _alignment_locations(main, settings)
     back_mark = bool(settings.get("backMark", True))
+    waist_line = bool(settings.get("cutterWaistLine"))
     two_color = bool(settings.get("twoColorFill")) and not (
         settings["mode"] == "imprint" and bool(settings.get("imprintInvert"))
     )
@@ -1218,6 +1221,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
                 base_shape=str(settings.get("baseShape", "rect")),
                 alignment=cutter_alignment,
+                waist_line=waist_line,
             )
             cutter = _add_cutter_extras(cutter, main, settings)
             parts.append(("Cortador", cutter, "#f39ab1"))
@@ -1292,6 +1296,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 edges_only=bool(settings.get("imprintEdgesOnly")),
                 base_inset=float(settings.get("imprintBaseWidth", 1.2)),
                 edge_width=float(settings.get("imprintEdgeWidth", 1.2)),
+                waist_line=waist_line,
                 back_mark=back_mark,
                 back_mark_width=back_mark_width,
                 two_color=two_color,
@@ -1324,6 +1329,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 press_handle_position=settings.get("pressHandlePosition", 50),
                 press_handle_shape=str(settings.get("pressHandleShape", "rounded")),
                 press_handles_both_ends=bool(settings.get("pressHandlesBothEnds")),
+                waist_line=waist_line,
             )
             if settings.get("addBar") and settings["barWidth"] >= 0.4:
                 mb = multi.bounds
@@ -1352,6 +1358,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     base_shape=str(settings.get("baseShape", "rect")),
                     sharp_edge=bool(settings["sharpEdge"]),
                     alignment=cutter_alignment,
+                    waist_line=waist_line,
                 )
                 parts.append(("Cortador sándwich", sandwich, "#f39ab1"))
                 if two_color and cutter_alignment is not None:
@@ -1538,6 +1545,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 extra_blade_thickness=settings.get("extraBladeThickness", 0),
                 base_shape=str(settings.get("baseShape", "rect")),
                 alignment=mirror_cut_align,
+                waist_line=waist_line,
             )
             mirror_cutter = _add_cutter_extras(mirror_cutter, mirrored_main, settings)
             parts.append(("Cortador espejo", mirror_cutter, "#f39ab1"))

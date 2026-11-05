@@ -228,6 +228,45 @@ def test_two_color_fill_creates_bambu_ready_accent_parts():
         assert "Metadata/model_settings.config" in z.namelist()
 
 
+def test_cutter_waist_line_is_optional_and_watertight():
+    for mode in ("cutter", "cutter-stamp", "imprint", "multicutter", "sandwich"):
+        plain = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": mode,
+            "cutterWaistLine": False,
+        }})
+        waisted = build({"shape": _shape().to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": mode,
+            "cutterWaistLine": True,
+        }})
+        plain_volume = sum(_mesh(part).volume for part in plain["parts"])
+        waisted_volume = sum(_mesh(part).volume for part in waisted["parts"])
+        assert waisted_volume < plain_volume, mode
+        assert all(_mesh(part).is_watertight for part in waisted["parts"]), mode
+
+
+def test_two_color_3mf_groups_parts_into_one_object():
+    settings = {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "twoColorFill": True,
+        "secondaryColor": "#22aa66",
+        "color": "#112233",
+    }
+    exported = export_3mf({
+        "shape": _shape().to_dict(),
+        "settings": settings,
+        "name": "un-objeto",
+    })
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(exported["data_b64"]))) as z:
+        model = z.read("3D/3dmodel.model").decode("utf-8")
+    assert model.count("<item ") == 1
+    assert "<components>" in model
+    assert "#112233" in model
+    assert "#22aa66" in model
+
+
 def test_complex_line_art_keeps_a_raised_back_mark():
     from shapely.geometry import LineString, Point
     from calicocutters.shape import Shape

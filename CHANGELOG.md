@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.7.10 ? 2026-11-05
+
+3MF de un solo objeto con varios colores y l?nea decorativa del cortador.
+
+### 3MF / Bambu
+
+- La marca de color y el punto se agrupan con su cuerpo dentro de un mismo
+  objeto 3MF, usando componentes con materiales distintos. Bambu Studio recibe
+  una sola pieza con varias partes de color en lugar de objetos sueltos.
+- El dibujo delantero sigue en el color principal; el color secundario queda
+  solo en la marca inferior y el punto.
+- El punto conserva el hundido visible.
+
+### Cortador
+
+- Nueva opci?n **L?nea decorativa en el cortador**, desactivada por defecto.
+- Hunde una l?nea exterior siguiendo el contorno del cortador, centrada en la
+  cuchilla y con una banda de aproximadamente el 25 % de la altura.
+- La profundidad se limita a una fracci?n del grosor de la cuchilla para no
+  debilitar el filo.
+
+### Calidad
+
+- 85 tests, typecheck y build.
+
 ## 0.7.9 ? 2026-11-05
 
 Color secundario solo en la parte inferior y punto visible.

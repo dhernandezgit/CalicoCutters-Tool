@@ -712,12 +712,55 @@ def build_cutter(
     extra_blade_thickness: float = 0.0,
     base_shape: str = "round",
     alignment: tuple[float, float, float] | None = None,
+    waist_line: bool = False,
 ) -> Mesh:
     base_parts, blade_parts, tip_parts = cutter_rings(
         main, blade_thickness, base_width, tip_width, base_shape=base_shape
     )
     meshes: list[Mesh] = []
     used: set[int] = set()
+
+    def waist_layers(
+        layers: list[tuple[float, list[tuple[float, float]], list[tuple[float, float]]]],
+        outer_ring: list[tuple[float, float]],
+        inner_ring: list[tuple[float, float]],
+        top: float,
+    ) -> None:
+        if not waist_line:
+            return
+        band_height = max(0.9, 0.25 * top)
+        centre = top * 0.5
+        low = max(base_height + 0.6, centre - band_height / 2.0)
+        high = min(base_height + max(0.5, blade_depth) - 0.6, centre + band_height / 2.0)
+        if high - low < 0.8:
+            return
+        depth = max(0.12, min(0.35, blade_thickness * 0.25))
+        try:
+            blade_poly = Polygon(outer_ring)
+            outer = blade_poly.buffer(-depth, join_style=1, quad_segs=8)
+            inner = Polygon(inner_ring)
+            if outer.is_empty:
+                return
+            groove = outer.difference(inner)
+            parts = _ring_parts(groove)
+            if not parts:
+                return
+            piece = max(parts, key=lambda p: p.area)
+            groove_outer = list(piece.exterior.coords[:-1])
+            # Keep the original inner wall; only the outside is relieved.
+            if piece.interiors:
+                groove_inner = list(piece.interiors[0].coords[:-1])
+            else:
+                groove_inner = inner_ring
+        except Exception:
+            return
+        layers.extend([
+            (low, outer_ring, inner_ring),
+            (low + 0.01, groove_outer, groove_inner),
+            (high - 0.01, groove_outer, groove_inner),
+            (high, outer_ring, inner_ring),
+        ])
+        layers.sort(key=lambda layer: layer[0])
     for base in base_parts:
         if not base.interiors:
             continue
@@ -750,6 +793,7 @@ def build_cutter(
                     blade_layers.append((base_height + blade_depth, outer_tip, inner_tip))
                 else:
                     blade_layers.append((base_height + blade_depth, outer_blade, inner_blade))
+                waist_layers(blade_layers, outer_blade, inner_blade, base_height + blade_depth)
                 meshes.append(_ring_loft(blade_layers).oriented())
             continue
         outer_base = list(base.exterior.coords[:-1])
@@ -774,6 +818,7 @@ def build_cutter(
             layers.append((base_height + blade_depth, outer_tip, inner_tip))
         else:
             layers.append((base_height + blade_depth, outer_blade, inner_blade))
+        waist_layers(layers, outer_blade, inner_blade, base_height + blade_depth)
         meshes.append(_ring_loft(layers).oriented())
     if not meshes:
         return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
@@ -840,6 +885,7 @@ def build_multicutter(
     press_handle_position: float = 50.0,
     press_handle_shape: str = "rounded",
     press_handles_both_ends: bool = False,
+    waist_line: bool = False,
 ) -> Mesh:
     """A batch cutter with one shared press plate and one hole per copy.
 
@@ -898,6 +944,29 @@ def build_multicutter(
                 layers.append((base_height + blade_depth, outer_tip, inner_tip))
             else:
                 layers.append((base_height + blade_depth, outer_blade, inner_blade))
+            if waist_line:
+                band_h = max(0.9, 0.25 * (base_height + blade_depth))
+                low = max(base_height + 0.6, (base_height + blade_depth) * 0.5 - band_h / 2)
+                high = min(base_height + blade_depth - 0.6, low + band_h)
+                if high - low >= 0.8:
+                    depth = max(0.12, min(0.35, blade_thickness * 0.25))
+                    try:
+                        outer = Polygon(outer_blade).buffer(-depth, join_style=1, quad_segs=8)
+                        groove = outer.difference(Polygon(inner_blade))
+                        pieces = _ring_parts(groove)
+                        if pieces:
+                            gp = max(pieces, key=lambda p: p.area)
+                            go = list(gp.exterior.coords[:-1])
+                            gi = list(gp.interiors[0].coords[:-1]) if gp.interiors else inner_blade
+                            layers.extend([
+                                (low, outer_blade, inner_blade),
+                                (low + 0.01, go, gi),
+                                (high - 0.01, go, gi),
+                                (high, outer_blade, inner_blade),
+                            ])
+                            layers.sort(key=lambda layer: layer[0])
+                    except Exception:
+                        pass
             parts.append(_ring_loft(layers).oriented())
         if extra_blade and extra_blade_depth > 0.2 and extra_blade_thickness > 0.05:
             extra_ring = cell.buffer(blade_thickness + extra_blade_thickness, join_style=1, quad_segs=8).difference(cell)
@@ -1215,6 +1284,7 @@ def build_imprint(
     alignment: tuple[float, float, float] | None = None,
     detail_curve: str = "none",
     detail_grow: float = 0.0,
+    waist_line: bool = False,
     extra_blade: bool = False,
     extra_blade_depth: float = 0.0,
     extra_blade_thickness: float = 0.0,
@@ -1241,6 +1311,7 @@ def build_imprint(
         extra_blade_thickness=extra_blade_thickness,
         base_shape=base_shape,
         alignment=alignment,
+        waist_line=waist_line,
     )
     grow = max(0.0, min(2.0, float(detail_grow)))
     sources: list[Polygon] = []
@@ -1378,6 +1449,7 @@ def build_sandwich(
     base_shape: str = "round",
     sharp_edge: bool = True,
     alignment: tuple[float, float, float] | None = None,
+    waist_line: bool = False,
 ) -> Mesh:
     """Cutter with an integrated CookieCAD-style sealing band.
 
@@ -1397,6 +1469,7 @@ def build_sandwich(
         base_shape=base_shape,
         sharp_edge=sharp_edge,
         alignment=alignment,
+        waist_line=waist_line,
     )
     width = max(0.8, float(seal_width))
     gap = max(0.0, float(gap))
@@ -2341,17 +2414,18 @@ def _escape(value: str) -> str:
 
 def three_mf_bytes(parts: list[tuple[str, Mesh, str, tuple[float, float, float]]], title: str = "CalicoCutters") -> bytes:
     materials = "".join(
-        f'<base name="{_escape(name)}" displaycolor="{color}" />' for name, _mesh, color, _off in parts
+        f'<base name="{_escape(name)}" displaycolor="{color}" />'
+        for name, _mesh, color, _off in parts
     )
     color_slots: dict[str, int] = {}
     for _name, _mesh, color, _off in parts:
         if color not in color_slots:
             color_slots[color] = len(color_slots) + 1
-    objects: list[str] = []
-    items: list[str] = []
-    model_settings: list[str] = []
-    for i, (name, mesh, color, offset) in enumerate(parts):
-        oid = i + 2
+
+    def is_accent(name: str) -> bool:
+        return "Dibujo a color" in name or "Punto a color" in name
+
+    def mesh_xml(mesh: Mesh) -> str:
         verts = "".join(
             f'<vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>'
             for x, y, z in mesh.vertices
@@ -2360,16 +2434,77 @@ def three_mf_bytes(parts: list[tuple[str, Mesh, str, tuple[float, float, float]]
             f'<triangle v1="{int(a)}" v2="{int(b)}" v3="{int(c)}"/>'
             for a, b, c in mesh.faces
         )
+        return f"<vertices>{verts}</vertices><triangles>{tris}</triangles>"
+
+    # Colour parts after a body belong to that same object.  Bambu Studio loads
+    # a single object with coloured sub-parts much more reliably than a row of
+    # separate top-level objects.
+    groups: list[list[int]] = []
+    for index, (name, _mesh, _color, _offset) in enumerate(parts):
+        if is_accent(name) and groups:
+            groups[-1].append(index)
+        else:
+            groups.append([index])
+
+    objects: list[str] = []
+    items: list[str] = []
+    model_settings: list[str] = []
+    next_id = 2
+    for group in groups:
+        first = parts[group[0]]
+        base_name, _base_mesh, base_color, base_offset = first
+        if len(group) == 1:
+            name, mesh, color, offset = first
+            oid = next_id
+            next_id += 1
+            objects.append(
+                f'<object id="{oid}" type="model" name="{_escape(name)}" pid="1" pindex="{group[0]}">'
+                f'<mesh>{mesh_xml(mesh)}</mesh></object>'
+            )
+            tx, ty, tz = offset
+            items.append(f'<item objectid="{oid}" transform="1 0 0 0 1 0 0 0 1 {tx:.4f} {ty:.4f} {tz:.4f}"/>')
+            model_settings.append(
+                f'<object id="{oid}"><metadata key="name" value="{_escape(name)}"/>'
+                f'<metadata key="extruder" value="{color_slots.get(color, 1)}"/></object>'
+            )
+            continue
+
+        component_xml: list[str] = []
+        for part_index in group:
+            name, mesh, color, offset = parts[part_index]
+            oid = next_id
+            next_id += 1
+            objects.append(
+                f'<object id="{oid}" type="model" name="{_escape(name)}" pid="1" pindex="{part_index}">'
+                f'<mesh>{mesh_xml(mesh)}</mesh></object>'
+            )
+            dx = offset[0] - base_offset[0]
+            dy = offset[1] - base_offset[1]
+            dz = offset[2] - base_offset[2]
+            component_transform = (
+                f' transform="1 0 0 0 1 0 0 0 1 {dx:.4f} {dy:.4f} {dz:.4f}"'
+                if abs(dx) + abs(dy) + abs(dz) > 1e-6
+                else ""
+            )
+            model_settings.append(
+                f'<object id="{oid}"><metadata key="name" value="{_escape(name)}"/>'
+                f'<metadata key="extruder" value="{color_slots.get(color, 1)}"/></object>'
+            )
+            component_xml.append(f'<component objectid="{oid}"{component_transform} />')
+        parent_id = next_id
+        next_id += 1
+        components = "".join(component_xml)
         objects.append(
-            f'<object id="{oid}" type="model" name="{_escape(name)}" pid="1" pindex="{i}">'
-            f'<mesh><vertices>{verts}</vertices><triangles>{tris}</triangles></mesh></object>'
+            f'<object id="{parent_id}" type="model" name="{_escape(base_name)}">'
+            f'<components>{components}</components></object>'
         )
-        tx, ty, tz = offset
-        items.append(f'<item objectid="{oid}" transform="1 0 0 0 1 0 0 0 1 {tx:.4f} {ty:.4f} {tz:.4f}"/>')
+        tx, ty, tz = base_offset
+        items.append(f'<item objectid="{parent_id}" transform="1 0 0 0 1 0 0 0 1 {tx:.4f} {ty:.4f} {tz:.4f}"/>')
         model_settings.append(
-            f'<object id="{oid}"><metadata key="name" value="{_escape(name)}"/>'
-            f'<metadata key="extruder" value="{color_slots.get(color, 1)}"/></object>'
+            f'<object id="{parent_id}"><metadata key="name" value="{_escape(base_name)}"/>'
+            f'<metadata key="extruder" value="{color_slots.get(base_color, 1)}"/></object>'
         )
+
     model = f'''<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="es-ES" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
   <metadata name="Title">{_escape(title)}</metadata>
@@ -2399,4 +2534,3 @@ def three_mf_bytes(parts: list[tuple[str, Mesh, str, tuple[float, float, float]]
         z.writestr("3D/3dmodel.model", model)
         z.writestr("Metadata/model_settings.config", bambu_settings)
     return buf.getvalue()
-

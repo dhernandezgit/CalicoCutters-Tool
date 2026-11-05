@@ -815,6 +815,12 @@ export default function SettingsPanel({
           hint="12 mm para galleta; 8–10 mm para arcilla."
           onChange={(v) => onChange({ bladeDepth: v })}
         />
+        <Toggle
+          label="Línea decorativa en el cortador"
+          hint="Hunde una línea exterior siguiendo el contorno, centrada en la cuchilla y de un 25 % de su altura. No toca el filo."
+          checked={settings.cutterWaistLine}
+          onChange={(v) => onChange({ cutterWaistLine: v })}
+        />
         {advanced && (
           <>
             <Toggle
