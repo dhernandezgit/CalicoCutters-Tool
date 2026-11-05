@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import { usePythonEngine } from "./hooks/usePythonEngine";
 import { BUILTIN_SHAPES } from "./data/shapes";
+import { DEFAULT_SAMPLE } from "./lib/defaultSample";
 import type { BuildPart, BuildResult, DesignAsset, DesignSettings, PrintCheck } from "./types";
 import { DEFAULT_SETTINGS } from "./types";
 import { applyCheckFix, applyPrintableSettings, mergeSettings, modeLabel } from "./lib/settings";
@@ -168,14 +169,18 @@ function combineBuilds(assets: DesignAsset[], builds: Record<string, BuildResult
 
 export default function App() {
   const engine = usePythonEngine();
-  const [assets, setAssets] = useState<DesignAsset[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [builds, setBuilds] = useState<Record<string, BuildResult>>({});
+  const [assets, setAssets] = useState<DesignAsset[]>(() => DEFAULT_SAMPLE ? [DEFAULT_SAMPLE.asset] : []);
+  const [selectedIds, setSelectedIds] = useState<string[]>(() => DEFAULT_SAMPLE ? [DEFAULT_SAMPLE.asset.id] : []);
+  const [activeId, setActiveId] = useState<string | null>(() => DEFAULT_SAMPLE?.asset.id ?? null);
+  const [builds, setBuilds] = useState<Record<string, BuildResult>>(() => DEFAULT_SAMPLE ? {
+    [DEFAULT_SAMPLE.asset.id]: DEFAULT_SAMPLE.build,
+  } : {});
   const [building, setBuilding] = useState(false);
   const [buildError, setBuildError] = useState("");
   const [fileBusy, setFileBusy] = useState(false);
-  const [projectName, setProjectName] = useState("mi-coleccion");
+  const [projectName, setProjectName] = useState(() => DEFAULT_SAMPLE
+    ? DEFAULT_SAMPLE.asset.name.toLowerCase().replace(/\s+/g, "-")
+    : "mi-coleccion");
   const [advanced, setAdvanced] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(initialTheme);
   const [tab, setTab] = useState<"3d" | "2d">("3d");
@@ -206,10 +211,14 @@ export default function App() {
   const viewportRef = useRef<Viewport3DHandle>(null);
   const viewerBoxRef = useRef<HTMLDivElement | null>(null);
   const projectInputRef = useRef<HTMLInputElement | null>(null);
-  const initialLoaded = useRef(false);
+  const initialLoaded = useRef(Boolean(DEFAULT_SAMPLE));
   const fileHandler = useRef<(files: File[]) => void>(() => undefined);
-  const buildsRef = useRef<Record<string, BuildResult>>({});
-  const signatures = useRef<Map<string, string>>(new Map());
+  const buildsRef = useRef<Record<string, BuildResult>>(DEFAULT_SAMPLE ? {
+    [DEFAULT_SAMPLE.asset.id]: DEFAULT_SAMPLE.build,
+  } : {});
+  const signatures = useRef<Map<string, string>>(DEFAULT_SAMPLE
+    ? new Map([[DEFAULT_SAMPLE.asset.id, DEFAULT_SAMPLE.signature]])
+    : new Map());
   const [buildProgress, setBuildProgress] = useState("");
   const [buildPercent, setBuildPercent] = useState(0);
   const [buildStepLabel, setBuildStepLabel] = useState("");
@@ -430,6 +439,11 @@ export default function App() {
 
   useEffect(() => {
     if (!engine.ready || !assets.length) return;
+    const pending = assets.some((asset) => {
+      const signature = `${asset.shape.id}|${JSON.stringify(asset.settings)}|${asset.color}`;
+      return signatures.current.get(asset.id) !== signature || !buildsRef.current[asset.id];
+    });
+    if (!pending) return;
     let cancelled = false;
     setBuilding(true);
     setBuildError("");
@@ -994,7 +1008,7 @@ export default function App() {
               </div>
             )}
 
-            {(busy) && (
+            {(fileBusy || building || (engine.status === "loading" && !displayBuild)) && (
               <div className="viewport-loading">
                 <span className="spinner" />
                 <strong>{fileBusy ? "Analizando archivos…" : building ? buildProgress || "Generando geometría…" : engine.progressText}</strong>

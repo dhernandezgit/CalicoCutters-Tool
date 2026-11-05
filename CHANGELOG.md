@@ -1,5 +1,35 @@
 # Changelog
 
+## 0.7.7 — 2026-11-05
+
+Carga inicial instantánea, dibujos de línea finos y selector de unidades.
+
+### Carga inicial
+
+- El ejemplo **Corazón** se incluye ya analizado y con su geometría generada en
+  el paquete web. Aparece en el visor desde el primer instante, mientras Pyodide
+  termina de cargar en segundo plano.
+- Se elimina el velo de “Cargando Python” cuando ya hay una geometría válida que
+  mostrar.
+
+### Dibujos de línea
+
+- Los trazos finos de ilustraciones raster se engrosan automáticamente hasta una
+  anchura imprimible (aprox. 2 líneas) cuando el dibujo se reduce a 60 mm.
+- Los dibujos con decenas de trazos sub-milimétricos ya no bloquean la
+  generación: la marca trasera se omite de forma controlada y se avisa, en vez
+  de provocar un fallo de topología dentro de Pyodide.
+- La cara delantera conserva el dibujo completo.
+
+### Interfaz
+
+- Los botones **mm** e **in** ocupan el mismo ancho en el selector de tamaño.
+- Los dos segmentados de la fila de tamaño quedan alineados.
+
+### Calidad
+
+- 82 tests, typecheck y build.
+
 ## 0.7.6 — 2026-11-05
 
 Relleno a dos colores para sellos e improntas.

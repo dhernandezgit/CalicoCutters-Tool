@@ -17,6 +17,7 @@ from shapely.ops import unary_union
 from .mesh import (
     Mesh,
     _append_all,
+    _ring_parts,
     build_bookmark,
     build_cake_pop,
     build_cake_pop_two,
@@ -505,6 +506,31 @@ def _sized_geometry(shape: Shape, settings: dict[str, Any]) -> tuple[Polygon, li
         elif isinstance(c, MultiPolygon):
             clipped.extend(p for p in c.geoms if p.area > 1e-5)
     return main, clipped, warnings
+
+
+def _auto_detail_grow(details: list[Polygon], line_width: float) -> float:
+    """Thicken very fine line-art so it survives a small cookie size.
+
+    A 60 mm trace of an illustrated line drawing can contain 0.05 mm wide
+    strokes.  Those disappear at FDM resolution even though the outline is
+    valid.  Keep solid artwork untouched, but lift a field of thin strokes to
+    roughly two printed lines.
+    """
+    if len(details) < 6:
+        return 0.0
+    widths = [
+        2.0 * d.area / max(d.length, 1e-9)
+        for d in details
+        if d.area > 0.002 and d.length > 1e-6
+    ]
+    if not widths:
+        return 0.0
+    widths.sort()
+    median = widths[len(widths) // 2]
+    target = max(0.8, max(0.4, float(line_width)) * 2.0)
+    if median >= target * 0.6:
+        return 0.0
+    return min(1.2, max(0.0, target - median))
 
 
 def _alignment_locations(
@@ -1080,6 +1106,28 @@ def _checks(
 def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple[str, Any, str]], list[str], Polygon, list[Polygon]]:
     main, details, pre_warnings = _sized_geometry(shape, settings)
     warnings = list(shape.warnings) + pre_warnings
+    detail_modes = {"stamp", "cutter-stamp", "imprint"}
+    if settings["mode"] == "sandwich" and settings.get("sandwichPart", "both") != "cutter":
+        detail_modes.add("sandwich")
+    if (
+        settings["mode"] in detail_modes
+        and float(settings.get("stampDetailGrow", 0.0)) <= 0.01
+    ):
+        automatic_grow = _auto_detail_grow(details, float(settings["lineWidth"]))
+        if automatic_grow > 0.05:
+            grown: list[Polygon] = []
+            for detail in details:
+                buffered = detail.buffer(
+                    automatic_grow / 2.0, join_style=1, quad_segs=8
+                )
+                for p in _ring_parts(buffered):
+                    if p.area > 0.002:
+                        grown.append(p)
+            details = grown
+            warnings.append(
+                "Trazos finos engrosados automáticamente para que se impriman "
+                f"a este tamaño (aprox. {automatic_grow + 0.3:.1f} mm de línea)."
+            )
     cutter_modes = {"cutter", "cutter-stamp", "imprint", "multicutter", "cutter-set"}
     if settings["mode"] == "sandwich" and settings.get("sandwichPart", "both") != "seal":
         cutter_modes.add("sandwich")
@@ -1103,6 +1151,13 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             warnings.append("No hay espacio para el punto de alineación en el sello con este tamaño.")
     if settings["mode"] in stamp_modes and not details:
         warnings.append("El sello no tiene relieve interior; se imprimirá como una base plana.")
+    if back_mark and len(details) > 24 and (
+        settings["mode"] in {"stamp", "cutter-stamp", "imprint", "sandwich"}
+    ):
+        warnings.append(
+            "Marca trasera omitida: el dibujo tiene demasiados trazos finos para "
+            "grabarla en la cara inferior sin debilitarla. El dibujo delantero se mantiene completo."
+        )
     if settings["mode"] in cutter_modes and settings["bladeThickness"] < PRINTERS[settings["printer"]]["minWall"]:
         warnings.append(
             f"La cuchilla de {settings['bladeThickness']:.2f} mm está por debajo de "

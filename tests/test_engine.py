@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 import trimesh
 
-from calicocutters.engine import DEFAULT_SETTINGS, build, export_3mf
+from calicocutters.engine import DEFAULT_SETTINGS, _auto_detail_grow, build, export_3mf
 from calicocutters.mesh import Mesh, extrude_polygon, three_mf_bytes
 from calicocutters.shape import Shape, parse_raster, parse_svg
-from shapely.geometry import Polygon
+from shapely.geometry import LineString, Point, Polygon
 
 
 HEART = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
@@ -182,6 +182,14 @@ def test_force_filled_keeps_counters_as_holes():
     assert shape.bounds["width"] <= 70.01
 
 
+
+
+def test_auto_detail_grow_lifts_fine_line_art():
+    thin = [LineString([(0, i), (20, i)]).buffer(0.05) for i in range(8)]
+    grow = _auto_detail_grow(thin, 0.4)
+    assert grow > 0.5
+    solid = [Point(0, 0).buffer(2, quad_segs=32) for _ in range(8)]
+    assert _auto_detail_grow(solid, 0.4) == 0.0
 
 
 def test_mesh_orientation_flip():

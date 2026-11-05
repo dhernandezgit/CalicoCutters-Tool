@@ -993,33 +993,29 @@ def build_stamp(
                 out.append(extrude_polygon(component, gd - 0.01, height - gd + 0.01))
                 return out
 
-        mark = None
+        mark_parts: list[Polygon] = []
         mark_depth = dep if dep > 0 else min(0.35, max(0.12, height * 0.1))
+        # Very detailed line-art (dozens of sub-millimetre interior rings) is
+        # not suitable for a reliable shallow back engraving.  The marking
+        # face still gets all the detail; keep the back clean rather than
+        # risking a GEOS topology failure during subtraction.
+        safe_back_mark = back_mark and len(details) <= 24
         if two_color:
-            if back_mark:
+            if safe_back_mark:
                 edge_margin = max(1.0, back_mark_width * 2.2)
                 safe = component.buffer(-edge_margin, join_style=1, quad_segs=8)
                 if not safe.is_empty:
-                    base_fill = main.intersection(safe) if backing == "rect" else safe
-                    fill_parts: list[Polygon] = []
+                    try:
+                        base_fill = main.intersection(safe) if backing == "rect" else safe
+                    except Exception:
+                        base_fill = safe
                     for p in _ring_parts(base_fill):
                         if p.area > 0.01:
-                            fill_parts.append(p)
-                    for detail in mark_details:
-                        clipped_detail = detail.intersection(safe)
-                        for p in _ring_parts(clipped_detail):
-                            if p.area > 0.01:
-                                fill_parts.append(p)
-                    if fill_parts:
-                        fill = unary_union(fill_parts)
-                        if dimple is not None:
-                            fill = fill.difference(dimple)
-                        for p in _ring_parts(fill):
-                            if p.area > 0.01:
-                                mark = p if mark is None else mark.union(p)
-                        if mark is not None and color_parts is not None:
-                            color_parts.append(extrude_polygon(mark, 0.0, mark_depth))
-        elif back_mark:
+                            mark_parts.append(p)
+                    if mark_parts and color_parts is not None:
+                        for p in mark_parts:
+                            color_parts.append(extrude_polygon(p, 0.0, mark_depth))
+        elif safe_back_mark:
             shapes: list[Polygon] = []
             edge_margin = max(0.6, back_mark_width * 1.6)
             inner_ref = component.buffer(-edge_margin, join_style=1, quad_segs=8)
@@ -1033,23 +1029,40 @@ def build_stamp(
                     else inner_ref
                 )
                 shapes.extend(_outline_band_parts(main_mark, back_mark_width))
-                for detail in mark_details:
-                    clipped_detail = detail.intersection(inner_ref)
-                    shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
+                # Pixel-traced line art can contain dozens of sub-millimetre
+                # detail rings.  Repeating all of them on the back makes the
+                # shallow relief unnecessarily fragile (and older GEOS builds
+                # can fail while subtracting near-coincident slivers).  Keep
+                # the readable outer contour and leave the fine linework on
+                # the marking face.
+                if len(mark_details) <= 24:
+                    for detail in mark_details:
+                        try:
+                            clipped_detail = detail.intersection(inner_ref)
+                        except Exception:
+                            clipped_detail = detail
+                        shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
             if shapes:
                 safe = component.buffer(-0.3, join_style=1, quad_segs=8)
                 if not safe.is_empty:
-                    clipped = unary_union(shapes).intersection(safe)
-                    for p in _ring_parts(clipped):
-                        if p.area > 0.002:
-                            mark = p if mark is None else mark.union(p)
-        if dimple is not None or mark is not None:
+                    for shape in shapes:
+                        try:
+                            clipped = shape.intersection(safe)
+                        except Exception:
+                            continue
+                        for p in _ring_parts(clipped):
+                            if p.area > 0.002:
+                                mark_parts.append(p)
+        if dimple is not None or mark_parts:
             groove_depth = mark_depth
             bottom = component
             if dimple is not None:
                 bottom = bottom.difference(dimple)
-            if mark is not None:
-                bottom = bottom.difference(mark)
+            for mark in mark_parts:
+                try:
+                    bottom = bottom.difference(mark)
+                except Exception:
+                    continue
             if not bottom.is_empty:
                 # Very thin grooves leave sub-micron slivers in earcut when
                 # the stamp has a narrow neck.  Cleaning them keeps the
@@ -1209,28 +1222,28 @@ def build_imprint(
         return cutter
 
     def marked_floor(poly: Polygon, top: float) -> list[Mesh]:
-        if not back_mark:
+        if not back_mark or len(details) > 24:
             return [extrude_polygon(poly, 0.0, top)]
         depth = min(0.35, max(0.12, base_height * 0.1))
         if two_color:
             safe = poly.buffer(-max(1.0, back_mark_width * 2.2), join_style=1, quad_segs=8)
             if safe.is_empty:
                 return [extrude_polygon(poly, 0.0, top)]
-            fill_parts: list[Polygon] = [p for p in _ring_parts(safe) if p.area > 0.01]
-            for detail in details:
-                clipped = detail.intersection(safe)
-                for p in _ring_parts(clipped):
-                    if p.area > 0.01:
-                        fill_parts.append(p)
-            if not fill_parts:
+            mark_parts = [p for p in _ring_parts(safe) if p.area > 0.01]
+            if not mark_parts:
                 return [extrude_polygon(poly, 0.0, top)]
-            mark = unary_union(fill_parts)
-            bottom = poly.difference(mark)
+            bottom = poly
+            for mark in mark_parts:
+                try:
+                    bottom = bottom.difference(mark)
+                except Exception:
+                    continue
             if bottom.is_empty:
                 return [extrude_polygon(poly, 0.0, top)]
             bottom = bottom.simplify(0.01, preserve_topology=True)
             if color_parts is not None:
-                color_parts.append(extrude_polygon(mark, 0.0, depth))
+                for mark in mark_parts:
+                    color_parts.append(extrude_polygon(mark, 0.0, depth))
             return [
                 extrude_polygon(bottom, 0.0, depth),
                 extrude_polygon(poly, depth - 0.01, top - depth + 0.01),
@@ -1239,19 +1252,36 @@ def build_imprint(
         reference = poly.buffer(-max(0.2, back_mark_width * 0.5), join_style=1, quad_segs=8)
         if not reference.is_empty:
             shapes.extend(_outline_band_parts(reference, back_mark_width))
-        for detail in details:
-            clipped = detail.intersection(poly)
-            for p in _ring_parts(clipped):
-                shapes.extend(_outline_band_parts(p, back_mark_width))
+        if len(details) <= 24:
+            for detail in details:
+                try:
+                    clipped = detail.intersection(poly)
+                except Exception:
+                    clipped = detail
+                for p in _ring_parts(clipped):
+                    shapes.extend(_outline_band_parts(p, back_mark_width))
         if not shapes:
             return [extrude_polygon(poly, 0.0, top)]
         safe = poly.buffer(-max(0.2, back_mark_width * 0.5), join_style=1, quad_segs=8)
         if safe.is_empty:
             return [extrude_polygon(poly, 0.0, top)]
-        mark = unary_union(shapes).intersection(safe)
-        if mark.is_empty:
+        mark_parts = []
+        for shape in shapes:
+            try:
+                clipped = shape.intersection(safe)
+            except Exception:
+                continue
+            for p in _ring_parts(clipped):
+                if p.area > 0.002:
+                    mark_parts.append(p)
+        if not mark_parts:
             return [extrude_polygon(poly, 0.0, top)]
-        bottom = poly.difference(mark)
+        bottom = poly
+        for mark in mark_parts:
+            try:
+                bottom = bottom.difference(mark)
+            except Exception:
+                continue
         if bottom.is_empty:
             return [extrude_polygon(poly, 0.0, top)]
         bottom = bottom.simplify(0.01, preserve_topology=True)

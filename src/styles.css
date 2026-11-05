@@ -381,6 +381,8 @@ button.primary:hover { filter: brightness(1.04); transform: translateY(-1px); }
 .field-input > span { font-size: 10px; color: var(--textSoft); min-width: 14px; white-space: nowrap; }
 .field-input.wide input { width: 100%; min-width: 150px; text-align: left; }
 .two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.two-fields > .segmented { display: flex; width: 100%; min-width: 0; }
+.two-fields > .segmented button { flex: 1 1 0; justify-content: center; padding-left: 6px; padding-right: 6px; }
 .inline-hint { display: flex; gap: 6px; align-items: flex-start; background: #fff8fb; border-radius: 8px; padding: 6px 8px; color: var(--textSoft); font-size: 10px; line-height: 1.4; }
 .inline-hint svg { flex: none; margin-top: 1px; color: var(--accent3); }
 .inline-hint strong { color: var(--accent3); }

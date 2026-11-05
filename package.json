@@ -1,13 +1,13 @@
 {
   "name": "calicocutters",
   "private": true,
-  "version": "0.7.6",
+  "version": "0.7.7",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "prebuild": "node scripts/clean-dist.mjs",
     "build:python": "python scripts/build_python_zip.py",
-    "build": "python scripts/build_python_zip.py && tsc --noEmit && vite build",
+    "build": "python scripts/build_python_zip.py && python scripts/build_default_sample.py && tsc --noEmit && vite build",
     "postbuild": "node scripts/write-root-redirect.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
