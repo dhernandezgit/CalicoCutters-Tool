@@ -511,6 +511,38 @@ def _outline_band_parts(geom: Polygon | None, width: float) -> list[Polygon]:
     return [p for p in _ring_parts(band) if p.area > 0.002]
 
 
+def _accent_extrude(poly: Polygon, z0: float, height: float) -> Mesh:
+    """Extrude a thin colour inlay, cleaning the slivers of outline bands."""
+    if poly is None or poly.is_empty or height <= 0.01:
+        return Mesh(np.zeros((0, 3)), np.zeros((0, 3), dtype=np.int64))
+    def closed(test: Mesh) -> bool:
+        counts: dict[tuple[int, int], int] = {}
+        for a, b, c in test.faces:
+            for p, q in ((int(a), int(b)), (int(b), int(c)), (int(c), int(a))):
+                key = (p, q) if p < q else (q, p)
+                counts[key] = counts.get(key, 0) + 1
+        return bool(counts) and all(value == 2 for value in counts.values())
+
+    clean = poly
+    last: Mesh | None = None
+    for tolerance in (0.0, 0.005, 0.01, 0.02, 0.04):
+        try:
+            if tolerance > 0:
+                clean = poly.simplify(tolerance, preserve_topology=True)
+            if not clean.is_valid:
+                clean = clean.buffer(0)
+            if clean.is_empty:
+                continue
+            mesh = extrude_polygon(clean, z0, height)
+            if len(mesh.faces):
+                last = mesh
+                if closed(mesh):
+                    return mesh
+        except Exception:
+            continue
+    return last if last is not None else extrude_polygon(poly, z0, height)
+
+
 def _subdivide_flat(mesh: Mesh, iterations: int) -> Mesh:
     """Uniform 1-to-4 subdivision, used before wrapping onto a cylinder."""
     if iterations <= 0 or len(mesh.faces) == 0:
@@ -958,7 +990,7 @@ def build_stamp(
     raised_depth = 0.0
 
     def stamp_base(component: Polygon, height: float, mark_details: list[Polygon]) -> list[Mesh]:
-        nonlocal raised_depth
+        nonlocal raised_depth, raised_marks
         out: list[Mesh] = []
         gp = None
         if grip:
@@ -982,10 +1014,12 @@ def build_stamp(
                 dimple = None
                 dep = 0.0
         if two_color and color_parts is not None and dimple is not None:
-            # The orientation dot is always an insert of the second colour,
-            # even when the optional back artwork is hidden by a grip recess.
+            # The orientation dot is an insert of the second colour, but it
+            # stops short of the back surface so the circular dimple remains
+            # visible instead of disappearing when the insert is flush.
             dot_depth = dep if dep > 0 else min(0.35, max(0.12, height * 0.1))
-            color_parts.append(extrude_polygon(dimple, 0.0, dot_depth))
+            dot_fill = max(0.08, dot_depth - min(0.18, dot_depth * 0.45))
+            color_parts.append(extrude_polygon(dimple, 0.0, dot_fill))
         if gd > 0.2 and gp is not None:
             # The grip recess occupies the centre of the back face.  The
             # shallow identification mark would be hidden inside it, so keep
@@ -1006,57 +1040,9 @@ def build_stamp(
         # raised insert uses no fragile boolean difference and still prints
         # reliably in one or two colours.
         safe_back_mark = back_mark and not raised_back
-        if raised_back:
-            edge_margin = max(1.0, back_mark_width * 2.2)
-            safe = component.buffer(-edge_margin, join_style=1, quad_segs=8)
-            if not safe.is_empty:
-                if two_color:
-                    try:
-                        base_fill = main.intersection(safe) if backing == "rect" else safe
-                    except Exception:
-                        base_fill = safe
-                    for p in _ring_parts(base_fill):
-                        if p.area > 0.01:
-                            raised_marks.append(p)
-                else:
-                    inner_ref = component.buffer(-0.6, join_style=1, quad_segs=8)
-                    if not inner_ref.is_empty:
-                        main_mark = (
-                            main.intersection(inner_ref)
-                            if backing == "rect"
-                            else inner_ref
-                        )
-                        shapes = _outline_band_parts(main_mark, back_mark_width)
-                        for detail in mark_details:
-                            try:
-                                clipped_detail = detail.intersection(inner_ref)
-                            except Exception:
-                                clipped_detail = detail
-                            shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
-                        for shape in shapes:
-                            for p in _ring_parts(shape):
-                                if p.area > 0.002:
-                                    raised_marks.append(p)
-                if raised_marks:
-                    raised_depth = max(raised_depth, mark_depth)
-        elif two_color:
-            if safe_back_mark:
-                edge_margin = max(1.0, back_mark_width * 2.2)
-                safe = component.buffer(-edge_margin, join_style=1, quad_segs=8)
-                if not safe.is_empty:
-                    try:
-                        base_fill = main.intersection(safe) if backing == "rect" else safe
-                    except Exception:
-                        base_fill = safe
-                    for p in _ring_parts(base_fill):
-                        if p.area > 0.01:
-                            mark_parts.append(p)
-                    if mark_parts and color_parts is not None:
-                        for p in mark_parts:
-                            color_parts.append(extrude_polygon(p, 0.0, mark_depth))
-        elif safe_back_mark:
+        if raised_back or safe_back_mark:
             shapes: list[Polygon] = []
-            edge_margin = max(0.6, back_mark_width * 1.6)
+            edge_margin = max(0.6, back_mark_width * 1.6) if not raised_back else 0.6
             inner_ref = component.buffer(-edge_margin, join_style=1, quad_segs=8)
             # On an outline-backed stamp the plate is already an inset copy of
             # the silhouette, so follow that plate.  With a rectangular
@@ -1074,17 +1060,36 @@ def build_stamp(
                     except Exception:
                         clipped_detail = detail
                     shapes.extend(_outline_band_parts(clipped_detail, back_mark_width))
-            if shapes:
-                safe = component.buffer(-0.3, join_style=1, quad_segs=8)
-                if not safe.is_empty:
-                    for shape in shapes:
-                        try:
-                            clipped = shape.intersection(safe)
-                        except Exception:
-                            continue
-                        for p in _ring_parts(clipped):
-                            if p.area > 0.002:
-                                mark_parts.append(p)
+            target = raised_marks if raised_back else mark_parts
+            for shape in shapes:
+                if raised_back:
+                    for p in _ring_parts(shape):
+                        if p.area > 0.002:
+                            target.append(p)
+                else:
+                    safe = component.buffer(-0.3, join_style=1, quad_segs=8)
+                    if safe.is_empty:
+                        continue
+                    try:
+                        clipped = shape.intersection(safe)
+                    except Exception:
+                        continue
+                    for p in _ring_parts(clipped):
+                        if p.area > 0.002:
+                            target.append(p)
+            if dimple is not None:
+                def clear_dimple(poly: Polygon) -> list[Polygon]:
+                    try:
+                        return _ring_parts(poly.difference(dimple))
+                    except Exception:
+                        return [poly]
+                raised_marks = [q for p in raised_marks for q in clear_dimple(p)]
+                mark_parts = [q for p in mark_parts for q in clear_dimple(p)]
+            if raised_back and raised_marks:
+                raised_depth = max(raised_depth, mark_depth)
+            if not raised_back and two_color and mark_parts and color_parts is not None:
+                for p in mark_parts:
+                    color_parts.append(_accent_extrude(p, 0.0, mark_depth))
         if dimple is not None or mark_parts:
             groove_depth = mark_depth
             bottom = component
@@ -1130,14 +1135,6 @@ def build_stamp(
                     pass
                 kept_details.append(p)
         depth = min(max(0.2, relief), max(0.2, back_height - 1.0))
-        if two_color and color_parts is not None and not recessed:
-            overlay_height = max(0.35, min(0.8, relief * 0.3))
-            top = back_height + relief
-            for detail in kept_details:
-                # A solid secondary-colour cap sitting on the raised artwork.
-                # Keeping it outside the primary body avoids overlapping
-                # volumes in the 3MF while still filling the drawing.
-                color_parts.append(extrude_polygon(detail, top, overlay_height))
         if recessed and kept_details:
             # Negative relief: the background is high and the artwork is a
             # shallow recess.  This leaves raised details in dough/fondant.
@@ -1187,7 +1184,7 @@ def build_stamp(
         # illustration underneath it, resting on the print bed.
         out = out.translated([0.0, 0.0, raised_depth])
         mark_meshes = [
-            extrude_polygon(p, 0.0, raised_depth + 0.05)
+            _accent_extrude(p, 0.0, raised_depth + 0.05)
             for p in raised_marks
         ]
         if two_color and color_parts is not None:
@@ -1274,29 +1271,6 @@ def build_imprint(
         if not back_mark or len(details) > 24:
             return [extrude_polygon(poly, 0.0, top)]
         depth = min(0.35, max(0.12, base_height * 0.1))
-        if two_color:
-            safe = poly.buffer(-max(1.0, back_mark_width * 2.2), join_style=1, quad_segs=8)
-            if safe.is_empty:
-                return [extrude_polygon(poly, 0.0, top)]
-            mark_parts = [p for p in _ring_parts(safe) if p.area > 0.01]
-            if not mark_parts:
-                return [extrude_polygon(poly, 0.0, top)]
-            bottom = poly
-            for mark in mark_parts:
-                try:
-                    bottom = bottom.difference(mark)
-                except Exception:
-                    continue
-            if bottom.is_empty:
-                return [extrude_polygon(poly, 0.0, top)]
-            bottom = bottom.simplify(0.01, preserve_topology=True)
-            if color_parts is not None:
-                for mark in mark_parts:
-                    color_parts.append(extrude_polygon(mark, 0.0, depth))
-            return [
-                extrude_polygon(bottom, 0.0, depth),
-                extrude_polygon(poly, depth - 0.01, top - depth + 0.01),
-            ]
         shapes: list[Polygon] = []
         reference = poly.buffer(-max(0.2, back_mark_width * 0.5), join_style=1, quad_segs=8)
         if not reference.is_empty:
@@ -1334,6 +1308,9 @@ def build_imprint(
         if bottom.is_empty:
             return [extrude_polygon(poly, 0.0, top)]
         bottom = bottom.simplify(0.01, preserve_topology=True)
+        if two_color and color_parts is not None:
+            for mark in mark_parts:
+                color_parts.append(_accent_extrude(mark, 0.0, depth))
         return [
             extrude_polygon(bottom, 0.0, depth),
             extrude_polygon(poly, depth - 0.01, top - depth + 0.01),
@@ -1343,7 +1320,8 @@ def build_imprint(
         ax, ay, ar = alignment
         dot = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
         dot_depth = min(0.5, max(0.15, base_height * 0.2))
-        color_parts.append(extrude_polygon(dot, 0.0, dot_depth))
+        dot_fill = max(0.08, dot_depth - min(0.18, dot_depth * 0.45))
+        color_parts.append(extrude_polygon(dot, 0.0, dot_fill))
 
     floor_z = max(1.0, base_height + blade_depth - imprint_depth)
     if invert:
@@ -1376,9 +1354,6 @@ def build_imprint(
                 p, floor_z - 0.25, height, detail_curve
             ):
                 out = out.append(extrude_polygon(layer, z0, layer_height))
-            if two_color and color_parts is not None:
-                overlay_height = max(0.35, min(0.8, imprint_depth * 0.3))
-                color_parts.append(extrude_polygon(p, ceiling, overlay_height))
     return out
 
 

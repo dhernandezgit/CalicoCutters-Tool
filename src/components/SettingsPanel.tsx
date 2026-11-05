@@ -701,8 +701,8 @@ export default function SettingsPanel({
           {twoColorAvailable && settings.backMark !== false && (
             <>
               <Toggle
-                label="Rellenar dibujo, marca y punto en otro color"
-                hint="Convierte el dibujo delantero, la marca trasera y el punto de orientación en piezas sólidas del color secundario. El 3MF se guarda con dos materiales para cargarlo en Bambu Studio."
+                label="Ver la marca trasera y el punto en otro color"
+                hint="Rellena con el color secundario el hueco de la marca de la cara inferior y el punto de orientación. El dibujo delantero no cambia. El 3MF se guarda con dos materiales para Bambu Studio."
                 checked={settings.twoColorFill === true}
                 onChange={(v) => onChange({ twoColorFill: v })}
               />
@@ -710,7 +710,7 @@ export default function SettingsPanel({
                 <label className="color-row">
                   <span className="field-label">
                     Color del relleno
-                    <small>Se usa para el dibujo, la marca trasera y el punto.</small>
+                    <small>Se usa solo para la marca trasera y el punto.</small>
                   </span>
                   <input
                     type="color"

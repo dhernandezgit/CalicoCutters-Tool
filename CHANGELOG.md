@@ -1,23 +1,41 @@
 # Changelog
 
-## 0.7.8 — 2026-11-05
+## 0.7.9 ? 2026-11-05
+
+Color secundario solo en la parte inferior y punto visible.
+
+### Marca trasera
+
+- El color secundario afecta ?nicamente a la **marca de la cara inferior** y al
+  **punto de orientaci?n**; el dibujo delantero conserva el color principal.
+- La marca trasera se rellena con el color secundario en lugar de quedar como un
+  hundido sin color.
+- El punto de orientaci?n se mantiene como un hundido visible: el relleno
+  secundario no llega a la superficie.
+- Los objetos de color se separan en piezas cerradas para que el 3MF y la vista
+  3D no mezclen colores ni generen geometr?a no estanca.
+- El 3MF mantiene los dos materiales/extrusores para Bambu Studio.
+
+### Calidad
+
+- 83 tests, typecheck y build.
+
+## 0.7.8 ? 2026-11-05
 
 Marca trasera recuperada para ilustraciones muy detalladas.
 
 ### Marca trasera
 
-- Los dibujos de línea con más de 24 trazos finos ya no pierden la marca
-  trasera: se añade como una capa exterior elevada, sin operaciones de resta
-  frágiles.
-- El dibujo delantero, la marca trasera y el punto de orientación se mantienen
-  en el mismo objeto; con la opción de dos colores, la marca y el punto se
-  exportan en el color secundario.
-- La vista 3D ya no tiñe los objetos de relleno con el color principal del
-  archivo: conserva el color secundario de cada pieza.
-- Se elimina el aviso de marca omitida en sellos; se sustituye por un aviso
-  informativo de relieve exterior.
-- El modo impronta sigue protegiendo su fondo rebajado y mantiene su aviso
-  específico.
+- Los dibujos de l?nea con m?s de 24 trazos finos ya no pierden la marca
+  trasera: se a?ade como una capa exterior elevada, sin operaciones de resta
+  fr?giles.
+- Con dos colores solo se rellenan la marca trasera y el punto de orientaci?n;
+  el dibujo delantero conserva el color principal.
+- El punto sigue siendo un hundido visible, aunque el relleno de color est?
+  activo.
+- La vista 3D conserva el color secundario de la marca y del punto.
+- El 3MF incluye esos objetos en el segundo material/extrusor para Bambu Studio.
+- El modo impronta sigue protegiendo su fondo rebajado.
 
 ### Calidad
 

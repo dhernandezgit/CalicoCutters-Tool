@@ -1227,7 +1227,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 dot_depth = min(0.5, max(0.15, settings["baseHeight"] * 0.2))
                 parts.append((
                     COLOR_DOT_NAME,
-                    extrude_polygon(dot, 0.0, dot_depth),
+                    extrude_polygon(dot, 0.0, max(0.08, dot_depth - min(0.18, dot_depth * 0.45))),
                     secondary_color,
                 ))
         if settings["mode"] == "cutter-set":
@@ -1266,12 +1266,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 color_parts=stamp_color_parts,
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
-            if stamp_color_parts:
-                parts.append((
-                    COLOR_ACCENT_NAME,
-                    _append_all(stamp_color_parts),
-                    secondary_color,
-                ))
+            for accent_mesh in stamp_color_parts:
+                parts.append((COLOR_ACCENT_NAME, accent_mesh, secondary_color))
         if settings["mode"] == "imprint":
             imprint_color_parts: list[Mesh] = []
             imprint = build_imprint(
@@ -1303,12 +1299,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             )
             imprint = _add_cutter_extras(imprint, main, settings)
             parts.append(("Impronta", imprint, "#f39ab1"))
-            if imprint_color_parts:
-                parts.append((
-                    COLOR_ACCENT_NAME,
-                    _append_all(imprint_color_parts),
-                    secondary_color,
-                ))
+            for accent_mesh in imprint_color_parts:
+                parts.append((COLOR_ACCENT_NAME, accent_mesh, secondary_color))
         if settings["mode"] == "multicutter":
             multi = build_multicutter(
                 main,
@@ -1368,7 +1360,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     dot_depth = min(0.5, max(0.15, settings["baseHeight"] * 0.2))
                     parts.append((
                         COLOR_DOT_NAME,
-                        extrude_polygon(dot, 0.0, dot_depth),
+                        extrude_polygon(dot, 0.0, max(0.08, dot_depth - min(0.18, dot_depth * 0.45))),
                         secondary_color,
                     ))
             if sandwich_part in {"both", "seal"}:
@@ -1391,12 +1383,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     color_parts=sandwich_color_parts,
                 )
                 parts.append(("Sello sándwich", sandwich_stamp, "#b7a4e8"))
-                if sandwich_color_parts:
-                    parts.append((
-                        COLOR_ACCENT_NAME,
-                        _append_all(sandwich_color_parts),
-                        secondary_color,
-                    ))
+                for accent_mesh in sandwich_color_parts:
+                    parts.append((COLOR_ACCENT_NAME, accent_mesh, secondary_color))
         if settings["mode"] == "roller":
             roller = build_roller(
                 main,
@@ -1559,7 +1547,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 dot_depth = min(0.5, max(0.15, settings["baseHeight"] * 0.2))
                 parts.append((
                     COLOR_DOT_NAME,
-                    extrude_polygon(dot, 0.0, dot_depth),
+                    extrude_polygon(dot, 0.0, max(0.08, dot_depth - min(0.18, dot_depth * 0.45))),
                     secondary_color,
                 ))
         if settings["mode"] in {"stamp", "cutter-stamp"}:
@@ -1592,12 +1580,8 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 color_parts=mirror_color_parts,
             )
             parts.append(("Sello espejo", mirror_stamp, "#b7a4e8"))
-            if mirror_color_parts:
-                parts.append((
-                    COLOR_ACCENT_NAME,
-                    _append_all(mirror_color_parts),
-                    secondary_color,
-                ))
+            for accent_mesh in mirror_color_parts:
+                parts.append((COLOR_ACCENT_NAME, accent_mesh, secondary_color))
     if not parts:
         raise ValueError("No se ha generado ninguna pieza.")
     return parts, warnings, main, details
