@@ -36,6 +36,9 @@ from .mesh import (
 )
 from .shape import Shape, _clean_polygon
 
+COLOR_ACCENT_NAME = "Dibujo a color"
+COLOR_DOT_NAME = "Punto a color"
+
 DEFAULT_SETTINGS: dict[str, Any] = {
     "mode": "cutter-stamp",
     "sizeMode": "longest",
@@ -194,6 +197,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "alignmentHole": True,
     "alignmentHoleDiameter": 1.8,
     "backMark": True,
+    "twoColorFill": False,
+    "secondaryColor": "#b7a4e8",
 }
 
 PRINTERS = {
@@ -330,7 +335,7 @@ _BOOLEAN_KEYS = {
     "cakePopTray",
     "bookmarkHole",
     "preprocessSmooth", "preprocessPreserveCorners", "preprocessSmoothDetails", "preprocessRemoveTiny",
-    "alignmentHole", "backMark",
+    "alignmentHole", "backMark", "twoColorFill",
 }
 
 
@@ -408,6 +413,8 @@ def _settings(raw: dict[str, Any] | None) -> dict[str, Any]:
     out["cakePopStickHole"] = min(out["cakePopStickHole"], out["longest"] * 0.35)
     color = str(out.get("color") or "#f39ab1")
     out["color"] = color if re.fullmatch(r"#[0-9a-fA-F]{6}", color) else "#f39ab1"
+    secondary = str(out.get("secondaryColor") or "#b7a4e8")
+    out["secondaryColor"] = secondary if re.fullmatch(r"#[0-9a-fA-F]{6}", secondary) else "#b7a4e8"
     return out
 
 
@@ -763,25 +770,36 @@ def _fits_nested(cutter: Any, stamp: Any) -> bool:
 
 
 def _nested_pair(parts: list[dict[str, Any]]) -> bool:
-    names = {p["name"] for p in parts}
-    if len(parts) != 2 or "Cortador" not in names or "Sello" not in names:
+    base = [p for p in parts if not _is_accent(p["name"])]
+    names = {p["name"] for p in base}
+    if len(base) != 2 or "Cortador" not in names or "Sello" not in names:
         return False
-    cutter = next(p for p in parts if p["name"] == "Cortador")
-    stamp = next(p for p in parts if p["name"] == "Sello")
+    cutter = next(p for p in base if p["name"] == "Cortador")
+    stamp = next(p for p in base if p["name"] == "Sello")
     return _fits_nested(cutter, stamp)
 
 
 def _arrange(parts: list[dict[str, Any]], gap: float = 8.0) -> None:
-    if len(parts) < 2 or _nested_pair(parts):
+    base = [p for p in parts if not _is_accent(p["name"])]
+    if len(base) < 2 or _nested_pair(parts):
         for p in parts:
             p["preview_offset"] = [0.0, 0.0, 0.0]
         return
-    widths = [p["bounds"]["max"][0] - p["bounds"]["min"][0] for p in parts]
-    total = sum(widths) + gap * (len(parts) - 1)
+    widths = [p["bounds"]["max"][0] - p["bounds"]["min"][0] for p in base]
+    total = sum(widths) + gap * (len(base) - 1)
     cursor = -total / 2
-    for p, w in zip(parts, widths):
-        p["preview_offset"] = [float(cursor + w / 2), 0.0, 0.0]
+    anchors: dict[int, list[float]] = {}
+    for i, (p, w) in enumerate(zip(base, widths)):
+        anchors[id(p)] = [float(cursor + w / 2), 0.0, 0.0]
         cursor += w + gap
+    last: list[float] | None = None
+    for p in parts:
+        if _is_accent(p["name"]):
+            p["preview_offset"] = list(last or [0.0, 0.0, 0.0])
+        else:
+            anchor = anchors.get(id(p), [0.0, 0.0, 0.0])
+            p["preview_offset"] = anchor
+            last = anchor
 
 
 def _check(level: str, title: str, detail: str, code: str | None = None) -> dict[str, str]:
@@ -1070,6 +1088,10 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
         stamp_modes.add("sandwich")
     cutter_alignment, stamp_alignment = _alignment_locations(main, settings)
     back_mark = bool(settings.get("backMark", True))
+    two_color = bool(settings.get("twoColorFill")) and not (
+        settings["mode"] == "imprint" and bool(settings.get("imprintInvert"))
+    )
+    secondary_color = str(settings.get("secondaryColor") or "#b7a4e8")
     back_mark_width = max(
         0.6,
         min(1.1, float(settings.get("alignmentHoleDiameter", 1.8)) * 0.5),
@@ -1140,6 +1162,15 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             )
             cutter = _add_cutter_extras(cutter, main, settings)
             parts.append(("Cortador", cutter, "#f39ab1"))
+            if two_color and settings["mode"] == "cutter-stamp" and cutter_alignment is not None:
+                ax, ay, ar = cutter_alignment
+                dot = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
+                dot_depth = min(0.5, max(0.15, settings["baseHeight"] * 0.2))
+                parts.append((
+                    COLOR_DOT_NAME,
+                    extrude_polygon(dot, 0.0, dot_depth),
+                    secondary_color,
+                ))
         if settings["mode"] == "cutter-set":
             if settings.get("cutterSetMode") == "shapes":
                 cutters = _build_cutter_set_shapes(_sized_components(shape, settings), settings)
@@ -1147,6 +1178,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 cutters = _build_cutter_set(main, settings)
             parts.append(("Set de cortadores", cutters, "#f39ab1"))
         if settings["mode"] in {"stamp", "cutter-stamp"}:
+            stamp_color_parts: list[Mesh] = []
             stamp = build_stamp(
                 main,
                 details,
@@ -1171,9 +1203,18 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 grip_depth=float(settings.get("stampGripDepth", 2.0)),
                 back_mark=back_mark,
                 back_mark_width=back_mark_width,
+                two_color=two_color,
+                color_parts=stamp_color_parts,
             )
             parts.append(("Sello", stamp, "#b7a4e8"))
+            if stamp_color_parts:
+                parts.append((
+                    COLOR_ACCENT_NAME,
+                    _append_all(stamp_color_parts),
+                    secondary_color,
+                ))
         if settings["mode"] == "imprint":
+            imprint_color_parts: list[Mesh] = []
             imprint = build_imprint(
                 main,
                 details,
@@ -1198,9 +1239,17 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 edge_width=float(settings.get("imprintEdgeWidth", 1.2)),
                 back_mark=back_mark,
                 back_mark_width=back_mark_width,
+                two_color=two_color,
+                color_parts=imprint_color_parts,
             )
             imprint = _add_cutter_extras(imprint, main, settings)
             parts.append(("Impronta", imprint, "#f39ab1"))
+            if imprint_color_parts:
+                parts.append((
+                    COLOR_ACCENT_NAME,
+                    _append_all(imprint_color_parts),
+                    secondary_color,
+                ))
         if settings["mode"] == "multicutter":
             multi = build_multicutter(
                 main,
@@ -1254,7 +1303,17 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     alignment=cutter_alignment,
                 )
                 parts.append(("Cortador sándwich", sandwich, "#f39ab1"))
+                if two_color and cutter_alignment is not None:
+                    ax, ay, ar = cutter_alignment
+                    dot = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
+                    dot_depth = min(0.5, max(0.15, settings["baseHeight"] * 0.2))
+                    parts.append((
+                        COLOR_DOT_NAME,
+                        extrude_polygon(dot, 0.0, dot_depth),
+                        secondary_color,
+                    ))
             if sandwich_part in {"both", "seal"}:
+                sandwich_color_parts: list[Mesh] = []
                 sandwich_stamp = build_stamp(
                     main,
                     details,
@@ -1269,8 +1328,16 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     detail_grow=float(settings.get("stampDetailGrow", 0.0)),
                     back_mark=back_mark,
                     back_mark_width=back_mark_width,
+                    two_color=two_color,
+                    color_parts=sandwich_color_parts,
                 )
                 parts.append(("Sello sándwich", sandwich_stamp, "#b7a4e8"))
+                if sandwich_color_parts:
+                    parts.append((
+                        COLOR_ACCENT_NAME,
+                        _append_all(sandwich_color_parts),
+                        secondary_color,
+                    ))
         if settings["mode"] == "roller":
             roller = build_roller(
                 main,
@@ -1427,7 +1494,17 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
             )
             mirror_cutter = _add_cutter_extras(mirror_cutter, mirrored_main, settings)
             parts.append(("Cortador espejo", mirror_cutter, "#f39ab1"))
+            if two_color and settings["mode"] == "cutter-stamp" and mirror_cut_align is not None:
+                ax, ay, ar = mirror_cut_align
+                dot = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
+                dot_depth = min(0.5, max(0.15, settings["baseHeight"] * 0.2))
+                parts.append((
+                    COLOR_DOT_NAME,
+                    extrude_polygon(dot, 0.0, dot_depth),
+                    secondary_color,
+                ))
         if settings["mode"] in {"stamp", "cutter-stamp"}:
+            mirror_color_parts: list[Mesh] = []
             mirror_stamp = build_stamp(
                 mirrored_main,
                 mirrored_details,
@@ -1452,8 +1529,16 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 grip_depth=float(settings.get("stampGripDepth", 2.0)),
                 back_mark=back_mark,
                 back_mark_width=back_mark_width,
+                two_color=two_color,
+                color_parts=mirror_color_parts,
             )
             parts.append(("Sello espejo", mirror_stamp, "#b7a4e8"))
+            if mirror_color_parts:
+                parts.append((
+                    COLOR_ACCENT_NAME,
+                    _append_all(mirror_color_parts),
+                    secondary_color,
+                ))
     if not parts:
         raise ValueError("No se ha generado ninguna pieza.")
     return parts, warnings, main, details
@@ -1511,31 +1596,62 @@ def analyze(payload: dict[str, Any]) -> dict[str, Any]:
     return {"shape": shape.to_dict()}
 
 
+def _is_accent(name: str) -> bool:
+    return COLOR_ACCENT_NAME in name or COLOR_DOT_NAME in name
+
+
 def _place_parts(raw: list[tuple[str, Any, str]], gap: float = 8.0) -> list[tuple[str, Mesh, str, tuple[float, float, float]]]:
-    names = {n for n, _m, _c in raw}
-    if len(raw) == 2 and "Cortador" in names and "Sello" in names:
-        cutter = next(m for n, m, _c in raw if n == "Cortador")
-        stamp = next(m for n, m, _c in raw if n == "Sello")
+    # Colour-accent shells share the exact transform of the body they decorate.
+    # They must never be laid out as an extra side-by-side object.
+    base = [(i, n, m, c) for i, (n, m, c) in enumerate(raw) if not _is_accent(n)]
+    names = {n for _i, n, _m, _c in base}
+    if len(base) == 2 and "Cortador" in names and "Sello" in names:
+        cutter = next(m for _i, n, m, _c in base if n == "Cortador")
+        stamp = next(m for _i, n, m, _c in base if n == "Sello")
         if _fits_nested(cutter, stamp):
-            # Nest the stamp inside the cutter's opening.  Both stay on the
-            # bed; the clearance means they remain separate printable objects.
             return [(n, m, c, (0.0, 0.0, 0.0)) for n, m, c in raw]
-    widths = [mesh.bounds["max"][0] - mesh.bounds["min"][0] for _n, mesh, _c in raw]
-    total = sum(widths) + gap * max(0, len(raw) - 1)
+    widths = [mesh.bounds["max"][0] - mesh.bounds["min"][0] for _i, _n, mesh, _c in base]
+    total = sum(widths) + gap * max(0, len(base) - 1)
     cursor = -total / 2
-    placed: list[tuple[str, Mesh, str, tuple[float, float, float]]] = []
-    for (name, mesh, color), width in zip(raw, widths):
-        placed.append((name, mesh, color, (float(cursor + width / 2), 0.0, 0.0)))
+    offsets: dict[int, tuple[float, float, float]] = {}
+    base_index = 0
+    for i, name, mesh, _color in base:
+        width = widths[base_index]
+        offsets[i] = (float(cursor + width / 2), 0.0, 0.0)
         cursor += width + gap
+        base_index += 1
+    placed: list[tuple[str, Mesh, str, tuple[float, float, float]]] = []
+    last_anchor: tuple[float, float, float] | None = None
+    for i, (name, mesh, color) in enumerate(raw):
+        if _is_accent(name):
+            anchor = last_anchor or (0.0, 0.0, 0.0)
+            placed.append((name, mesh, color, anchor))
+            continue
+        anchor = offsets.get(i, (0.0, 0.0, 0.0))
+        placed.append((name, mesh, color, anchor))
+        last_anchor = anchor
     return placed
+
+
+def _export_colors(raw: list[tuple[str, Mesh, str]], settings: dict[str, Any]) -> list[tuple[str, Mesh, str]]:
+    primary = str(settings.get("color") or "").strip()
+    secondary = str(settings.get("secondaryColor") or "#b7a4e8")
+    out: list[tuple[str, Mesh, str]] = []
+    for name, mesh, color in raw:
+        if _is_accent(name):
+            out.append((name, mesh, secondary))
+        elif primary:
+            out.append((name, mesh, primary))
+        else:
+            out.append((name, mesh, color))
+    return out
 
 
 def export_3mf(payload: dict[str, Any]) -> dict[str, Any]:
     shape = Shape.from_dict(payload["shape"])
     settings = _settings(payload.get("settings"))
     raw, _warnings, _main, _details = _generate_meshes(shape, settings)
-    if settings.get("color"):
-        raw = [(n, m, str(settings["color"])) for n, m, _c in raw]
+    raw = _export_colors(raw, settings)
     placed = _place_parts(raw)
     selected = set(payload.get("parts") or [p[0] for p in placed])
     placed = [p for p in placed if p[0] in selected]
@@ -1555,8 +1671,7 @@ def export_3mf_multi(payload: dict[str, Any]) -> dict[str, Any]:
         shape = Shape.from_dict(item["shape"])
         settings = _settings(item.get("settings"))
         raw, _warnings, _main, _details = _generate_meshes(shape, settings)
-        if settings.get("color"):
-            raw = [(n, m, str(settings["color"])) for n, m, _c in raw]
+        raw = _export_colors(raw, settings)
         placed = _place_parts(raw)
         name_prefix = item.get("name") or shape.name
         if not placed:

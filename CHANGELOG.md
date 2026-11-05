@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.7.6 — 2026-11-05
+
+Relleno a dos colores para sellos e improntas.
+
+### Dos colores
+
+- Nueva opción **Rellenar dibujo, marca y punto en otro color**, desactivada por
+  defecto.
+- El dibujo delantero, la marca trasera y el punto de orientación se generan como
+  piezas sólidas del color secundario.
+- Selector de **color del relleno**; el color principal sigue siendo el del
+  diseño.
+- El 3MF incluye dos objetos/materiales y `Metadata/model_settings.config` con la
+  asignación de extrusores para cargarlo en Bambu Studio.
+- El relleno trasero ocupa un alojamiento en la pieza principal y queda enrasado;
+  el punto de orientación también se rellena en el segundo color.
+- En impronta invertida la opción se oculta para no debilitar el fondo rebajado.
+
+### Calidad
+
+- 81 tests, typecheck y build.
+
 ## 0.7.5 — 2026-11-05
 
 Dibujo identificativo en la parte de atrás del sello y de la impronta.

@@ -930,6 +930,8 @@ def build_stamp(
     grip_depth: float = 2.0,
     back_mark: bool = False,
     back_mark_width: float = 0.9,
+    two_color: bool = False,
+    color_parts: list[Mesh] | None = None,
 ) -> Mesh:
     if backing == "rect":
         b = main.bounds
@@ -974,6 +976,11 @@ def build_stamp(
             if not component.buffer(0.05).contains(dimple):
                 dimple = None
                 dep = 0.0
+        if two_color and color_parts is not None and dimple is not None:
+            # The orientation dot is always an insert of the second colour,
+            # even when the optional back artwork is hidden by a grip recess.
+            dot_depth = dep if dep > 0 else min(0.35, max(0.12, height * 0.1))
+            color_parts.append(extrude_polygon(dimple, 0.0, dot_depth))
         if gd > 0.2 and gp is not None:
             # The grip recess occupies the centre of the back face.  The
             # shallow identification mark would be hidden inside it, so keep
@@ -987,7 +994,32 @@ def build_stamp(
                 return out
 
         mark = None
-        if back_mark:
+        mark_depth = dep if dep > 0 else min(0.35, max(0.12, height * 0.1))
+        if two_color:
+            if back_mark:
+                edge_margin = max(1.0, back_mark_width * 2.2)
+                safe = component.buffer(-edge_margin, join_style=1, quad_segs=8)
+                if not safe.is_empty:
+                    base_fill = main.intersection(safe) if backing == "rect" else safe
+                    fill_parts: list[Polygon] = []
+                    for p in _ring_parts(base_fill):
+                        if p.area > 0.01:
+                            fill_parts.append(p)
+                    for detail in mark_details:
+                        clipped_detail = detail.intersection(safe)
+                        for p in _ring_parts(clipped_detail):
+                            if p.area > 0.01:
+                                fill_parts.append(p)
+                    if fill_parts:
+                        fill = unary_union(fill_parts)
+                        if dimple is not None:
+                            fill = fill.difference(dimple)
+                        for p in _ring_parts(fill):
+                            if p.area > 0.01:
+                                mark = p if mark is None else mark.union(p)
+                        if mark is not None and color_parts is not None:
+                            color_parts.append(extrude_polygon(mark, 0.0, mark_depth))
+        elif back_mark:
             shapes: list[Polygon] = []
             edge_margin = max(0.6, back_mark_width * 1.6)
             inner_ref = component.buffer(-edge_margin, join_style=1, quad_segs=8)
@@ -1012,7 +1044,7 @@ def build_stamp(
                         if p.area > 0.002:
                             mark = p if mark is None else mark.union(p)
         if dimple is not None or mark is not None:
-            groove_depth = dep if dep > 0 else min(0.35, max(0.12, height * 0.1))
+            groove_depth = mark_depth
             bottom = component
             if dimple is not None:
                 bottom = bottom.difference(dimple)
@@ -1053,6 +1085,14 @@ def build_stamp(
                     pass
                 kept_details.append(p)
         depth = min(max(0.2, relief), max(0.2, back_height - 1.0))
+        if two_color and color_parts is not None and not recessed:
+            overlay_height = max(0.35, min(0.8, relief * 0.3))
+            top = back_height + relief
+            for detail in kept_details:
+                # A solid secondary-colour cap sitting on the raised artwork.
+                # Keeping it outside the primary body avoids overlapping
+                # volumes in the 3MF while still filling the drawing.
+                color_parts.append(extrude_polygon(detail, top, overlay_height))
         if recessed and kept_details:
             # Negative relief: the background is high and the artwork is a
             # shallow recess.  This leaves raised details in dough/fondant.
@@ -1125,6 +1165,8 @@ def build_imprint(
     edge_width: float = 1.2,
     back_mark: bool = False,
     back_mark_width: float = 0.9,
+    two_color: bool = False,
+    color_parts: list[Mesh] | None = None,
 ) -> Mesh:
     cutter = build_cutter(
         main,
@@ -1169,6 +1211,30 @@ def build_imprint(
     def marked_floor(poly: Polygon, top: float) -> list[Mesh]:
         if not back_mark:
             return [extrude_polygon(poly, 0.0, top)]
+        depth = min(0.35, max(0.12, base_height * 0.1))
+        if two_color:
+            safe = poly.buffer(-max(1.0, back_mark_width * 2.2), join_style=1, quad_segs=8)
+            if safe.is_empty:
+                return [extrude_polygon(poly, 0.0, top)]
+            fill_parts: list[Polygon] = [p for p in _ring_parts(safe) if p.area > 0.01]
+            for detail in details:
+                clipped = detail.intersection(safe)
+                for p in _ring_parts(clipped):
+                    if p.area > 0.01:
+                        fill_parts.append(p)
+            if not fill_parts:
+                return [extrude_polygon(poly, 0.0, top)]
+            mark = unary_union(fill_parts)
+            bottom = poly.difference(mark)
+            if bottom.is_empty:
+                return [extrude_polygon(poly, 0.0, top)]
+            bottom = bottom.simplify(0.01, preserve_topology=True)
+            if color_parts is not None:
+                color_parts.append(extrude_polygon(mark, 0.0, depth))
+            return [
+                extrude_polygon(bottom, 0.0, depth),
+                extrude_polygon(poly, depth - 0.01, top - depth + 0.01),
+            ]
         shapes: list[Polygon] = []
         reference = poly.buffer(-max(0.2, back_mark_width * 0.5), join_style=1, quad_segs=8)
         if not reference.is_empty:
@@ -1185,7 +1251,6 @@ def build_imprint(
         mark = unary_union(shapes).intersection(safe)
         if mark.is_empty:
             return [extrude_polygon(poly, 0.0, top)]
-        depth = min(0.35, max(0.12, base_height * 0.1))
         bottom = poly.difference(mark)
         if bottom.is_empty:
             return [extrude_polygon(poly, 0.0, top)]
@@ -1194,6 +1259,12 @@ def build_imprint(
             extrude_polygon(bottom, 0.0, depth),
             extrude_polygon(poly, depth - 0.01, top - depth + 0.01),
         ]
+
+    if two_color and color_parts is not None and alignment is not None:
+        ax, ay, ar = alignment
+        dot = Point(ax, ay).buffer(max(0.4, ar), quad_segs=24)
+        dot_depth = min(0.5, max(0.15, base_height * 0.2))
+        color_parts.append(extrude_polygon(dot, 0.0, dot_depth))
 
     floor_z = max(1.0, base_height + blade_depth - imprint_depth)
     if invert:
@@ -1226,6 +1297,9 @@ def build_imprint(
                 p, floor_z - 0.25, height, detail_curve
             ):
                 out = out.append(extrude_polygon(layer, z0, layer_height))
+            if two_color and color_parts is not None:
+                overlay_height = max(0.35, min(0.8, imprint_depth * 0.3))
+                color_parts.append(extrude_polygon(p, ceiling, overlay_height))
     return out
 
 
@@ -2215,9 +2289,14 @@ def three_mf_bytes(parts: list[tuple[str, Mesh, str, tuple[float, float, float]]
     materials = "".join(
         f'<base name="{_escape(name)}" displaycolor="{color}" />' for name, _mesh, color, _off in parts
     )
+    color_slots: dict[str, int] = {}
+    for _name, _mesh, color, _off in parts:
+        if color not in color_slots:
+            color_slots[color] = len(color_slots) + 1
     objects: list[str] = []
     items: list[str] = []
-    for i, (name, mesh, _color, offset) in enumerate(parts):
+    model_settings: list[str] = []
+    for i, (name, mesh, color, offset) in enumerate(parts):
         oid = i + 2
         verts = "".join(
             f'<vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>'
@@ -2233,6 +2312,10 @@ def three_mf_bytes(parts: list[tuple[str, Mesh, str, tuple[float, float, float]]
         )
         tx, ty, tz = offset
         items.append(f'<item objectid="{oid}" transform="1 0 0 0 1 0 0 0 1 {tx:.4f} {ty:.4f} {tz:.4f}"/>')
+        model_settings.append(
+            f'<object id="{oid}"><metadata key="name" value="{_escape(name)}"/>'
+            f'<metadata key="extruder" value="{color_slots.get(color, 1)}"/></object>'
+        )
     model = f'''<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="es-ES" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
   <metadata name="Title">{_escape(title)}</metadata>
@@ -2244,15 +2327,22 @@ def three_mf_bytes(parts: list[tuple[str, Mesh, str, tuple[float, float, float]]
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+  <Default Extension="config" ContentType="application/xml"/>
 </Types>'''
     rels = '''<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>
 </Relationships>'''
+    bambu_settings = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n'
+        + "\n".join(model_settings)
+        + "\n</config>"
+    )
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", content_types)
         z.writestr("_rels/.rels", rels)
         z.writestr("3D/3dmodel.model", model)
+        z.writestr("Metadata/model_settings.config", bambu_settings)
     return buf.getvalue()
 

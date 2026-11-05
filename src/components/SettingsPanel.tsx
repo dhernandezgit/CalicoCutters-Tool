@@ -342,6 +342,7 @@ export default function SettingsPanel({
     || settings.mode === "cutter-stamp"
     || (settings.mode === "imprint" && !settings.imprintEdgesOnly)
     || (settings.mode === "sandwich" && settings.sandwichPart !== "cutter");
+  const twoColorAvailable = backMarkAvailable && !(settings.mode === "imprint" && settings.imprintInvert);
   const aspect = shape ? shape.bounds.width / Math.max(shape.bounds.height, 0.001) : 1;
   const final = build?.parts[0];
   const finalW = final ? final.bounds.max[0] - final.bounds.min[0] : 0;
@@ -672,7 +673,7 @@ export default function SettingsPanel({
       )}
 
       {advanced && (cutterLike || stampLike) && (
-        <Section id="alignment" title="Alineación" icon={<Focus size={16} />} summary={settings.alignmentHole ? `${settings.alignmentHoleDiameter.toFixed(1)} mm` : "Desactivada"}>
+        <Section id="alignment" title="Alineación" icon={<Focus size={16} />} defaultOpen summary={settings.alignmentHole ? `${settings.alignmentHoleDiameter.toFixed(1)} mm` : "Desactivada"}>
           <Toggle
             label="Punto de alineación superficial"
             hint="Un hundido mínimo en la base, en el lado que no marca, para orientar cortador y sello. No atraviesa la pieza."
@@ -696,6 +697,30 @@ export default function SettingsPanel({
               checked={settings.backMark !== false}
               onChange={(v) => onChange({ backMark: v })}
             />
+          )}
+          {twoColorAvailable && settings.backMark !== false && (
+            <>
+              <Toggle
+                label="Rellenar dibujo, marca y punto en otro color"
+                hint="Convierte el dibujo delantero, la marca trasera y el punto de orientación en piezas sólidas del color secundario. El 3MF se guarda con dos materiales para cargarlo en Bambu Studio."
+                checked={settings.twoColorFill === true}
+                onChange={(v) => onChange({ twoColorFill: v })}
+              />
+              {settings.twoColorFill && (
+                <label className="color-row">
+                  <span className="field-label">
+                    Color del relleno
+                    <small>Se usa para el dibujo, la marca trasera y el punto.</small>
+                  </span>
+                  <input
+                    type="color"
+                    value={settings.secondaryColor || "#b7a4e8"}
+                    onChange={(e) => onChange({ secondaryColor: e.target.value })}
+                    aria-label="Color del relleno a dos colores"
+                  />
+                </label>
+              )}
+            </>
           )}
         </Section>
       )}

@@ -186,6 +186,48 @@ def test_back_mark_is_default_and_can_be_disabled():
             assert part["bounds"]["min"][2] == pytest.approx(0.0, abs=0.01)
 
 
+def test_two_color_fill_creates_bambu_ready_accent_parts():
+    for mode in ("stamp", "cutter-stamp", "imprint"):
+        settings = {
+            **DEFAULT_SETTINGS,
+            "mode": mode,
+            "twoColorFill": True,
+            "secondaryColor": "#22aa66",
+            "color": "#112233",
+        }
+        result = build({"shape": _shape().to_dict(), "settings": settings})
+        names = [part["name"] for part in result["parts"]]
+        assert any("Dibujo a color" in name for name in names), mode
+        accents = [p for p in result["parts"] if "a color" in p["name"]]
+        assert accents
+        assert all(p["color"] == "#22aa66" for p in accents)
+        assert all(_mesh(p).is_watertight for p in result["parts"]), mode
+        base_parts = [p for p in result["parts"] if "a color" not in p["name"]]
+        for accent in accents:
+            assert accent["preview_offset"] == base_parts[-1]["preview_offset"], mode
+        if mode == "cutter-stamp":
+            assert "Punto a color" in names
+
+    stamp_settings = {
+        **DEFAULT_SETTINGS,
+        "mode": "stamp",
+        "twoColorFill": True,
+        "secondaryColor": "#22aa66",
+        "color": "#112233",
+    }
+    exported = export_3mf({
+        "shape": _shape().to_dict(),
+        "settings": stamp_settings,
+        "name": "dos-colores",
+    })
+    data = base64.b64decode(exported["data_b64"])
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        model = z.read("3D/3dmodel.model").decode("utf-8")
+        assert "#112233" in model
+        assert "#22aa66" in model
+        assert "Metadata/model_settings.config" in z.namelist()
+
+
 def test_texture_roller_zero_bore_is_solid():
     base = {**DEFAULT_SETTINGS, "mode": "roller", "rollerPatternMode": "silhouette", "rollerBore": 0}
     solid = build({"shape": _shape().to_dict(), "settings": base})
