@@ -1,6 +1,6 @@
 # CalicoCutters
 
-**Versión 0.7.11** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
+**Versión 0.7.12** · Convierte un SVG o una imagen en un cortador y un sello de galleta listos para imprimir en 3D.
 
 CalicoCutters es una aplicación local-first: el motor de geometría está escrito en **Python** y se ejecuta en el navegador con **Pyodide/WebAssembly**. No hay servidor, no se suben archivos y no hace falta cuenta.
 
@@ -16,6 +16,7 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - Vectoriza dibujos de líneas y conserva los detalles interiores para el sello.
 - Genera un cortador exterior con cuchilla, base y mango opcional (desactivado por defecto).
 - **L?nea decorativa del cortador**: opci?n para hundir una l?nea exterior siguiendo el contorno, centrada en la cuchilla y de ~25 % de la altura; profundidad limitada para no debilitar el filo.
+- **Interior del cortador liso**: la base y la cuchilla comparten la pared interior sin escal?n visible; la l?nea decorativa solo modifica el exterior.
 - Genera un sello coordinado con respaldo y relieve; en Cortador + sello se muestra dentro del cortador.
 - Relieve positivo, relieve negativo hundido, borde a ras del dibujo, par espejo y mangos en uno o ambos extremos.
 - Menú agrupado y plegable por **Galletas, Lotes, Sellos, Sándwich, Rodillo, Repostería y Papelería**:

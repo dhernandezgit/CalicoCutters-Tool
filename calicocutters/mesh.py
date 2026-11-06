@@ -447,7 +447,7 @@ def cutter_rings(
     thickness: float,
     base_width: float,
     tip_width: float,
-    inset: float = 0.25,
+    inset: float = 0.03,
     base_shape: str = "round",
 ):
     """Return base, blade and tip ring polygons for an outline."""

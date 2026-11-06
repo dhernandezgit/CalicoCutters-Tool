@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.12 ? 2026-11-06
+
+Interior del cortador liso.
+
+### Cortador
+
+- Se reduce a 0,03 mm el solape interior de la base con la cuchilla, por debajo
+  de la resoluci?n de impresi?n, para que no aparezca el reborde interno.
+- La pared interior se genera como una sola superficie continua, incluso con la
+  l?nea decorativa exterior activa.
+- La l?nea decorativa sigue afectando ?nicamente a la pared exterior.
+
+### Calidad
+
+- 85 tests, typecheck y build.
+
 ## 0.7.11 ? 2026-11-06
 
 Engrosado autom?tico selectivo para no ensanchar todo el dibujo.
