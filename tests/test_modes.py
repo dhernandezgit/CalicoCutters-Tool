@@ -6,6 +6,7 @@ import zipfile
 
 import pytest
 import trimesh
+from shapely.geometry import Point
 
 from calicocutters.engine import DEFAULT_SETTINGS, build, export_3mf, export_3mf_multi
 from calicocutters.shape import parse_svg
@@ -113,6 +114,32 @@ def test_stamp_border_can_be_removed_cleanly():
         assert mesh.is_winding_consistent
         assert mesh.bounds[0][2] == pytest.approx(0.0, abs=0.01)
         assert mesh.bounds[1][2] == pytest.approx(8.5, abs=0.1)
+
+
+def test_remove_outer_edge_forces_a_flat_stamp():
+    for mode in ("stamp", "cutter-stamp", "sandwich"):
+        base = {
+            **DEFAULT_SETTINGS,
+            "mode": mode,
+            "stampRemoveOuterEdge": True,
+        }
+        with_border_setting = build({"shape": _shape().to_dict(), "settings": {
+            **base,
+            "stampBorder": True,
+        }})
+        without_border = build({"shape": _shape().to_dict(), "settings": {
+            **base,
+            "stampBorder": False,
+        }})
+        stamp_with = next(p for p in with_border_setting["parts"] if "Sello" in p["name"])
+        stamp_without = next(p for p in without_border["parts"] if "Sello" in p["name"])
+        assert stamp_with["volume"] == pytest.approx(stamp_without["volume"], rel=1e-4)
+        assert stamp_with["bounds"]["max"][2] == pytest.approx(
+            stamp_without["bounds"]["max"][2], abs=1e-5
+        )
+        mesh = _mesh(stamp_with)
+        assert mesh.is_watertight
+        assert mesh.is_winding_consistent
 
 
 def test_extra_blade_adds_material_without_breaking_mesh():
@@ -226,6 +253,25 @@ def test_two_color_fill_creates_bambu_ready_accent_parts():
         assert "#112233" in model
         assert "#22aa66" in model
         assert "Metadata/model_settings.config" in z.namelist()
+
+
+def test_cutter_waist_does_not_leave_a_seam_on_the_inner_wall():
+    shape = _shape()
+    main = shape.main_polygon
+    for waist in (False, True):
+        result = build({"shape": shape.to_dict(), "settings": {
+            **DEFAULT_SETTINGS,
+            "mode": "cutter",
+            "cutterWaistLine": waist,
+        }})
+        mesh = _mesh(result["parts"][0])
+        band = (mesh.vertices[:, 2] > 4.0) & (mesh.vertices[:, 2] < 11.0)
+        points = mesh.vertices[band]
+        near_inner = [
+            main.boundary.distance(Point(float(x), float(y))) < 0.12
+            for x, y, _z in points
+        ]
+        assert not any(near_inner), f"inner wall seam with waist={waist}"
 
 
 def test_cutter_waist_line_is_optional_and_watertight():

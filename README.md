@@ -42,7 +42,7 @@ CalicoCutters es una aplicación local-first: el motor de geometría está escri
 - **Rodillo de textura avanzado**: patrones repetido, ladrillo y reflejado, con cierre automático de la costura; motivo de dibujo (contorno + detalles, como un sello) o silueta rellena; escala del origen, giro, margen, inversión, grosor posterior, borde exterior con altura y curvas redondeadas por defecto. En grabado se genera una sola manga cilíndrica continua con huecos vectoriales, sin parches rectangulares; el relieve elevado y la manga usan subdivisión adaptativa para conservar la silueta circular y los bordes definidos.
 - **Multicortador y set de cortadores**: multicortador con barras, mango y cuchilla extra; set por tamaños o por formas separadas.
 - **Impronta**: mango, barras, cuchilla extra, relieve elevado o hundido, solo bordes y margen de base.
-- **Sello**: grip posterior, respaldo rectangular o contorneado, relieve negativo y borde perimetral.
+- **Sello**: grip posterior, respaldo rectangular o contorneado, relieve negativo y borde perimetral. Al quitar el contorno exterior, el borde elevado se desactiva y la cara queda completamente plana.
 - **Cortador sándwich**: cortador con banda de sellado integrada y sello central separado (o solo una de las piezas), con muescas redondas, triangulares o cuadradas, redondeo y banda hacia dentro o hacia fuera.
 - **Topper para tarta**: relieve con curva recta, chaflán o redondeada y pin estrechado para clavar con facilidad.
 - **Molde cake pop**: prensador con cara de relieve, solo contorno o lisa, además de molde, bandeja y palito.

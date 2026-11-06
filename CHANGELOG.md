@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.7.13 ? 2026-11-06
+
+Sello plano al quitar el contorno exterior.
+
+### Sello
+
+- Al activar **Quitar contorno exterior del sello**, el borde perimetral elevado
+  deja de generarse aunque el ajuste **Borde perimetral** siguiera activo.
+- La cara del sello queda plana y solo se marca el dibujo interior.
+- El control de borde se oculta mientras el contorno exterior est? quitado para
+  evitar ajustes contradictorios.
+
+### Calidad
+
+- 87 tests, typecheck y build.
+- Revisados de nuevo el interior del cortador, el engrosado selectivo, la l?nea
+  decorativa, el 3MF agrupado y el ejemplo inicial.
+
 ## 0.7.12 ? 2026-11-06
 
 Interior del cortador liso.

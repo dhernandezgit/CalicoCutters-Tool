@@ -992,15 +992,23 @@ export default function SettingsPanel({
               <NumberField label="Profundidad del grip" value={settings.stampGripDepth} min={0.5} max={6} step={0.2} onChange={(v) => onChange({ stampGripDepth: v })} />
             </div>
           )}
-          <Toggle
-            label={settings.mode === "cutter-stamp" ? "Borde perimetral bajo" : "Borde perimetral del sello"}
-            hint={settings.mode === "cutter-stamp"
-              ? "En Cortador + sello el borde queda bajo para no crear un aro alto dentro del cortador."
-              : "Deja un marco elevado a la misma altura que el dibujo. Desactívalo para que el borde quede a la altura de la base plana."}
-            checked={settings.stampBorder}
-            onChange={(v) => onChange({ stampBorder: v })}
-          />
-          {advanced && settings.stampBorder && (
+          {!settings.stampRemoveOuterEdge && (
+            <Toggle
+              label={settings.mode === "cutter-stamp" ? "Borde perimetral bajo" : "Borde perimetral del sello"}
+              hint={settings.mode === "cutter-stamp"
+                ? "En Cortador + sello el borde queda bajo para no crear un aro alto dentro del cortador."
+                : "Deja un marco elevado a la misma altura que el dibujo. Desactívalo para que el borde quede a la altura de la base plana."}
+              checked={settings.stampBorder}
+              onChange={(v) => onChange({ stampBorder: v })}
+            />
+          )}
+          {settings.stampRemoveOuterEdge && (
+            <div className="inline-hint">
+              <CircleHelp size={13} />
+              <span>Contorno exterior quitado: la cara del sello queda plana y solo se marca el dibujo interior.</span>
+            </div>
+          )}
+          {advanced && settings.stampBorder && !settings.stampRemoveOuterEdge && (
             <NumberField
               label="Ancho del borde"
               value={settings.stampBorderWidth}

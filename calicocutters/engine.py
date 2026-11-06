@@ -583,9 +583,14 @@ def _alignment_locations(
             )
             if not base_band.contains(cutter_center.buffer(radius + 0.15)):
                 continue
+            border_reserve = (
+                settings["stampBorderWidth"]
+                if settings.get("stampBorder") and not settings.get("stampRemoveOuterEdge")
+                else 0
+            )
             stamp_center = Point(
-                hit.x - dx * (clearance + (settings["stampBorderWidth"] if settings.get("stampBorder") else 0) + radius + 0.55),
-                hit.y - dy * (clearance + (settings["stampBorderWidth"] if settings.get("stampBorder") else 0) + radius + 0.55),
+                hit.x - dx * (clearance + border_reserve + radius + 0.55),
+                hit.y - dy * (clearance + border_reserve + radius + 0.55),
             )
             if not stamp_poly.contains(stamp_center.buffer(radius + 0.2)):
                 continue
@@ -1256,7 +1261,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 back_height=settings["stampBack"],
                 relief=settings["stampRelief"],
                 clearance=settings["stampClearance"] if settings["mode"] == "cutter-stamp" else 0.0,
-                border=bool(settings.get("stampBorder", True)),
+                border=bool(settings.get("stampBorder", True)) and not bool(settings.get("stampRemoveOuterEdge")),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
                 border_height=(
                     max(0.3, min(0.8, settings["stampRelief"] * 0.3))
@@ -1386,7 +1391,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                     back_height=settings["stampBack"],
                     relief=settings["stampRelief"],
                     clearance=settings["stampClearance"],
-                    border=bool(settings.get("stampBorder", True)),
+                    border=bool(settings.get("stampBorder", True)) and not bool(settings.get("stampRemoveOuterEdge")),
                     border_width=float(settings.get("stampBorderWidth", 1.6)),
                     alignment=stamp_alignment,
                     recessed=bool(settings.get("stampRecessed")),
@@ -1574,7 +1579,7 @@ def _generate_meshes(shape: Shape, settings: dict[str, Any]) -> tuple[list[tuple
                 back_height=settings["stampBack"],
                 relief=settings["stampRelief"],
                 clearance=settings["stampClearance"] if settings["mode"] == "cutter-stamp" else 0.0,
-                border=bool(settings.get("stampBorder", True)),
+                border=bool(settings.get("stampBorder", True)) and not bool(settings.get("stampRemoveOuterEdge")),
                 border_width=float(settings.get("stampBorderWidth", 1.6)),
                 border_height=(
                     max(0.3, min(0.8, settings["stampRelief"] * 0.3))
